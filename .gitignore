@@ -1,0 +1,23 @@
+﻿# Database
+data/*.db
+data/*.db-journal
+data/*.sqlite
+
+# Backups
+_archive/
+
+# Temp files
+src/temp_*.jl
+*.log
+*.bak
+*.tmp
+
+# System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
