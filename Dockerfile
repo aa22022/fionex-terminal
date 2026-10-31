@@ -5,14 +5,13 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Copy Julia package files
+# Copy project files
 COPY Project.toml ./
-COPY Manifest.toml* ./
 
-# Install Julia packages
-RUN julia -e "using Pkg; Pkg.instantiate(); Pkg.precompile()"
+# Install Julia packages (force add + instantiate)
+RUN julia --project=. -e "using Pkg; Pkg.instantiate(); Pkg.precompile()"
 
-# Copy project code
+# Copy source code
 COPY src/ ./src/
 COPY templates/ ./templates/
 COPY static/ ./static/
