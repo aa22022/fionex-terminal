@@ -3,4 +3,5 @@ println("Loading modules...")
 include("web_server.jl")
 using .WebServer
 
-start_server(8080)
+port = parse(Int, get(ENV, "PORT", "8080"))
+start_server(port)
