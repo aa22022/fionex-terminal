@@ -1,0 +1,1107 @@
+// ================================================================
+// FIONEX TERMINAL - Core
+// ================================================================
+
+var State = { data: null, charts: {}, alerts: [], page: 'p-home' };
+
+// ---------- Formatters ----------
+function fmtNum(n) {
+  if (n === null || n === undefined || isNaN(n)) return '--';
+  return Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+function fmtDec(n, d) {
+  d = (d === undefined) ? 2 : d;
+  if (n === null || n === undefined || isNaN(n)) return '--';
+  return Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+function signOf(n) { return n > 0 ? '+' : ''; }
+function clsOf(n) { return n > 0 ? 'up' : (n < 0 ? 'down' : 'flat'); }
+
+
+// ================================================================
+// Jalali Calendar Converter (بدون وابستگی خارجی)
+// ================================================================
+function toJalali(dateStr) {
+  if (!dateStr) return '--';
+  var s = String(dateStr);
+  // اگر شکل yyyy-mm-dd یا yyyy-mm-dd HH:MM:SS باشد
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return s;
+
+  var gy = parseInt(m[1], 10);
+  var gm = parseInt(m[2], 10);
+  var gd = parseInt(m[3], 10);
+
+  var g_d_m = [0,31,59,90,120,151,181,212,243,273,304,334];
+  var jy = (gy <= 1600) ? 0 : 979;
+  gy -= (gy <= 1600) ? 621 : 1600;
+  var gy2 = (gm > 2) ? (gy + 1) : gy;
+  var days = (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
+  jy += 33 * Math.floor(days / 12053);
+  days %= 12053;
+  jy += 4 * Math.floor(days / 1461);
+  days %= 1461;
+  if (days > 365) {
+    jy += Math.floor((days - 1) / 365);
+    days = (days - 1) % 365;
+  }
+  var jm = (days < 186) ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30);
+  var jd = 1 + ((days < 186) ? (days % 31) : ((days - 186) % 30));
+
+  var jmStr = (jm < 10 ? '0' : '') + jm;
+  var jdStr = (jd < 10 ? '0' : '') + jd;
+  return jy + '/' + jmStr + '/' + jdStr;
+}
+
+// نسخه کوتاه برای محور X (فقط ماه/روز)
+function toJalaliShort(dateStr) {
+  var full = toJalali(dateStr);
+  if (full === '--') return '--';
+  var parts = full.split('/');
+  if (parts.length === 3) return parts[1] + '/' + parts[2];
+  return full;
+}
+
+// تبدیل کامل با ساعت
+function toJalaliFull(dateStr) {
+  if (!dateStr) return '--';
+  var s = String(dateStr);
+  var datePart = s.substring(0, 10);
+  var timePart = s.length > 10 ? s.substring(10) : '';
+  return toJalali(datePart) + timePart;
+}
+
+// ---------- Navigation ----------
+function switchPage(id) {
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(function(b){ b.classList.remove('active'); });
+  var page = document.getElementById(id);
+  if (page) page.classList.add('active');
+  var btn = document.querySelector('.nav-item[data-page="' + id + '"]');
+  if (btn) btn.classList.add('active');
+  State.page = id;
+  renderPage(id);
+  window.scrollTo(0, 0);
+}
+
+function renderPage(id) {
+  if (!State.data) return;
+  try {
+    if (id === 'p-home') renderHome();
+    else if (id === 'p-coins') renderCoins();
+    else if (id === 'p-currencies') renderCurrencies();
+    else if (id === 'p-charts') renderCharts();
+    else if (id === 'p-alerts') renderAlerts();
+    else if (id === 'p-predict') renderPrediction();
+  } catch (e) {
+    console.error('render ' + id, e);
+  }
+}
+
+// ---------- Data Loading ----------
+function loadData() {
+  var t0 = performance.now();
+  fetch('/api/data').then(function(r){ return r.json(); }).then(function(data){
+    if (data.status !== 'success') {
+      setStatus('در حال بارگذاری داده‌های اولیه...', 'warn');
+      return;
+    }
+    State.data = data;
+    var ms = Math.round(performance.now() - t0);
+    document.getElementById('dot').classList.add('online');
+    document.getElementById('connText').textContent = 'زنده';
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('fa-IR');
+    document.getElementById('latency').textContent = ms;
+    document.getElementById('lastUpdate').textContent = data.last_update || '--';
+
+    if (data.market_alert) {
+      var ma = data.market_alert;
+      var lvl = ma.level || 'LOW';
+      var cls = lvl === 'HIGH' ? 'err' : (lvl === 'MEDIUM' ? 'warn' : 'ok');
+      setStatus('نوسان بازار: ' + lvl + '  |  انس: ' + ma.gold_move + '%  |  دلار: ' + ma.usd_move + '%', cls);
+    }
+
+    initAlerts();
+    renderPage(State.page);
+    checkAlerts();
+  }).catch(function(e){
+    console.error(e);
+    setStatus('خطا در ارتباط با سرور', 'err');
+    var dot = document.getElementById('dot');
+    if (dot) dot.classList.remove('online');
+  });
+}
+
+function setStatus(text, cls) {
+  var el = document.getElementById('statusBar');
+  var txt = document.getElementById('statusText');
+  if (!el || !txt) return;
+  txt.textContent = text;
+  el.className = 'status-bar';
+  if (cls) el.classList.add('status-' + cls);
+}
+
+// ---------- F1: Home ----------
+function renderHome() {
+  var d = State.data, tgju = d.tgju || {};
+  var c = tgju.currencies || {}, m = tgju.metals || {}, co = tgju.coins || {};
+  var oz = tgju.gold_oz || {};
+
+  var kpis = [
+    { title: 'دلار آزاد', unit: 'تومان', live: (c.usd && c.usd.price_toman) || 0, change: (c.usd && c.usd.change_pct) || 0, dec: 0 },
+    { title: 'انس جهانی', unit: 'دلار', live: oz.price || 0, change: oz.change_pct || 0, dec: 2 },
+    { title: 'طلای ۱۸ عیار', unit: 'تومان', live: (m.gold_18k && m.gold_18k.price_toman) || 0, change: (m.gold_18k && m.gold_18k.change_pct) || 0, dec: 0 },
+    { title: 'سکه امامی', unit: 'تومان', live: (co.emami && co.emami.price_toman) || 0, change: (co.emami && co.emami.change_pct) || 0, dec: 0 }
+  ];
+
+  var html = '';
+  kpis.forEach(function(k){
+    html += '<div class="kpi">' +
+      '<div class="kpi-title">' + k.title + '</div>' +
+      '<div class="kpi-val">' + fmtDec(k.live, k.dec) + '<span class="unit">' + k.unit + '</span></div>' +
+      '<div class="kpi-change ' + clsOf(k.change) + '">' + signOf(k.change) + fmtDec(k.change, 2) + '%</div>' +
+    '</div>';
+  });
+  document.getElementById('homeKpi').innerHTML = html;
+
+  document.getElementById('homeCoins').innerHTML = miniTable(co, [
+    ['emami', 'سکه امامی'], ['bahar', 'بهار آزادی'], ['nim', 'نیم سکه'],
+    ['rob', 'ربع سکه'], ['gerami', 'سکه گرمی']
+  ]);
+
+  document.getElementById('homeCurrencies').innerHTML = miniTable(c, [
+    ['usd', 'دلار'], ['eur', 'یورو'], ['gbp', 'پوند'],
+    ['aed', 'درهم'], ['try', 'لیر'], ['cny', 'یوان']
+  ]);
+
+  document.getElementById('homeMetals').innerHTML = miniTable(m, [
+    ['gold_18k', 'طلای ۱۸ عیار'], ['gold_24k', 'طلای ۲۴ عیار'],
+    ['mesghal', 'مثقال'], ['gold_melted', 'آب‌شده']
+  ]);
+}
+
+function miniTable(data, rows) {
+  var html = '<table class="tbl"><thead><tr><th>نام</th><th>قیمت</th><th>تغییر</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    var k = r[0], n = r[1];
+    var it = data[k];
+    if (!it) return;
+    var price = it.price_toman !== undefined ? it.price_toman : (it.price || 0);
+    var ch = it.change_pct || 0;
+    html += '<tr>' +
+      '<td>' + n + '</td>' +
+      '<td class="mono num">' + fmtNum(price) + '</td>' +
+      '<td class="mono ' + clsOf(ch) + '">' + signOf(ch) + fmtDec(ch, 2) + '%</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+// ---------- F2: Coins ----------
+function renderCoins() {
+  var tgju = (State.data && State.data.tgju) || {};
+  var co = tgju.coins || {};
+  var m = tgju.metals || {};
+  var oz = tgju.gold_oz || {};
+
+  var coinRows = [
+    ['emami', 'سکه امامی'], ['bahar', 'بهار آزادی'], ['nim', 'نیم سکه'],
+    ['rob', 'ربع سکه'], ['gerami', 'سکه گرمی']
+  ];
+
+  var html = '<table class="tbl"><thead><tr><th>سکه</th><th>قیمت (تومان)</th><th>تغییر</th><th>بیشترین</th><th>کمترین</th><th>بروزرسانی</th></tr></thead><tbody>';
+  coinRows.forEach(function(r){
+    var it = co[r[0]]; if (!it) return;
+    var ch = it.change_pct || 0;
+    var t = (it.time || '').substring(11, 19);
+    html += '<tr>' +
+      '<td>' + r[1] + '</td>' +
+      '<td class="mono num bold">' + fmtNum(it.price_toman) + '</td>' +
+      '<td class="mono ' + clsOf(ch) + '">' + signOf(ch) + fmtDec(ch, 2) + '%</td>' +
+      '<td class="mono num dim">' + fmtNum(it.high_toman) + '</td>' +
+      '<td class="mono num dim">' + fmtNum(it.low_toman) + '</td>' +
+      '<td class="mono dim">' + t + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('coinsTable').innerHTML = html;
+
+  var metalRows = [
+    ['gold_18k', 'طلای ۱۸ عیار'], ['gold_24k', 'طلای ۲۴ عیار'],
+    ['mesghal', 'مثقال طلا'], ['gold_melted', 'طلای آب‌شده']
+  ];
+
+  html = '<table class="tbl"><thead><tr><th>نام</th><th>قیمت (تومان)</th><th>تغییر</th><th>بیشترین</th><th>کمترین</th><th>بروزرسانی</th></tr></thead><tbody>';
+  metalRows.forEach(function(r){
+    var it = m[r[0]]; if (!it) return;
+    var ch = it.change_pct || 0;
+    var t = (it.time || '').substring(11, 19);
+    html += '<tr>' +
+      '<td>' + r[1] + '</td>' +
+      '<td class="mono num bold">' + fmtNum(it.price_toman) + '</td>' +
+      '<td class="mono ' + clsOf(ch) + '">' + signOf(ch) + fmtDec(ch, 2) + '%</td>' +
+      '<td class="mono num dim">' + fmtNum(it.high_toman) + '</td>' +
+      '<td class="mono num dim">' + fmtNum(it.low_toman) + '</td>' +
+      '<td class="mono dim">' + t + '</td>' +
+    '</tr>';
+  });
+
+  if (oz.price) {
+    var ch2 = oz.change_pct || 0;
+    var t2 = (oz.time || '').substring(11, 19);
+    html += '<tr>' +
+      '<td>انس جهانی</td>' +
+      '<td class="mono num bold">' + fmtDec(oz.price, 2) + ' USD</td>' +
+      '<td class="mono ' + clsOf(ch2) + '">' + signOf(ch2) + fmtDec(ch2, 2) + '%</td>' +
+      '<td class="mono num dim">' + fmtDec(oz.high, 2) + '</td>' +
+      '<td class="mono num dim">' + fmtDec(oz.low, 2) + '</td>' +
+      '<td class="mono dim">' + t2 + '</td>' +
+    '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('metalsTable').innerHTML = html;
+
+  renderBubble();
+}
+
+function renderBubble() {
+  var el = document.getElementById('bubbleBox');
+  if (!el) return;
+  var tgju = (State.data && State.data.tgju) || {};
+  var co = tgju.coins || {}, m = tgju.metals || {};
+
+  var emami = (co.emami && co.emami.price_toman) || 0;
+  var g18 = (m.gold_18k && m.gold_18k.price_toman) || 0;
+
+  if (emami <= 0 || g18 <= 0) {
+    el.innerHTML = '<div class="empty">داده کافی برای محاسبه موجود نیست</div>';
+    return;
+  }
+
+  var purePerGram = g18 / 0.75;
+  var intrinsic = purePerGram * 8.133 * 0.900;
+  var bubble = emami - intrinsic;
+  var bubblePct = (bubble / emami) * 100;
+
+  var statusText = 'متعادل';
+  var statusCls = 'flat';
+  if (bubblePct > 15) { statusText = 'حباب بالا - احتیاط'; statusCls = 'down'; }
+  else if (bubblePct > 8) { statusText = 'حباب متوسط'; statusCls = 'warn'; }
+  else if (bubblePct < 3) { statusText = 'فرصت خرید'; statusCls = 'up'; }
+
+  el.innerHTML =
+    '<table class="tbl">' +
+      '<tbody>' +
+        '<tr><td>قیمت بازار سکه امامی</td><td class="mono num bold">' + fmtNum(emami) + ' تومان</td></tr>' +
+        '<tr><td>ارزش ذاتی (طلای خالص)</td><td class="mono num">' + fmtNum(Math.round(intrinsic)) + ' تومان</td></tr>' +
+        '<tr><td>مبلغ حباب</td><td class="mono num ' + clsOf(bubble) + '">' + fmtNum(Math.round(bubble)) + ' تومان</td></tr>' +
+        '<tr><td>درصد حباب</td><td class="mono num ' + statusCls + ' bold">' + fmtDec(bubblePct, 2) + '% - ' + statusText + '</td></tr>' +
+      '</tbody>' +
+    '</table>';
+}
+
+// ---------- F3: Currencies ----------
+function renderCurrencies() {
+  var tgju = (State.data && State.data.tgju) || {};
+  var c = tgju.currencies || {};
+
+  var names = [
+    ['usd', 'دلار آمریکا'], ['eur', 'یورو'], ['gbp', 'پوند انگلیس'],
+    ['aed', 'درهم امارات'], ['try', 'لیر ترکیه'], ['cny', 'یوان چین'],
+    ['jpy', 'ین ژاپن'], ['cad', 'دلار کانادا'],
+    ['aud', 'دلار استرالیا'], ['chf', 'فرانک سوئیس']
+  ];
+
+  var html = '<table class="tbl"><thead><tr>' +
+    '<th>ارز</th><th>نرخ (تومان)</th><th>تغییر</th><th>بیشترین</th><th>کمترین</th><th>بروزرسانی</th>' +
+  '</tr></thead><tbody>';
+  names.forEach(function(r){
+    var it = c[r[0]]; if (!it) return;
+    var ch = it.change_pct || 0;
+    var t = (it.time || '').substring(11, 19);
+    html += '<tr>' +
+      '<td>' + r[1] + '</td>' +
+      '<td class="mono num bold">' + fmtNum(it.price_toman) + '</td>' +
+      '<td class="mono ' + clsOf(ch) + '">' + signOf(ch) + fmtDec(ch, 2) + '%</td>' +
+      '<td class="mono num dim">' + fmtNum(it.high_toman) + '</td>' +
+      '<td class="mono num dim">' + fmtNum(it.low_toman) + '</td>' +
+      '<td class="mono dim">' + t + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('currenciesTable').innerHTML = html;
+}
+
+// ---------- F4: Forecast Charts ----------
+function renderCharts() {
+  var d = State.data;
+  if (!d) return;
+  var p = d.prediction || {};
+
+  if (d.gold_history && p.gold_oz) {
+    drawForecastChart(
+      'cGoldOz',
+      d.gold_history.dates || [],
+      d.gold_history.prices || [],
+      p.target_dates || [],
+      p.gold_oz.daily || [],
+      p.gold_oz.low || 0,
+      p.gold_oz.high || 0,
+      '#00b8d4',
+      'دلار'
+    );
+  }
+
+  if (d.usd_history && p.usd_irr) {
+    drawForecastChart(
+      'cUsd',
+      d.usd_history.dates || [],
+      d.usd_history.prices || [],
+      p.target_dates || [],
+      p.usd_irr.daily || [],
+      p.usd_irr.low || 0,
+      p.usd_irr.high || 0,
+      '#c9a227',
+      'تومان'
+    );
+  }
+
+  if (d.iran_gold_history && p.iran_gold) {
+    drawForecastChart(
+      'cGold18',
+      d.iran_gold_history.dates || [],
+      d.iran_gold_history.prices || [],
+      p.target_dates || [],
+      p.iran_gold.daily || [],
+      p.iran_gold.low || 0,
+      p.iran_gold.high || 0,
+      '#d97706',
+      'تومان'
+    );
+  }
+}
+
+function drawForecastChart(canvasId, histDates, histPrices, predDates, predPrices, predLow, predHigh, color, unit) {
+  var el = document.getElementById(canvasId);
+  if (!el || typeof Chart === 'undefined') return;
+
+  if (State.charts[canvasId]) {
+    try { State.charts[canvasId].destroy(); } catch(e){}
+  }
+
+  // ─── آماده‌سازی داده‌ها ───
+  var HIST_DAYS = 30;
+  var hStart = Math.max(0, histDates.length - HIST_DAYS);
+  var histD = histDates.slice(hStart);
+  var histP = histPrices.slice(hStart);
+
+  if (histP.length === 0) return;
+
+  var currentPrice = histP[histP.length - 1];
+
+  // برچسب‌ها
+  var labels = [];
+  for (var i = 0; i < histD.length; i++) labels.push(toJalaliShort(histD[i]));
+  labels.push('امروز');
+  for (var i = 0; i < predDates.length; i++) {
+    var dt = predDates[i] || '';
+    labels.push(dt ? toJalaliShort(dt) : ('روز ' + (i + 1)));
+  }
+
+  var totalLen = labels.length;
+  var predOffset = histD.length + 1; // ایندکس شروع پیش‌بینی (روز اول آینده)
+
+  // ─── سری قیمت واقعی ───
+  var actualData = histP.slice();
+  actualData.push(currentPrice);        // نقطه امروز
+  for (var i = 0; i < predDates.length; i++) actualData.push(null);
+
+  // ─── سری پیش‌بینی ───
+  var predData = new Array(totalLen).fill(null);
+  predData[predOffset - 1] = currentPrice;  // نقطه اتصال با واقعی
+  for (var i = 0; i < predPrices.length; i++) {
+    predData[predOffset + i] = predPrices[i];
+  }
+
+  // ─── ابر عدم قطعیت (باند بالا و پایین) ───
+  var bandHigh = new Array(totalLen).fill(null);
+  var bandLow = new Array(totalLen).fill(null);
+
+  // شروع از نقطه امروز — عرض صفر
+  bandHigh[predOffset - 1] = currentPrice;
+  bandLow[predOffset - 1] = currentPrice;
+
+  // گسترش تدریجی
+  var fullBand = predHigh - predLow;
+  if (fullBand <= 0) fullBand = currentPrice * 0.04;
+
+  for (var i = 0; i < predPrices.length; i++) {
+    var progress = (i + 1) / predPrices.length;
+    // منحنی رشد نرم (کمی کمتر از خطی — شبیه ابر ایچیموکو)
+    var curveProgress = Math.pow(progress, 0.85);
+    var width = fullBand * curveProgress;
+    var mid = predPrices[i];
+    bandHigh[predOffset + i] = mid + width / 2;
+    bandLow[predOffset + i] = mid - width / 2;
+  }
+
+  // ─── رنگ‌ها ───
+  var bandFill = hexToRgba(color, 0.10);
+  var bandLine = hexToRgba(color, 0.35);
+
+  // ─── Chart.js ───
+  State.charts[canvasId] = new Chart(el, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        // ۱. باند بالایی (مخفی — فقط به‌عنوان مرجع fill)
+        {
+          label: '_upper',
+          data: bandHigh,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          borderWidth: 0,
+          pointRadius: 0,
+          fill: false,
+          tension: 0.2,
+          spanGaps: false
+        },
+        // ۲. باند پایینی (fill به باند بالایی = ابر)
+        {
+          label: 'محدوده پیش‌بینی',
+          data: bandLow,
+          borderColor: bandLine,
+          backgroundColor: bandFill,
+          borderWidth: 1,
+          pointRadius: 0,
+          fill: '-1',
+          tension: 0.2,
+          spanGaps: false
+        },
+        // ۳. قیمت واقعی
+        {
+          label: 'قیمت واقعی',
+          data: actualData,
+          borderColor: color,
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          fill: false,
+          tension: 0.15,
+          spanGaps: false
+        },
+        // ۴. پیش‌بینی
+        {
+          label: 'پیش‌بینی',
+          data: predData,
+          borderColor: color,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [5, 4],
+          pointRadius: 3,
+          pointBackgroundColor: color,
+          pointBorderColor: color,
+          fill: false,
+          tension: 0.2,
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      elements: { line: { capBezierPoints: true } },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'end',
+          labels: {
+            color: '#8891a0',
+            font: { size: 12, family: 'Vazirmatn' },
+            boxWidth: 14,
+            boxHeight: 2,
+            padding: 12,
+            usePointStyle: false,
+            filter: function(item) { return item.text !== '_upper'; }
+          }
+        },
+        tooltip: {
+          backgroundColor: '#10141a',
+          borderColor: '#1e242e',
+          borderWidth: 1,
+          titleColor: '#e8ecf1',
+          titleFont: { size: 11, family: 'Vazirmatn' },
+          bodyColor: '#8891a0',
+          bodyFont: { size: 11, family: 'Consolas' },
+          padding: 10,
+          displayColors: true,
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.dataset.label === '_upper') return null;
+              if (ctx.parsed.y === null || ctx.parsed.y === undefined) return null;
+              var v = ctx.parsed.y.toLocaleString('en-US', { maximumFractionDigits: 2 });
+              return ctx.dataset.label + ': ' + v + ' ' + unit;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#556070',
+            maxTicksLimit: 14,
+            font: { size: 11, family: 'Consolas' },
+            autoSkip: true
+          },
+          grid: { color: 'rgba(30,36,46,0.4)', drawBorder: false }
+        },
+        y: {
+          ticks: {
+            color: '#8891a0',
+            font: { size: 9, family: 'Consolas' }
+          },
+          grid: { color: 'rgba(30,36,46,0.4)', drawBorder: false }
+        }
+      }
+    }
+  });
+}
+
+function hexToRgba(hex, alpha) {
+  if (!hex || hex[0] !== '#' || hex.length < 7) return 'rgba(0,184,212,' + alpha + ')';
+  var r = parseInt(hex.slice(1, 3), 16);
+  var g = parseInt(hex.slice(3, 5), 16);
+  var b = parseInt(hex.slice(5, 7), 16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+// ---------- F5: Alerts ----------
+function initAlerts() {
+  var tgju = (State.data && State.data.tgju) || {};
+  var sel = document.getElementById('alertItem');
+  if (!sel) return;
+  if (sel.options.length === 0) {
+    var opts = '';
+    for (var k in (tgju.currencies || {})) opts += '<option value="c:' + k + '">ارز: ' + k.toUpperCase() + '</option>';
+    for (var k2 in (tgju.coins || {})) opts += '<option value="co:' + k2 + '">سکه: ' + k2 + '</option>';
+    for (var k3 in (tgju.metals || {})) opts += '<option value="m:' + k3 + '">فلز: ' + k3 + '</option>';
+    opts += '<option value="oz:gold">انس جهانی</option>';
+    sel.innerHTML = opts;
+  }
+  var btn = document.getElementById('btnAddAlert');
+  if (btn) btn.onclick = addAlert;
+  try {
+    var saved = localStorage.getItem('fionex_alerts');
+    if (saved) State.alerts = JSON.parse(saved);
+  } catch(e){}
+  renderAlertsList();
+}
+
+function addAlert() {
+  var item = document.getElementById('alertItem').value;
+  var op = document.getElementById('alertOp').value;
+  var price = parseFloat(document.getElementById('alertPrice').value);
+  if (!item || !op || isNaN(price) || price <= 0) return;
+  State.alerts.push({ item: item, op: op, price: price, ts: Date.now(), triggered: false });
+  localStorage.setItem('fionex_alerts', JSON.stringify(State.alerts));
+  document.getElementById('alertPrice').value = '';
+  renderAlertsList();
+}
+
+function getItemPrice(key) {
+  var tgju = (State.data && State.data.tgju) || {};
+  var parts = key.split(':');
+  var type = parts[0], name = parts[1];
+  if (type === 'oz') return (tgju.gold_oz && tgju.gold_oz.price) || 0;
+  if (type === 'c') return (tgju.currencies && tgju.currencies[name] && tgju.currencies[name].price_toman) || 0;
+  if (type === 'co') return (tgju.coins && tgju.coins[name] && tgju.coins[name].price_toman) || 0;
+  if (type === 'm') return (tgju.metals && tgju.metals[name] && tgju.metals[name].price_toman) || 0;
+  return 0;
+}
+
+function checkAlerts() {
+  var changed = false;
+  State.alerts.forEach(function(a){
+    var cur = getItemPrice(a.item);
+    var hit = (a.op === '>' && cur > a.price) || (a.op === '<' && cur < a.price);
+    if (hit && !a.triggered) { a.triggered = true; changed = true; }
+    if (!hit && a.triggered) { a.triggered = false; changed = true; }
+  });
+  if (changed) localStorage.setItem('fionex_alerts', JSON.stringify(State.alerts));
+  renderAlertsList();
+}
+
+function renderAlerts() {
+  renderAlertsList();
+}
+
+function renderAlertsList() {
+  var el = document.getElementById('alertsList'); if (!el) return;
+  if (State.alerts.length === 0) {
+    el.innerHTML = '<div class="empty">هشدار فعالی تنظیم نشده است</div>';
+    return;
+  }
+  var html = '<table class="tbl"><thead><tr>' +
+    '<th>آیتم</th><th>شرط</th><th>قیمت فعلی</th><th>وضعیت</th><th></th>' +
+  '</tr></thead><tbody>';
+  State.alerts.forEach(function(a, i){
+    var cur = getItemPrice(a.item);
+    var status = a.triggered ? '<span class="badge badge-active">فعال شده</span>' : '<span class="badge badge-wait">در انتظار</span>';
+    html += '<tr>' +
+      '<td class="mono">' + a.item + '</td>' +
+      '<td class="mono">' + a.op + ' ' + fmtNum(a.price) + '</td>' +
+      '<td class="mono">' + fmtNum(cur) + '</td>' +
+      '<td>' + status + '</td>' +
+      '<td><button class="btn-ghost" onclick="delAlert(' + i + ')">حذف</button></td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function delAlert(i) {
+  State.alerts.splice(i, 1);
+  localStorage.setItem('fionex_alerts', JSON.stringify(State.alerts));
+  renderAlertsList();
+}
+window.delAlert = delAlert;
+
+// ---------- F6: Prediction ----------
+function renderPrediction() {
+  var d = State.data;
+  if (!d) return;
+
+  document.querySelectorAll('.tab-btn').forEach(function(b){
+    b.onclick = function() {
+      document.querySelectorAll('.tab-btn').forEach(function(x){ x.classList.remove('active'); });
+      this.classList.add('active');
+      var t = this.getAttribute('data-tab');
+      document.getElementById('tabShort').style.display = (t === 'short') ? 'block' : 'none';
+      document.getElementById('tabWeekly').style.display = (t === 'weekly') ? 'block' : 'none';
+    };
+  });
+
+  renderSignalBar(d);
+  renderShortGrid(d);
+  renderWeeklyGrid(d);
+  renderWeeklyDaily(d);
+  renderPredChart(d);
+  renderPredSignals(d);
+  renderPredWeights(d);
+  renderPredictionAccuracy();
+  renderMarketRegime();
+  renderUpcomingEvents();
+  renderPredictionHistory();
+}
+
+function renderSignalBar(d) {
+  var el = document.getElementById('overallSignal');
+  if (!el) return;
+  var p = d.prediction || {};
+  var pe = d.prediction_ext || {};
+
+  var up = 0, down = 0, flat = 0;
+  ['gold_oz', 'usd_irr', 'iran_gold', 'coin'].forEach(function(k){
+    if (!pe[k]) return;
+    if (pe[k].direction === 'UP') up++;
+    else if (pe[k].direction === 'DOWN') down++;
+    else flat++;
+  });
+
+  var overall = 'خنثی', cls = 'flat';
+  if (up > down && up >= 2) { overall = 'صعودی'; cls = 'up'; }
+  else if (down > up && down >= 2) { overall = 'نزولی'; cls = 'down'; }
+
+  var weeklyConf = pe.weekly_confidence_dynamic || p.confidence || 50;
+  var trend = p.trend || '--';
+
+  el.className = 'signal-bar signal-' + cls;
+  el.innerHTML =
+    '<div class="signal-main">' +
+      '<span class="signal-label">سیگنال کلی بازار</span>' +
+      '<span class="signal-value">' + overall + '</span>' +
+    '</div>' +
+    '<div class="signal-detail">' +
+      '<span>روند: ' + trend + '</span>' +
+      '<span>اطمینان هفتگی: ' + fmtDec(weeklyConf, 1) + '%</span>' +
+    '</div>' +
+    '<div class="signal-counts">' +
+      '<span class="up">صعودی: ' + up + '</span>' +
+      '<span class="down">نزولی: ' + down + '</span>' +
+      '<span class="flat">خنثی: ' + flat + '</span>' +
+    '</div>';
+}
+
+function renderShortGrid(d) {
+  var el = document.getElementById('shortGrid');
+  if (!el) return;
+  var pe = d.prediction_ext || {};
+  var tgju = d.tgju || {};
+  var c = tgju.currencies || {}, m = tgju.metals || {}, co = tgju.coins || {}, oz = tgju.gold_oz || {};
+
+  var items = [
+    { key: 'gold_oz', title: 'انس جهانی', unit: 'دلار', live: oz.price || 0, dec: 2 },
+    { key: 'usd_irr', title: 'دلار آزاد', unit: 'تومان', live: (c.usd && c.usd.price_toman) || 0, dec: 0 },
+    { key: 'iran_gold', title: 'طلای ۱۸ عیار', unit: 'تومان', live: (m.gold_18k && m.gold_18k.price_toman) || 0, dec: 0 },
+    { key: 'coin', title: 'سکه امامی', unit: 'تومان', live: (co.emami && co.emami.price_toman) || 0, dec: 0 }
+  ];
+
+  var html = '';
+  items.forEach(function(it){
+    var pred = pe[it.key];
+    if (!pred) {
+      html += '<div class="pred-card flat"><div class="pred-title">' + it.title + '</div><div class="empty-sm">داده موجود نیست</div></div>';
+      return;
+    }
+    var cls2 = pred.direction === 'UP' ? 'up' : (pred.direction === 'DOWN' ? 'down' : 'flat');
+    var strengthFa = { 'STRONG': 'قوی', 'MODERATE': 'متوسط', 'WEAK': 'ضعیف' }[pred.strength] || '--';
+
+    html += '<div class="pred-card ' + cls2 + '">' +
+      '<div class="pred-card-hdr">' +
+        '<span class="pred-title">' + it.title + '</span>' +
+        '<span class="pred-status ' + cls2 + '">' + strengthFa + '</span>' +
+      '</div>' +
+      '<div class="pred-current mono">' + fmtDec(it.live, it.dec) + '<span class="u">' + it.unit + '</span></div>' +
+      '<table class="pred-table">' +
+        '<tr><td>+۱ ساعت</td><td class="mono">' + fmtDec(pred.h1, it.dec) + '</td><td class="mono ' + clsOf(pred.h1_pct) + '">' + signOf(pred.h1_pct) + fmtDec(pred.h1_pct, 3) + '%</td></tr>' +
+        '<tr><td>+۴ ساعت</td><td class="mono">' + fmtDec(pred.h4, it.dec) + '</td><td class="mono ' + clsOf(pred.h4_pct) + '">' + signOf(pred.h4_pct) + fmtDec(pred.h4_pct, 3) + '%</td></tr>' +
+        '<tr class="row-main"><td>+۲۴ ساعت</td><td class="mono bold">' + fmtDec(pred.h24, it.dec) + '</td><td class="mono bold ' + clsOf(pred.h24_pct) + '">' + signOf(pred.h24_pct) + fmtDec(pred.h24_pct, 3) + '%</td></tr>' +
+      '</table>' +
+      '<div class="pred-foot"><span>اطمینان</span><span class="mono">' + fmtDec(pred.confidence, 1) + '%</span></div>' +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderWeeklyGrid(d) {
+  var el = document.getElementById('weeklyGrid');
+  if (!el) return;
+  var p = d.prediction || {};
+  var tgju = d.tgju || {};
+  var c = tgju.currencies || {}, m = tgju.metals || {}, co = tgju.coins || {}, oz = tgju.gold_oz || {};
+
+  var items = [
+    { title: 'انس جهانی', unit: 'دلار', live: oz.price || 0, pred: p.gold_oz, dec: 2 },
+    { title: 'دلار آزاد', unit: 'تومان', live: (c.usd && c.usd.price_toman) || 0, pred: p.usd_irr, dec: 0 },
+    { title: 'طلای ۱۸ عیار', unit: 'تومان', live: (m.gold_18k && m.gold_18k.price_toman) || 0, pred: p.iran_gold, dec: 0 },
+    { title: 'سکه امامی', unit: 'تومان', live: (co.emami && co.emami.price_toman) || 0, pred: p.coin, dec: 0 }
+  ];
+
+  var html = '';
+  items.forEach(function(it){
+    if (!it.pred || !it.pred.point || it.live <= 0) {
+      html += '<div class="pred-card flat"><div class="pred-title">' + it.title + '</div><div class="empty-sm">داده موجود نیست</div></div>';
+      return;
+    }
+    var point = it.pred.point;
+    var low = it.pred.low || point * 0.98;
+    var high = it.pred.high || point * 1.02;
+    var ch = ((point - it.live) / it.live) * 100;
+    var cls2 = ch > 0.3 ? 'up' : (ch < -0.3 ? 'down' : 'flat');
+
+    html += '<div class="pred-card ' + cls2 + '">' +
+      '<div class="pred-card-hdr"><span class="pred-title">' + it.title + '</span><span class="pred-status ' + cls2 + '">۷ روز</span></div>' +
+      '<div class="pred-current mono">' + fmtDec(it.live, it.dec) + '<span class="u">' + it.unit + '</span></div>' +
+      '<table class="pred-table">' +
+        '<tr><td>هدف ۷ روز</td><td class="mono bold" colspan="2">' + fmtDec(point, it.dec) + '</td></tr>' +
+        '<tr><td>تغییر</td><td class="mono bold ' + cls2 + '" colspan="2">' + signOf(ch) + fmtDec(ch, 2) + '%</td></tr>' +
+        '<tr><td>کمترین</td><td class="mono dim" colspan="2">' + fmtDec(low, it.dec) + '</td></tr>' +
+        '<tr><td>بیشترین</td><td class="mono dim" colspan="2">' + fmtDec(high, it.dec) + '</td></tr>' +
+      '</table>' +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderWeeklyDaily(d) {
+  var el = document.getElementById('weeklyDaily');
+  if (!el) return;
+  var p = d.prediction || {};
+  var tgju = d.tgju || {};
+  var oz = tgju.gold_oz || {}, c = tgju.currencies || {}, m = tgju.metals || {};
+
+  var dates = p.target_dates || [];
+  var gD = (p.gold_oz && p.gold_oz.daily) || [];
+  var uD = (p.usd_irr && p.usd_irr.daily) || [];
+  var iD = (p.iran_gold && p.iran_gold.daily) || [];
+
+  if (dates.length === 0 || gD.length === 0) {
+    el.innerHTML = '<div class="empty">داده روزانه موجود نیست</div>';
+    return;
+  }
+
+  var gNow = oz.price || 0;
+  var uNow = (c.usd && c.usd.price_toman) || 0;
+  var iNow = (m.gold_18k && m.gold_18k.price_toman) || 0;
+
+  var html = '<table class="tbl"><thead><tr>' +
+    '<th>تاریخ</th>' +
+    '<th>انس (دلار)</th><th>تغییر</th>' +
+    '<th>دلار (تومان)</th><th>تغییر</th>' +
+    '<th>طلای ۱۸ (تومان)</th><th>تغییر</th>' +
+  '</tr></thead><tbody>';
+
+  for (var i = 0; i < dates.length; i++) {
+    var gP = i === 0 ? gNow : gD[i-1];
+    var uP = i === 0 ? uNow : uD[i-1];
+    var iP = i === 0 ? iNow : iD[i-1];
+    var gCh = gP > 0 ? ((gD[i] - gP) / gP) * 100 : 0;
+    var uCh = uP > 0 ? ((uD[i] - uP) / uP) * 100 : 0;
+    var iCh = iP > 0 ? ((iD[i] - iP) / iP) * 100 : 0;
+
+    html += '<tr>' +
+      '<td class="mono dim">' + toJalali(dates[i]) + '</td>' +
+      '<td class="mono">' + fmtDec(gD[i], 2) + '</td>' +
+      '<td class="mono ' + clsOf(gCh) + '">' + signOf(gCh) + fmtDec(gCh, 2) + '%</td>' +
+      '<td class="mono">' + fmtNum(uD[i]) + '</td>' +
+      '<td class="mono ' + clsOf(uCh) + '">' + signOf(uCh) + fmtDec(uCh, 2) + '%</td>' +
+      '<td class="mono">' + fmtNum(iD[i]) + '</td>' +
+      '<td class="mono ' + clsOf(iCh) + '">' + signOf(iCh) + fmtDec(iCh, 2) + '%</td>' +
+    '</tr>';
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function renderPredChart(d) {
+  var canvas = document.getElementById('predChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  var p = d.prediction || {};
+  var tgju = d.tgju || {};
+  var oz = tgju.gold_oz || {};
+  var now = oz.price || 0;
+  var daily = (p.gold_oz && p.gold_oz.daily) || [];
+
+  if (daily.length === 0 || now <= 0) return;
+
+  var labels = ['امروز'];
+  var actual = [now];
+  var predicted = [now];
+  var dates = p.target_dates || [];
+
+  for (var i = 0; i < daily.length; i++) {
+    labels.push(dates[i] ? dates[i].substring(5) : ('روز ' + (i+1)));
+    actual.push(null);
+    predicted.push(daily[i]);
+  }
+
+  if (State.charts['predChart']) {
+    try { State.charts['predChart'].destroy(); } catch(e){}
+  }
+
+  State.charts['predChart'] = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'قیمت فعلی', data: actual, borderColor: '#00b8d4', backgroundColor: '#00b8d410', borderWidth: 2, pointRadius: 4, fill: false },
+        { label: 'پیش‌بینی', data: predicted, borderColor: '#a855f7', backgroundColor: '#a855f710', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 3, fill: true }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#8891a0', font: { size: 10 } } },
+        tooltip: { backgroundColor: '#10141a', borderColor: '#1e242e', borderWidth: 1, titleColor: '#d0d4db', bodyColor: '#8891a0' }
+      },
+      scales: {
+        x: { ticks: { color: '#556070', font: { size: 9 } }, grid: { color: 'rgba(30,36,46,0.5)' } },
+        y: { ticks: { color: '#8891a0', font: { size: 9 } }, grid: { color: 'rgba(30,36,46,0.5)' } }
+      }
+    }
+  });
+}
+
+function renderPredSignals(d) {
+  var el = document.getElementById('predSignals');
+  if (!el) return;
+  var p = d.prediction || {};
+  var pe = d.prediction_ext || {};
+  var sigs = [];
+
+  if (pe.gold_oz) {
+    if (pe.gold_oz.direction === 'UP' && pe.gold_oz.strength === 'STRONG') sigs.push('انس طلا: صعود قوی در ۲۴ ساعت آینده');
+    else if (pe.gold_oz.direction === 'UP') sigs.push('انس طلا: صعود ملایم');
+    else if (pe.gold_oz.direction === 'DOWN' && pe.gold_oz.strength === 'STRONG') sigs.push('انس طلا: فشار فروش شدید');
+  }
+  if (pe.usd_irr) {
+    if (pe.usd_irr.direction === 'UP') sigs.push('دلار: فشار خرید در بازار');
+    else if (pe.usd_irr.direction === 'DOWN') sigs.push('دلار: احتمال کاهش نرخ');
+  }
+  if (pe.coin && pe.coin.direction === 'UP') sigs.push('سکه امامی: تمایل صعودی');
+
+  (p.signals || []).forEach(function(s){ sigs.push(s); });
+
+  if (sigs.length === 0) {
+    el.innerHTML = '<div class="empty">سیگنال فعالی موجود نیست</div>';
+    return;
+  }
+
+  var html = '';
+  sigs.slice(0, 10).forEach(function(s){ html += '<div class="signal-line">' + s + '</div>'; });
+  el.innerHTML = html;
+}
+
+function renderPredWeights(d) {
+  var el = document.getElementById('predWeights');
+  if (!el) return;
+  var weights = (d.prediction || {}).method_weights || {};
+  var total = 0;
+  for (var k in weights) total += weights[k];
+
+  if (total <= 0) { el.innerHTML = '<div class="empty">داده‌ای موجود نیست</div>'; return; }
+
+  var html = '';
+  for (var k2 in weights) {
+    var pct = (weights[k2] / total) * 100;
+    html += '<div class="wt-row">' +
+      '<span class="wt-name mono">' + k2 + '</span>' +
+      '<div class="wt-bar"><div class="wt-fill" style="width:' + pct + '%"></div></div>' +
+      '<span class="wt-pct mono">' + fmtDec(pct, 1) + '%</span>' +
+    '</div>';
+  }
+  el.innerHTML = html;
+}
+
+
+// ---------- Prediction Accuracy ----------
+function renderPredictionAccuracy() {
+  var el = document.getElementById('predAccuracy');
+  if (!el) return;
+  var d = State.data || {};
+  var acc = d.prediction_accuracy || {};
+  if (!acc.available) {
+    el.innerHTML = '<div class="empty">داده کافی برای محاسبه دقت موجود نیست - پس از چند روز پیش‌بینی، این بخش فعال می‌شود</div>';
+    return;
+  }
+  var syms = acc.symbols || {};
+  var names = { gold_oz: 'انس جهانی', usd_irr: 'دلار آزاد', iran_gold: 'طلای ۱۸ عیار', coin: 'سکه امامی' };
+  var html = '<table class="tbl"><thead><tr>' +
+    '<th>دارایی</th><th>تعداد پیش‌بینی</th><th>میانگین خطا</th><th>دقت کلی</th><th>دقت جهتی</th>' +
+  '</tr></thead><tbody>';
+  var totalCount = 0, totalErr = 0;
+  for (var k in names) {
+    var s = syms[k]; if (!s) continue;
+    totalCount += s.count;
+    totalErr += s.mean_error_pct * s.count;
+    var accCls = s.accuracy_pct >= 85 ? 'up' : (s.accuracy_pct >= 70 ? 'flat' : 'down');
+    html += '<tr>' +
+      '<td>' + names[k] + '</td>' +
+      '<td class="mono num">' + s.count + '</td>' +
+      '<td class="mono num">' + s.mean_error_pct.toFixed(3) + '%</td>' +
+      '<td class="mono num bold ' + accCls + '">' + s.accuracy_pct.toFixed(1) + '%</td>' +
+      '<td class="mono num">' + s.directional_accuracy.toFixed(1) + '%</td>' +
+    '</tr>';
+  }
+  if (totalCount > 0) {
+    var overall = 100 - (totalErr / totalCount);
+    var overallCls = overall >= 85 ? 'up' : (overall >= 70 ? 'flat' : 'down');
+    html += '<tr style="border-top:2px solid var(--border);font-weight:700">' +
+      '<td>مجموع</td>' +
+      '<td class="mono num">' + totalCount + '</td>' +
+      '<td class="mono num">' + (totalErr / totalCount).toFixed(3) + '%</td>' +
+      '<td class="mono num ' + overallCls + '">' + overall.toFixed(1) + '%</td>' +
+      '<td>-</td>' +
+    '</tr>';
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ---------- Market Regime ----------
+function renderMarketRegime() {
+  var el = document.getElementById('marketRegimeBox');
+  if (!el) return;
+  var d = State.data || {};
+  var r = d.market_regime || {};
+  if (!r.available) {
+    el.innerHTML = '<div class="empty">داده کافی موجود نیست</div>';
+    return;
+  }
+  var cls = r.type === 'RANGE' ? 'flat' : (r.type === 'VOLATILE' ? 'warn' : 'up');
+  el.innerHTML =
+    '<div class="regime-box regime-' + cls + '">' +
+      '<div class="regime-type">' + r.type_fa + '</div>' +
+      '<div class="regime-desc">' + r.description + '</div>' +
+      '<div class="regime-vol mono">نوسان ۳۰ روز: ' + r.volatility_pct.toFixed(2) + '%</div>' +
+    '</div>';
+}
+
+// ---------- Upcoming Events Warning ----------
+function renderUpcomingEvents() {
+  var el = document.getElementById('upcomingEvents');
+  if (!el) return;
+  var d = State.data || {};
+  var e = d.upcoming_events_warning || {};
+  if (!e.available || !e.events || e.events.length === 0) {
+    el.innerHTML = '<div class="empty">رویداد مهمی در پیش نیست</div>';
+    return;
+  }
+  var html = '';
+  e.events.forEach(function(ev){
+    var impactCls = ev.impact === 'high' ? 'down' : 'warn';
+    var impactFa = ev.impact === 'high' ? 'پراهمیت' : 'متوسط';
+    html += '<div class="event-row event-' + impactCls + '">' +
+      '<div class="event-title">' + ev.title + '</div>' +
+      '<div class="event-meta">' +
+        '<span class="event-impact ' + impactCls + '">' + impactFa + '</span>' +
+        '<span class="mono dim">' + (ev.date || '') + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+// ---------- Prediction History Table ----------
+function renderPredictionHistory() {
+  var el = document.getElementById('predHistory');
+  if (!el) return;
+  var d = State.data || {};
+  var h = d.prediction_history || {};
+  var goldH = h.gold_oz || [];
+  if (goldH.length === 0) {
+    el.innerHTML = '<div class="empty">تاریخچه‌ای موجود نیست - با گذشت زمان پر می‌شود</div>';
+    return;
+  }
+  var html = '<table class="tbl"><thead><tr>' +
+    '<th>تاریخ</th><th>قیمت پایه</th><th>پیش‌بینی ۲۴س</th><th>واقعی ۲۴س</th><th>خطا</th>' +
+  '</tr></thead><tbody>';
+  goldH.forEach(function(r){
+    var errCls = r.error_pct < 0.5 ? 'up' : (r.error_pct < 1.0 ? 'flat' : 'down');
+    html += '<tr>' +
+      '<td class="mono dim">' + toJalali(r.date) + '</td>' +
+      '<td class="mono num">' + r.base_price.toFixed(2) + '</td>' +
+      '<td class="mono num">' + r.predicted.toFixed(2) + '</td>' +
+      '<td class="mono num">' + r.actual.toFixed(2) + '</td>' +
+      '<td class="mono num ' + errCls + '">' + r.error_pct.toFixed(2) + '%</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ---------- Bootstrap ----------
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.nav-item').forEach(function(b){
+    b.addEventListener('click', function(){ switchPage(this.getAttribute('data-page')); });
+  });
+  document.addEventListener('keydown', function(e){
+    var keys = { 'F1':'p-home', 'F2':'p-coins', 'F3':'p-currencies', 'F4':'p-charts', 'F5':'p-alerts', 'F6':'p-predict' };
+    if (keys[e.key]) { e.preventDefault(); switchPage(keys[e.key]); }
+  });
+  var btn = document.getElementById('btnRefresh');
+  if (btn) {
+    btn.onclick = function(){
+      this.disabled = true;
+      var self = this;
+      fetch('/api/refresh').then(function(r){ return r.json(); }).then(function(){ loadData(); }).finally(function(){ self.disabled = false; });
+    };
+  }
+  loadData();
+  setInterval(loadData, 30000);
+});

@@ -1,0 +1,294 @@
+// ================================================================
+// 🏦 سامانه فرانت‌اند جامع Gold Predictor v5.0 (نسخه خطی خالص)
+// ================================================================
+
+window.appState = null;
+let charts = {};
+
+// تبدیل تاریخ‌ها به تقویم شمسی
+function gregorianToJalali(gy, gm, gd) {
+    const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    let jy = (gy <= 1600) ? 0 : 979;
+    gy -= (gy <= 1600) ? 621 : 1600;
+    const gy2 = (gm > 2) ? (gy + 1) : gy;
+    let days = (365 * gy) + parseInt((gy2 + 3) / 4) - parseInt((gy2 + 99) / 100) + parseInt((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
+    jy += 33 * parseInt(days / 12053);
+    days %= 12053;
+    jy += 4 * parseInt(days / 1461);
+    days %= 1461;
+    jy += parseInt((days - 1) / 365);
+    if (days > 0) days = (days - 1) % 365;
+    const jm = (days < 186) ? 1 + parseInt(days / 31) : 7 + parseInt((days - 186) / 30);
+    const jd = 1 + ((days < 186) ? (days % 31) : ((days - 186) % 30));
+    return [jy, jm, jd];
+}
+
+const PERSIAN_MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+
+function toPersianDate(dateStr, includeMonthName = false) {
+    if (!dateStr) return "--";
+    try {
+        const cleanStr = String(dateStr).split("T")[0].split(" ")[0];
+        const parts = cleanStr.split("-");
+        if (parts.length < 3) return dateStr;
+        const gy = parseInt(parts[0], 10);
+        const gm = parseInt(parts[1], 10);
+        const gd = parseInt(parts[2], 10);
+        if (isNaN(gy) || isNaN(gm) || isNaN(gd)) return dateStr;
+        const [jy, jm, jd] = gregorianToJalali(gy, gm, gd);
+        if (includeMonthName) {
+            return `${jd} ${PERSIAN_MONTHS[jm - 1]} ${jy}`;
+        }
+        return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+function formatPriceFa(num) {
+    if (num === null || num === undefined || isNaN(num)) return "--";
+    return Math.round(Number(num)).toLocaleString('fa-IR');
+}
+
+// ------------------------------------------------------------------
+// تزریق پیش‌بینی‌های گذشته به صورت نقاط طلایی متمایز روی نمودار خطی اصلی
+// ------------------------------------------------------------------
+function injectPredictionDots(chartInstance, dotsArray, baseDates) {
+    if (!chartInstance || !dotsArray || dotsArray.length === 0) return;
+    
+    const predictionValues = baseDates.map(date => {
+        const match = dotsArray.find(d => d.target_date === date);
+        return match ? match.predicted : null;
+    });
+
+    const datasetLabel = 'پیش‌بینی‌های گذشته شما';
+    const dotDataset = {
+        label: datasetLabel,
+        data: predictionValues,
+        borderColor: '#ffcc00',
+        backgroundColor: '#ffcc00',
+        pointRadius: 6,
+        pointHoverRadius: 9,
+        showLine: false, // بدون خط، فقط نقطه
+        fill: false,
+        zIndex: 99
+    };
+
+    const existingIdx = chartInstance.data.datasets.findIndex(d => d.label === datasetLabel);
+    if (existingIdx !== -1) {
+        chartInstance.data.datasets[existingIdx] = dotDataset;
+    } else {
+        chartInstance.data.datasets.push(dotDataset);
+    }
+    chartInstance.update();
+}
+
+// ------------------------------------------------------------------
+// ایجاد نمودارهای خطی استاندارد Chart.js
+// ------------------------------------------------------------------
+function destroyChart(id) {
+    if (charts[id]) {
+        charts[id].destroy();
+        delete charts[id];
+    }
+}
+
+function renderLineChart(canvasId, labels, dataPoints, labelName, color = "#00ff88", historicalDots = null) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    
+    destroyChart(canvasId);
+
+    const persianLabels = labels.map(d => toPersianDate(d));
+
+    charts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: persianLabels,
+            datasets: [{
+                label: labelName,
+                data: dataPoints,
+                borderColor: color,
+                backgroundColor: 'rgba(0, 255, 136, 0.05)',
+                borderWidth: 2,
+                pointRadius: 1,
+                tension: 0.15,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, labels: { color: '#d1d4dc' } }
+            },
+            scales: {
+                x: { grid: { color: '#2a2e39' }, ticks: { color: '#d1d4dc' } },
+                y: { grid: { color: '#2a2e39' }, ticks: { color: '#d1d4dc' } }
+            }
+        }
+    });
+
+    // اگر دیتای ذخیره شده پیش‌بینی وجود دارد، روی نمودار خطی تزریق شود
+    if (historicalDots) {
+        injectPredictionDots(charts[canvasId], historicalDots, labels);
+    }
+}
+
+// ------------------------------------------------------------------
+// رندرهای اختصاصی صفحات
+// ------------------------------------------------------------------
+function renderOverview() {
+    if (!window.appState) return;
+    const cp = window.appState.current_prices;
+    
+    document.getElementById("alertBanner").innerText = window.appState.market_alert.message;
+    
+    // فیلدهای دلار، انس و طلا ۱۸
+    document.getElementById("macroKpi").innerHTML = `
+        <div class="kpi-card">
+            <h4>انس جهانی</h4>
+            <div class="value">${cp.gold_oz_usd} USD</div>
+            <div class="source-badge">${cp.providers.gold}</div>
+        </div>
+        <div class="kpi-card">
+            <h4>دلار تهران</h4>
+            <div class="value">${formatPriceFa(cp.usd_irr)} تومان</div>
+            <div class="source-badge">${cp.providers.usd}</div>
+        </div>
+        <div class="kpi-card">
+            <h4>طلای ۱۸ عیار</h4>
+            <div class="value">${formatPriceFa(cp.iran_gold_gram18)} تومان</div>
+            <div class="source-badge">${cp.providers.iran}</div>
+        </div>
+        <div class="kpi-card">
+            <h4>سکه امامی</h4>
+            <div class="value">${formatPriceFa(cp.coin_emami)} تومان</div>
+            <div class="source-badge">فرمول محاسباتی</div>
+        </div>
+    `;
+
+    // رسم چارت مینی طلا
+    const gh = window.appState.gold_history;
+    renderLineChart("ovChGoldMini", gh.dates, gh.prices, "انس جهانی طلا", "#ffcc00");
+}
+
+function renderGold() {
+    if (!window.appState) return;
+    
+    const gh = window.appState.gold_history;
+    const uh = window.appState.usd_history;
+    const ih = window.appState.iran_gold_history;
+    const hDots = window.appState.historical_prediction_dots;
+
+    // رسم نمودار خطی انس به همراه ذخیره پیش‌بینی‌های قبلی
+    renderLineChart("chGold", gh.dates, gh.prices, "انس جهانی طلا (USD)", "#ffcc00", hDots ? hDots.gold_oz : null);
+    
+    // رسم نمودار خطی دلار به همراه ذخیره پیش‌بینی‌های قبلی
+    renderLineChart("chUSD", uh.dates, uh.prices, "دلار تهران (تومان)", "#00ff88", hDots ? hDots.usd_irr : null);
+    
+    // رسم نمودار خطی طلای ۱۸ عیار به همراه ذخیره پیش‌بینی‌های قبلی
+    renderLineChart("chIran", ih.dates, ih.prices, "طلای ۱۸ عیار (تومان)", "#e5a93b", hDots ? hDots.iran_gold : null);
+}
+
+function renderFX() {
+    // فارکس اسکنر همچنان به قوت خود فعال است
+    if (!window.appState || !window.appState.fx_scan) return;
+    const setups = window.appState.fx_scan.setups || [];
+    const container = document.getElementById("fxSetups");
+    if (!container) return;
+    
+    container.innerHTML = setups.map(s => `
+        <div class="setup-card">
+            <h4>${s.symbol} [${s.bias}]</h4>
+            <p>کیفیت: ${s.trade_quality} | ریسک به ریوار: ${s.risk_reward}</p>
+            <p>تارگت: ${formatPriceFa(s.target1)} | استاپ: ${formatPriceFa(s.stop_loss)}</p>
+        </div>
+    `).join("");
+}
+
+function renderRelations() {
+    if (!window.appState || !window.appState.relationships) return;
+    const rels = window.appState.relationships.relations || [];
+    const container = document.getElementById("corrTbl");
+    if (!container) return;
+
+    container.innerHTML = rels.map(r => `
+        <tr>
+            <td>${r.asset_b}</td>
+            <td>${r.pearson_20d.toFixed(2)}</td>
+            <td>${r.pearson_60d.toFixed(2)}</td>
+            <td>${r.strength}</td>
+        </tr>
+    `).join("");
+}
+
+function renderBacktestDefault() {
+    if (!window.appState || !window.appState.backtest) return;
+    const bt = window.appState.backtest;
+    document.getElementById("horizonStats").innerHTML = `
+        <div class="kpi-card"><h4>MAPE انس</h4><div class="value">${bt.gold_mape}%</div></div>
+        <div class="kpi-card"><h4>MAPE دلار</h4><div class="value">${bt.usd_mape}%</div></div>
+        <div class="kpi-card"><h4>MAPE طلای ۱۸</h4><div class="value">${bt.iran_mape}%</div></div>
+    `;
+}
+
+function renderReports() {
+    if (!window.appState || !window.appState.trade_journal) return;
+    const j = window.appState.trade_journal;
+    document.getElementById("journalStatsWidget").innerHTML = `
+        <p>نرخ برد: ${j.win_rate}% | فاکتور سود: ${j.profit_factor}</p>
+    `;
+}
+
+// ------------------------------------------------------------------
+// کنترلر لایف‌سایکل و ناوبری صفحات
+// ------------------------------------------------------------------
+function renderCurrentPage() {
+    const activeTab = document.querySelector(".nav-btn.active");
+    if (!activeTab) return;
+    const pageId = activeTab.getAttribute("data-page");
+    
+    if (pageId === "page-overview") renderOverview();
+    else if (pageId === "page-gold") renderGold();
+    else if (pageId === "page-fx") renderFX();
+    else if (pageId === "page-relations") renderRelations();
+    else if (pageId === "page-backtest") renderBacktestDefault();
+    else if (pageId === "page-reports") renderReports();
+}
+
+async function loadData() {
+    try {
+        const resp = await fetch("/api/data");
+        if (resp.ok) {
+            window.appState = await resp.json();
+            renderCurrentPage();
+        }
+    } catch (e) {
+        console.error("خطا در ارتباط با سرور:", e);
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    // ناوبری تب‌ها
+    const btns = document.querySelectorAll(".nav-btn");
+    btns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            btns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            
+            // مخفی کردن تمام صفحات و باز کردن صفحه جاری
+            document.querySelectorAll(".page-section").forEach(p => p.classList.remove("active"));
+            const targetPage = btn.getAttribute("data-page");
+            const pageEl = document.getElementById(targetPage);
+            if (pageEl) pageEl.classList.add("active");
+            
+            renderCurrentPage();
+        });
+    });
+
+    loadData();
+    
+    // سیستم آپدیت خودکار زنده هر ۴۵ ثانیه
+    setInterval(loadData, 45000);
+});

@@ -1,0 +1,532 @@
+﻿# ============================================================
+# ENHANCED PREDICTOR - فاز 1
+# ============================================================
+
+# 1. Z-Score Mean Reversion
+function zscore_signal(prices::Vector{Float64}, window::Int=20)
+    if length(prices) < window + 5
+        return 0.0, 0.0
+    end
+    recent = prices[end-window+1:end]
+    mu = mean(recent)
+    sigma = std(recent)
+    if sigma < 1e-10
+        return 0.0, 0.0
+    end
+    z = (last(prices) - mu) / sigma
+    # mean reversion signal: اگر z > 2 فشار نزولی، اگر z < -2 فشار صعودی
+    reversion_adj = clamp(-z * 0.015, -0.04, 0.04)
+    return z, reversion_adj
+end
+
+# 2. Improved Macro Adjustment با regression واقعی
+function macro_regression_signal(gold_prices::Vector{Float64},
+                                  dxy::Float64, us10y::Float64, vix::Float64,
+                                  dxy_hist::Vector{Float64}, us10y_hist::Vector{Float64},
+                                  vix_hist::Vector{Float64})
+    signals = String[]
+    total_adj = 0.0
+
+    # DXY: رابطه معکوس با طلا
+    # هر 1% تغییر DXY ≈ 0.5% تغییر معکوس طلا
+    if length(dxy_hist) >= 5
+        dxy_chg = (dxy - dxy_hist[end-min(4,length(dxy_hist)-1)]) / dxy_hist[end-min(4,length(dxy_hist)-1)]
+        dxy_adj = -dxy_chg * 0.5
+        total_adj += dxy_adj
+        if abs(dxy_chg) > 0.005
+            dir = dxy_chg > 0 ? "↑ فشار نزولی" : "↓ حمایت صعودی"
+            push!(signals, "DXY $(round(dxy,digits=1)) $dir ($(round(dxy_chg*100,digits=2))%)")
+        end
+    end
+
+    # US10Y: رابطه معکوس با طلا (real rate)
+    if us10y > 5.0
+        total_adj -= 0.008
+        push!(signals, "US10Y $(us10y)% → فشار نزولی شدید")
+    elseif us10y > 4.5
+        total_adj -= 0.004
+        push!(signals, "US10Y $(us10y)% → فشار نزولی متوسط")
+    elseif us10y < 3.0
+        total_adj += 0.006
+        push!(signals, "US10Y $(us10y)% → حمایت صعودی")
+    elseif us10y < 3.5
+        total_adj += 0.003
+        push!(signals, "US10Y $(us10y)% → حمایت ملایم")
+    end
+
+    # VIX: رابطه مستقیم با طلا (safe haven)
+    if vix > 35
+        total_adj += 0.015
+        push!(signals, "VIX $(vix) → پناهگاه امن - صعود قوی")
+    elseif vix > 25
+        total_adj += 0.007
+        push!(signals, "VIX $(vix) → تقاضای safe haven")
+    elseif vix < 12
+        total_adj -= 0.003
+        push!(signals, "VIX $(vix) → ریسک‌پذیری بالا، فشار نزولی")
+    end
+
+    return clamp(total_adj, -0.03, 0.03), signals
+end
+
+# 3. Sentiment-Weighted Adjustment
+function sentiment_adjustment(sentiment_score::Float64, alert_level::String)
+    # sentiment_score: -100 to +100
+    # تبدیل به تأثیر قیمتی
+    base_adj = clamp(sentiment_score / 5000.0, -0.02, 0.02)
+
+    multiplier = if alert_level == "HIGH"
+        1.5
+    elseif alert_level == "MEDIUM"
+        1.2
+    else
+        1.0
+    end
+
+    return base_adj * multiplier
+end
+
+# 4. Improved Technical Analysis
+function advanced_technical(prices::Vector{Float64}, days::Int=7)
+    signals = String[]
+    score = 0.0
+    cur = last(prices)
+    n = length(prices)
+
+    # RSI با divergence
+    if n > 14
+        rsi = begin
+            ch = diff(prices[end-14:end])
+            ag = mean(max.(ch, 0.0)); al = mean(max.(-ch, 0.0))
+            al < 1e-15 ? 100.0 : 100.0 - 100.0/(1.0 + ag/al)
+        end
+
+        if rsi > 80
+            score -= 20; push!(signals, "RSI=$(round(rsi,digits=1)) ← اشباع خرید شدید")
+        elseif rsi > 70
+            score -= 12; push!(signals, "RSI=$(round(rsi,digits=1)) ← اشباع خرید")
+        elseif rsi < 20
+            score += 20; push!(signals, "RSI=$(round(rsi,digits=1)) ← اشباع فروش شدید")
+        elseif rsi < 30
+            score += 12; push!(signals, "RSI=$(round(rsi,digits=1)) ← اشباع فروش")
+        elseif rsi > 55
+            score += 6; push!(signals, "RSI=$(round(rsi,digits=1)) ← صعودی")
+        elseif rsi < 45
+            score -= 6; push!(signals, "RSI=$(round(rsi,digits=1)) ← نزولی")
+        end
+    end
+
+    # MACD
+    if n > 26
+        alpha12 = 2.0/(12+1); alpha26 = 2.0/(26+1); alpha9 = 2.0/(9+1)
+        ema12 = prices[1]; ema26 = prices[1]
+        for p in prices
+            ema12 = alpha12*p + (1-alpha12)*ema12
+            ema26 = alpha26*p + (1-alpha26)*ema26
+        end
+        macd = ema12 - ema26
+        if macd > 0
+            score += 10; push!(signals, "MACD=$(round(macd,digits=2)) ← صعودی")
+        else
+            score -= 10; push!(signals, "MACD=$(round(macd,digits=2)) ← نزولی")
+        end
+    end
+
+    # Moving Averages
+    if n >= 200
+        ma50 = mean(prices[end-49:end])
+        ma100 = mean(prices[end-99:end])
+        ma200 = mean(prices[end-199:end])
+        if cur > ma50 > ma100 > ma200
+            score += 25; push!(signals, "MA50>100>200 ← روند صعودی قوی")
+        elseif cur > ma50 > ma200
+            score += 15; push!(signals, "قیمت بالای MA50,200 ← صعودی")
+        elseif cur < ma50 < ma100 < ma200
+            score -= 25; push!(signals, "MA50<100<200 ← روند نزولی قوی")
+        end
+    elseif n >= 50
+        ma10 = mean(prices[end-9:end])
+        ma20 = mean(prices[end-19:end])
+        ma50 = mean(prices[end-49:end])
+        if ma10 > ma20 > ma50
+            score += 20; push!(signals, "MA10>20>50 ← ترتیب صعودی")
+        elseif ma10 < ma20 < ma50
+            score -= 20; push!(signals, "MA10<20<50 ← ترتیب نزولی")
+        end
+    end
+
+    # Bollinger Bands
+    if n >= 20
+        bb_mean = mean(prices[end-19:end])
+        bb_std = std(prices[end-19:end])
+        bb_up = bb_mean + 2*bb_std
+        bb_lo = bb_mean - 2*bb_std
+        bb_pct = (cur - bb_lo) / (bb_up - bb_lo)  # 0=پایین، 1=بالا
+
+        if cur > bb_up
+            score -= 12; push!(signals, "%BB=$(round(bb_pct*100,digits=0)) ← بالای باند بولینگر")
+        elseif cur < bb_lo
+            score += 12; push!(signals, "%BB=$(round(bb_pct*100,digits=0)) ← پایین باند بولینگر")
+        else
+            push!(signals, "%BB=$(round(bb_pct*100,digits=0))%")
+        end
+    end
+
+    # Stochastic
+    if n >= 14
+        h14 = maximum(prices[end-13:end])
+        l14 = minimum(prices[end-13:end])
+        stoch = h14 > l14 ? (cur - l14)/(h14 - l14)*100 : 50.0
+
+        if stoch > 85
+            score -= 10; push!(signals, "Stoch=$(round(stoch,digits=0)) ← اشباع خرید")
+        elseif stoch < 15
+            score += 10; push!(signals, "Stoch=$(round(stoch,digits=0)) ← اشباع فروش")
+        end
+    end
+
+    # ATR-based volatility adjustment
+    if n >= 15
+        atr = mean([abs(prices[i]-prices[i-1]) for i in max(2,n-13):n])
+        atr_pct = atr / cur * 100
+        push!(signals, "ATR=$(round(atr_pct,digits=2))%")
+    end
+
+    # Momentum (Rate of Change)
+    if n >= 10
+        roc10 = (cur - prices[end-9]) / prices[end-9] * 100
+        if roc10 > 5
+            score += 15; push!(signals, "ROC10=$(round(roc10,digits=2))% ← مومنتوم قوی صعودی")
+        elseif roc10 < -5
+            score -= 15; push!(signals, "ROC10=$(round(roc10,digits=2))% ← مومنتوم قوی نزولی")
+        elseif roc10 > 2
+            score += 8; push!(signals, "ROC10=$(round(roc10,digits=2))%")
+        elseif roc10 < -2
+            score -= 8; push!(signals, "ROC10=$(round(roc10,digits=2))%")
+        end
+    end
+
+    # Support/Resistance
+    if n >= 30
+        h30 = maximum(prices[end-29:end])
+        l30 = minimum(prices[end-29:end])
+        if cur > h30 * 0.99
+            score += 10; push!(signals, "نزدیک مقاومت 30 روزه: $(round(h30,digits=0))")
+        elseif cur < l30 * 1.01
+            score -= 10; push!(signals, "نزدیک حمایت 30 روزه: $(round(l30,digits=0))")
+        end
+    end
+
+    trend_factor = clamp(score / 120.0, -0.07, 0.07)
+    preds = [cur * (1.0 + trend_factor * d / days) for d in 1:days]
+    conf = clamp(0.35 + abs(score) / 150.0, 0.35, 0.80)
+
+    push!(signals, "─── امتیاز تکنیکال: $(round(score,digits=1))/120")
+    return preds, conf, signals, score
+end
+
+# 5. Improved Regime Detection
+function enhanced_regime_detect(prices::Vector{Float64},
+                                 dxy::Float64, vix::Float64, us10y::Float64,
+                                 volume_proxy::Float64=1.0)
+    n = length(prices)
+    if n < 30
+        return "RANGING", "داده کافی نیست", 0.5
+    end
+
+    rets = diff(log.(max.(prices, 1e-10)))
+    recent = rets[max(1,end-19):end]
+
+    # نوسان
+    vol_ann = std(recent) * sqrt(252) * 100
+
+    # مومنتوم‌های مختلف
+    mom5  = n >= 5  ? (last(prices) - prices[end-4])  / prices[end-4]  * 100 : 0.0
+    mom10 = n >= 10 ? (last(prices) - prices[end-9])  / prices[end-9]  * 100 : 0.0
+    mom20 = n >= 20 ? (last(prices) - prices[end-19]) / prices[end-19] * 100 : 0.0
+
+    # Moving averages
+    ma20 = mean(prices[max(1,end-19):end])
+    ma50 = n >= 50 ? mean(prices[end-49:end]) : mean(prices)
+
+    # ADX estimate
+    up_moves = [max(prices[i]-prices[i-1], 0.0) for i in max(2,n-13):n]
+    dn_moves = [max(prices[i-1]-prices[i], 0.0) for i in max(2,n-13):n]
+    avg_up = isempty(up_moves) ? 0.0 : mean(up_moves)
+    avg_dn = isempty(dn_moves) ? 0.0 : mean(dn_moves)
+    denom = avg_up + avg_dn
+    adx = denom > 0 ? abs(avg_up - avg_dn) / denom * 100 : 0.0
+
+    # امتیاز کلی
+    score = mom20 * 0.35 + mom10 * 0.25 + mom5 * 0.15
+    score += (ma20 > ma50 ? 1.0 : -1.0) * 15 * 0.15
+    score += (dxy < 100 ? 1.0 : dxy > 105 ? -1.0 : 0.0) * 10 * 0.05
+    score += (vix > 30 ? 0.5 : vix < 15 ? -0.2 : 0.0) * 10 * 0.05
+
+    regime = if vol_ann > 30 || vix > 35
+        "VOLATILE"
+    elseif adx > 35 && score > 8
+        "TRENDING_UP"
+    elseif adx > 35 && score < -8
+        "TRENDING_DOWN"
+    elseif adx > 20 && score > 4
+        "MILD_UP"
+    elseif adx > 20 && score < -4
+        "MILD_DOWN"
+    else
+        "RANGING"
+    end
+
+    regime_fa = Dict(
+        "TRENDING_UP"   => "روند صعودی قوی",
+        "TRENDING_DOWN" => "روند نزولی قوی",
+        "MILD_UP"       => "روند صعودی ملایم",
+        "MILD_DOWN"     => "روند نزولی ملایم",
+        "RANGING"       => "بازار رنج / خنثی",
+        "VOLATILE"      => "بازار پرنوسان"
+    )
+
+    details = "$(get(regime_fa, regime, regime)) | ADX=$(round(adx,digits=1)) | Vol=$(round(vol_ann,digits=1))% | Mom20=$(round(mom20,digits=2))%"
+
+    conf = clamp(0.4 + adx/100 + abs(score)/100, 0.3, 0.85)
+    return regime, details, conf
+end
+
+# 6. Adaptive Weight System
+function adaptive_weights(mapes::Vector{Float64}, confs::Vector{Float64},
+                          regime::String, sentiment_score::Float64)
+    n = length(mapes)
+    @assert length(confs) == n
+
+    # وزن پایه بر اساس دقت تاریخی
+    base = [1.0/(m + 0.005) for m in mapes]
+
+    # Regime boosts
+    regime_boosts = if regime == "TRENDING_UP"
+        [1.1, 1.0, 1.2, 0.9, 1.3, 1.0]  # AR,HW,Ridge,MC,TA,CI
+    elseif regime == "TRENDING_DOWN"
+        [1.1, 0.9, 1.0, 1.0, 1.3, 0.9]
+    elseif regime == "VOLATILE"
+        [0.7, 0.7, 0.8, 1.8, 0.9, 0.8]  # MC بیشتر در volatile
+    elseif regime == "RANGING"
+        [1.0, 1.3, 1.0, 1.2, 1.0, 1.0]  # HW بهتر در ranging
+    else
+        ones(n)
+    end
+
+    # Sentiment boost برای TA
+    sent_boost = ones(n)
+    if abs(sentiment_score) > 20
+        sent_boost[5] = 1.0 + abs(sentiment_score) / 200.0  # TA index
+    end
+
+    adj = base .* regime_boosts[1:n] .* sent_boost
+    total = sum(adj)
+    return total > 0 ? adj ./ total : ones(n) ./ n
+end
+
+# 7. Improved USD/IRR Prediction
+function predict_usd_irr_v2(usd_prices::Vector{Float64},
+                             gold_prices::Vector{Float64},
+                             dxy::Float64, days::Int=7)
+    n_usd = length(usd_prices)
+    n_gold = length(gold_prices)
+
+    # VAR model (دلار + طلا با هم)
+    var_usd, _, var_conf, _ = var_predict(usd_prices, gold_prices, days; lags=3)
+
+    # ARIMA روی دلار
+    ar_usd, ar_conf, _ = arima_predict(usd_prices, days)
+
+    # Holt-Winters روی دلار
+    hw_usd, hw_conf, _ = holt_predict(usd_prices, days)
+
+    # MC+GARCH روی دلار
+    mc_usd, mc_conf, mc_lo_usd, mc_hi_usd, _ = mc_garch_predict(usd_prices, days; nsim=3000)
+
+    # Z-Score mean reversion
+    z, z_adj = zscore_signal(usd_prices, 20)
+
+    # وزن‌دهی
+    w_var = 0.35; w_ar = 0.25; w_hw = 0.20; w_mc = 0.20
+    combined = [w_var*var_usd[d] + w_ar*ar_usd[d] + w_hw*hw_usd[d] + w_mc*mc_usd[d] for d in 1:days]
+
+    # اعمال mean reversion
+    for d in 1:days
+        combined[d] *= (1.0 + z_adj * exp(-0.15*d))
+    end
+
+    # CI
+    combined_lo = [0.6*var_usd[d] + 0.4*mc_lo_usd[d] for d in 1:days]
+    combined_hi = [0.6*var_usd[d] + 0.4*mc_hi_usd[d] for d in 1:days]
+
+    conf = 0.35*var_conf + 0.25*ar_conf + 0.20*hw_conf + 0.20*mc_conf
+    return combined, combined_lo, combined_hi, clamp(conf, 0.2, 0.85)
+end
+
+# 8. Kelly Criterion-based position sizing (برای سیگنال)
+function kelly_signal(win_rate::Float64, avg_win::Float64, avg_loss::Float64)
+    if avg_loss < 1e-10 || win_rate <= 0 || win_rate >= 1
+        return 0.0
+    end
+    b = avg_win / avg_loss
+    f = (b * win_rate - (1 - win_rate)) / b
+    return clamp(f, -0.5, 0.5)
+end
+
+
+# ============================================================
+# Walk-Forward Validation
+# ============================================================
+
+function walk_forward_validate(prices::Vector{Float64};
+                                window::Int=60,
+                                step::Int=5,
+                                horizon::Int=1,
+                                min_train::Int=30)
+    n = length(prices)
+    if n < min_train + window + horizon
+        return Dict("mape" => nothing, "direction" => nothing, "count" => 0)
+    end
+
+    errors = Float64[]
+    dir_hits = Float64[]
+
+    start_idx = min_train + 1
+    end_idx = n - horizon
+
+    for i in start_idx:step:end_idx
+        train = prices[max(1, i-window):i]
+        actual = prices[i + horizon]
+
+        if length(train) < min_train
+            continue
+        end
+
+        # Simple ensemble: ARIMA + Holt + Naive
+        pred1 = arima_predict(train, horizon)[1]
+        pred2 = holt_predict(train, horizon)[1]
+
+        if isempty(pred1) || isempty(pred2)
+            continue
+        end
+
+        pred = 0.5 * pred1[end] + 0.5 * pred2[end]
+
+        if !isfinite(pred) || actual <= 0
+            continue
+        end
+
+        err = abs(pred - actual) / actual * 100
+        if isfinite(err)
+            push!(errors, err)
+        end
+
+        # Direction
+        prev = prices[i]
+        pred_dir = pred > prev ? 1 : -1
+        act_dir = actual > prev ? 1 : -1
+        if act_dir != 0
+            push!(dir_hits, pred_dir == act_dir ? 1.0 : 0.0)
+        end
+    end
+
+    return Dict(
+        "mape" => isempty(errors) ? nothing : round(mean(errors), digits=3),
+        "direction" => isempty(dir_hits) ? nothing : round(mean(dir_hits) * 100, digits=1),
+        "count" => length(errors),
+        "best_error" => isempty(errors) ? nothing : round(minimum(errors), digits=3),
+        "worst_error" => isempty(errors) ? nothing : round(maximum(errors), digits=3),
+        "median_error" => isempty(errors) ? nothing : round(median(errors), digits=3)
+    )
+end
+
+function walk_forward_multi(gold::Vector{Float64},
+                             usd::Vector{Float64},
+                             iran::Vector{Float64};
+                             window::Int=60, step::Int=5)
+    return Dict(
+        "gold_h1" => walk_forward_validate(gold; window=window, step=step, horizon=1),
+        "gold_h3" => walk_forward_validate(gold; window=window, step=step, horizon=3),
+        "gold_h7" => walk_forward_validate(gold; window=window, step=step, horizon=7),
+        "usd_h1"  => walk_forward_validate(usd;  window=window, step=step, horizon=1),
+        "usd_h3"  => walk_forward_validate(usd;  window=window, step=step, horizon=3),
+        "iran_h1" => walk_forward_validate(iran; window=window, step=step, horizon=1),
+        "iran_h3" => walk_forward_validate(iran; window=window, step=step, horizon=3)
+    )
+end
+
+
+# ============================================================
+# Auto-Tuning Weights via Walk-Forward
+# ============================================================
+
+function auto_tune_weights(prices::Vector{Float64},
+                            predict_fns::Vector,
+                            fn_names::Vector{String};
+                            window::Int=60,
+                            val_days::Int=20,
+                            min_train::Int=30)
+    n = length(prices)
+    nf = length(predict_fns)
+
+    if n < min_train + val_days + 10
+        return ones(nf) ./ nf, Dict{String,Float64}()
+    end
+
+    # Walk-forward: test each model on last val_days
+    mapes = zeros(nf)
+    counts = zeros(Int, nf)
+
+    for offset in val_days:-1:1
+        train_end = n - offset
+        if train_end < min_train
+            continue
+        end
+        train = prices[1:train_end]
+        actual = prices[train_end + 1]
+
+        if actual <= 0
+            continue
+        end
+
+        for m in 1:nf
+            try
+                pred_result = predict_fns[m](train, 1)
+                pred_val = if isa(pred_result, Tuple)
+                    p = pred_result[1]
+                    isa(p, Vector) ? (isempty(p) ? NaN : p[1]) : Float64(p)
+                elseif isa(pred_result, Vector)
+                    isempty(pred_result) ? NaN : pred_result[1]
+                else
+                    Float64(pred_result)
+                end
+
+                if isfinite(pred_val)
+                    err = abs(pred_val - actual) / actual
+                    if isfinite(err)
+                        mapes[m] += err
+                        counts[m] += 1
+                    end
+                end
+            catch
+            end
+        end
+    end
+
+    # Convert to average MAPE
+    avg_mapes = Float64[]
+    mape_dict = Dict{String,Float64}()
+    for m in 1:nf
+        avg = counts[m] > 0 ? mapes[m] / counts[m] : 1.0
+        push!(avg_mapes, avg)
+        mape_dict[fn_names[m]] = round(avg * 100, digits=3)
+    end
+
+    # Inverse MAPE weighting
+    inv = [1.0 / (m + 0.005) for m in avg_mapes]
+    total = sum(inv)
+    weights = total > 0 ? inv ./ total : ones(nf) ./ nf
+
+    return weights, mape_dict
+end

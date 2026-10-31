@@ -1,0 +1,585 @@
+// ============================================================
+// GOLD PREDICTOR DASHBOARD - INTERACTIVE APP ENGINE
+// ============================================================
+
+let globalData = null;
+let charts = {};
+
+document.addEventListener("DOMContentLoaded", () => {
+    initTabs();
+    fetchData();
+    
+    // دکمه به‌روزرسانی دستی
+    const refreshBtn = document.getElementById("refresh-btn");
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => triggerManualRefresh());
+    }
+
+    // دکمه اجرای بک‌تست سفارشی
+    const runBacktestBtn = document.getElementById("run-backtest-btn");
+    if (runBacktestBtn) {
+        runBacktestBtn.addEventListener("click", () => runCustomBacktest());
+    }
+});
+
+// ------------------------------------------------------------
+// ۱. مدیریت تب‌ها و ناوبری صفحات
+// ------------------------------------------------------------
+function initTabs() {
+    const navLinks = document.querySelectorAll(".nav-link");
+    const tabContents = document.querySelectorAll(".tab-content");
+
+    navLinks.forEach(link => {
+        link.addEventListener("click", (e) => {
+            e.preventDefault();
+            const targetTab = link.getAttribute("data-tab");
+
+            navLinks.forEach(l => l.classList.remove("active"));
+            tabContents.forEach(c => c.classList.remove("active"));
+
+            link.classList.add("active");
+            const activeContent = document.getElementById(targetTab);
+            if (activeContent) {
+                activeContent.classList.add("active");
+            }
+
+            // بازنویسی چارت‌ها هنگام تعویض تب برای برطرف کردن باگ ابعاد بوم (Canvas)
+            if (globalData) {
+                renderChartsForTab(targetTab);
+            }
+        });
+    });
+}
+
+// ------------------------------------------------------------
+// ۲. دریافت داده‌ها از وب‌سرویس جولیا
+// ------------------------------------------------------------
+async function fetchData() {
+    showLoader(true);
+    try {
+        const response = await fetch("/api/data");
+        const resJson = await response.json();
+
+        if (resJson.status === "success") {
+            globalData = resJson;
+            updateLastUpdateTime(resJson.last_update);
+            renderAllSections();
+        } else if (resJson.status === "loading") {
+            showLoadingOverlay(resJson.message);
+        } else {
+            showError(resJson.message || "خطا در بارگذاری اطلاعات.");
+        }
+    } catch (error) {
+        console.error("API Fetch Error:", error);
+        showError("ارتباط با سرور بک‌اند جولیا برقرار نشد.");
+    } finally {
+        showLoader(false);
+    }
+}
+
+async function triggerManualRefresh() {
+    const btn = document.getElementById("refresh-btn");
+    if (btn) btn.disabled = true;
+    showLoader(true);
+    try {
+        const response = await fetch("/api/refresh");
+        const resJson = await response.json();
+        if (resJson.status === "success") {
+            await fetchData();
+        } else {
+            alert("خطا در به‌روزرسانی: " + resJson.message);
+        }
+    } catch (err) {
+        alert("خطا در ارتباط با سرور.");
+    } finally {
+        if (btn) btn.disabled = false;
+        showLoader(false);
+    }
+}
+
+// ------------------------------------------------------------
+// ۳. رندر بخش‌های مختلف داشبورد با داده‌های زنده
+// ------------------------------------------------------------
+function renderAllSections() {
+    const activeTab = document.querySelector(".nav-link.active").getAttribute("data-tab");
+    
+    // رندر کارت‌های بخش Overview در هدر همگانی
+    renderOverviewHeader();
+    
+    // رندر تب فعال جهت ممانعت از کندی سیستم
+    renderChartsForTab(activeTab);
+}
+
+function renderChartsForTab(tabId) {
+    if (!globalData) return;
+
+    if (tabId === "overview") {
+        renderOverviewTab();
+    } else if (tabId === "gold") {
+        renderGoldIranTab();
+    } else if (tabId === "fx") {
+        renderForexScannerTab();
+    } else if (tabId === "relations") {
+        renderRelationsTab();
+    } else if (tabId === "backtest") {
+        renderBacktestTab();
+    } else if (tabId === "reports") {
+        renderReportsTab();
+    }
+}
+
+// ------------------------------------------------------------
+// فرمت‌دهی به اعداد و مبالغ ریالی/تومانی
+// ------------------------------------------------------------
+function formatNum(val, decimals = 0) {
+    if (val === null || val === undefined || isNaN(val)) return "--";
+    return Number(val).toLocaleString("fa-IR", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
+function formatToman(val) {
+    if (!val) return "--";
+    // طلا در دیتابیس به صورت ریال ذخیره شده، تبدیل به تومان برای نمایش
+    const toman = Math.round(val / 10.0);
+    return formatNum(toman) + " تومان";
+}
+
+// ------------------------------------------------------------
+// ۴. رندر صفحه نمای کلی (Overview)
+// ------------------------------------------------------------
+function renderOverviewHeader() {
+    const cp = globalData.current_prices;
+    
+    document.getElementById("gold-live-price").innerText = "$" + formatNum(cp.gold_oz_usd, 2);
+    document.getElementById("usd-live-price").innerText = formatNum(cp.usd_irr) + " ریال";
+    document.getElementById("gold18-live-price").innerText = formatToman(cp.iran_gold_gram18);
+    
+    const fg = document.getElementById("fear-greed-val");
+    if (fg) {
+        fg.innerText = formatNum(cp.fear_greed) + " / ۱۰۰";
+        fg.style.color = cp.fear_greed > 70 ? "#00e676" : (cp.fear_greed < 30 ? "#ff1744" : "#ffc107");
+    }
+
+    // هشدار مارکت
+    const alertBox = document.getElementById("market-alert-box");
+    if (alertBox && globalData.market_alert) {
+        const ma = globalData.market_alert;
+        alertBox.className = "alert-banner " + ma.level.toLowerCase();
+        alertBox.innerHTML = `<span>⚠️ ${ma.message} (نوسان طلا: ${formatNum(ma.gold_move, 2)}% | دلار: ${formatNum(ma.usd_move, 2)}%)</span>`;
+    }
+}
+
+function renderOverviewTab() {
+    // رندر چارت‌های خلاصه قیمت‌ها در صفحه اصلی
+    const d = globalData;
+    
+    destroyChart("overview-chart");
+    const ctx = document.getElementById("overview-chart").getContext("2d");
+    charts["overview-chart"] = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: d.gold_history.dates,
+            datasets: [
+                {
+                    label: "انس جهانی طلا (USD)",
+                    data: d.gold_history.prices,
+                    borderColor: "#ffd700",
+                    tension: 0.3,
+                    yAxisID: "y"
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { grid: { color: "#222" } },
+                x: { grid: { color: "#222" } }
+            }
+        }
+    });
+
+    // پر کردن جدول تقویم اقتصادی
+    const eventsTable = document.getElementById("events-table-body");
+    if (eventsTable && d.events) {
+        eventsTable.innerHTML = d.events.map(ev => `
+            <tr>
+                <td>${ev.date}</td>
+                <td><span class="badge ${ev.impact === "بحرانی" ? "high" : "medium"}">${ev.impact}</span></td>
+                <td>${ev.title}</td>
+                <td>${ev.asset}</td>
+            </tr>
+        `).join("");
+    }
+
+    // پر کردن بخش سنتیمنت اخبار
+    const sent = d.sentiment;
+    const sentBox = document.getElementById("sentiment-overview-card");
+    if (sentBox && sent.available) {
+        sentBox.innerHTML = `
+            <div class="sentiment-header">
+                <h4>شاخص هوش مصنوعی سنجش اخبار جهانی</h4>
+                <span class="badge ${sent.alert_level.toLowerCase()}">ریسک: ${sent.alert_level}</span>
+            </div>
+            <div class="sentiment-score-value" style="color: ${sent.overall_score >= 0 ? "#00e676" : "#ff1744"}">
+                ${sent.overall_score > 0 ? "+" : ""}${sent.overall_score}%
+            </div>
+            <p class="sentiment-summary-text">${sent.summary}</p>
+            <div class="sentiment-breakdown">
+                <div>انس جهانی: <b style="color: ${sent.gold_score >= 0 ? "#00e676" : "#ff1744"}">${sent.gold_score}%</b></div>
+                <div>دلار بازار تهران: <b style="color: ${sent.usd_score >= 0 ? "#00e676" : "#ff1744"}">${sent.usd_score}%</b></div>
+            </div>
+        `;
+    }
+}
+
+// ------------------------------------------------------------
+// ۵. رندر تب طلا و دلار ایران
+// ------------------------------------------------------------
+function renderGoldIranTab() {
+    const d = globalData;
+    const p = d.prediction;
+
+    // پر کردن باکس پیش‌بینی انس طلا
+    document.getElementById("gold-pred-point").innerText = "$" + formatNum(p.gold_oz.point, 2);
+    document.getElementById("gold-pred-range").innerText = `بازه ایمن: $${formatNum(p.gold_oz.low, 0)} - $${formatNum(p.gold_oz.high, 0)}`;
+
+    // دلار تهران
+    document.getElementById("usd-pred-point").innerText = formatNum(p.usd_irr.point) + " ریال";
+    document.getElementById("usd-pred-range").innerText = `بازه ایمن: ${formatNum(p.usd_irr.low)} - ${formatNum(p.usd_irr.high)}`;
+
+    // طلای ۱۸ عیار
+    document.getElementById("gold18-pred-point").innerText = formatToman(p.iran_gold.point);
+    document.getElementById("gold18-pred-range").innerText = `بازه ایمن: ${formatToman(p.iran_gold.low)} - ${formatToman(p.iran_gold.high)}`;
+
+    // روند بازار و اعتماد به نفس مدل
+    document.getElementById("prediction-confidence-val").innerText = formatNum(p.confidence, 1) + "%";
+    document.getElementById("prediction-trend-label").innerText = p.trend;
+
+    // رندر چارت ۷ روز آینده طلا و دلار ایران
+    destroyChart("prediction-chart");
+    const ctx = document.getElementById("prediction-chart").getContext("2d");
+    charts["prediction-chart"] = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: p.target_dates,
+            datasets: [
+                {
+                    label: "پیش‌بینی انس جهانی طلا",
+                    data: p.gold_oz.daily,
+                    borderColor: "#ffd700",
+                    borderDash: [5, 5],
+                    fill: false
+                },
+                {
+                    label: "پیش‌بینی طلای ۱۸ عیار (میلیون ریال)",
+                    data: p.iran_gold.daily.map(v => v / 100000.0), // تبدیل به مقیاس متناسب چارت
+                    borderColor: "#e5a93b",
+                    tension: 0.2,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { grid: { color: "#222" } },
+                x: { grid: { color: "#222" } }
+            }
+        }
+    });
+
+    // لیست سیگنال‌های معاملاتی هوش مصنوعی
+    const signalsList = document.getElementById("ai-signals-list");
+    if (signalsList && p.signals) {
+        signalsList.innerHTML = p.signals.map(sig => `
+            <div class="signal-item">
+                <span class="signal-bullet">🎯</span>
+                <span class="signal-text">${sig}</span>
+            </div>
+        `).join("");
+    }
+}
+
+// ------------------------------------------------------------
+// ۶. رندر تب اسکنر جفت‌ارزها و کریپتو (Forex / Crypto Scanner)
+// ------------------------------------------------------------
+function renderForexScannerTab() {
+    const d = globalData;
+    const scan = d.fx_scan;
+
+    if (!scan || !scan.available) return;
+
+    // جدول قدرت نسبی ارزها
+    const strengthTable = document.getElementById("strength-table-body");
+    if (strengthTable && scan.strengths) {
+        strengthTable.innerHTML = scan.strengths.map(s => {
+            const barLen = Math.max(0, Math.min(100, (s.score + 3) * 16));
+            return `
+                <tr>
+                    <td><b>${s.currency}</b></td>
+                    <td>${s.score > 0 ? "+" : ""}${formatNum(s.score, 2)}</td>
+                    <td>
+                        <div class="strength-bar-container">
+                            <div class="strength-bar" style="width: ${barLen}%; background: ${s.score >= 0 ? "#00e676" : "#ff1744"}"></div>
+                        </div>
+                    </td>
+                    <td><span class="badge ${s.trend_bias.includes("bull") ? "bullish" : "bearish"}">${s.trend_bias}</span></td>
+                </tr>
+            `;
+        }).join("");
+    }
+
+    // کارت‌های ستاپ‌های معاملاتی (Trade Setups)
+    const setupsContainer = document.getElementById("setups-container");
+    if (setupsContainer && scan.setups) {
+        if (scan.setups.length === 0) {
+            setupsContainer.innerHTML = `<div class="no-setup-message">هیچ موقعیت معاملاتی فعالی در این لحظه یافت نشد.</div>`;
+            return;
+        }
+
+        setupsContainer.innerHTML = scan.setups.map((s, idx) => {
+            const hasChecklist = s.checklist !== null;
+            return `
+                <div class="setup-card">
+                    <div class="setup-header">
+                        <h4>${s.symbol} <span class="badge quality-${s.trade_quality.toLowerCase()}">${s.trade_quality}</span></h4>
+                        <span class="setup-bias bias-${s.bias}">${s.bias.toUpperCase()}</span>
+                    </div>
+                    <div class="setup-body">
+                        <div class="setup-metric">نوع ستاپ: <span>${s.setup_name_fa || s.setup_type}</span></div>
+                        <div class="setup-metric">امتیاز کلی: <span>${s.total_score} / ۱۰۰</span></div>
+                        <div class="setup-metric">ریسک به ریوارد: <span>1:${s.risk_reward}</span></div>
+                        
+                        <div class="setup-targets">
+                            <div>ورود بهینه: <b>${formatNum(s.entry_low, 4)} - ${formatNum(s.entry_high, 4)}</b></div>
+                            <div>حد سود اول: <b style="color: #00e676">${formatNum(s.target1, 4)}</b></div>
+                            <div>حد ضرر (SL): <b style="color: #ff1744">${formatNum(s.stop_loss, 4)}</b></div>
+                        </div>
+
+                        <!-- چک‌لیست قبل از ترید -->
+                        ${hasChecklist ? `
+                            <div class="setup-checklist-trigger" onclick="toggleChecklistDetails(${idx})">
+                                📋 چک‌لیست قبل ترید: <b>${s.checklist.approval_fa}</b> (کلیک کنید)
+                            </div>
+                            <div id="checklist-details-${idx}" class="setup-checklist-details" style="display: none;">
+                                ${s.checklist.items.map(item => `
+                                    <div class="checklist-item-row">
+                                        <span class="checklist-status">${item.passed ? "✅" : "❌"}</span>
+                                        <span class="checklist-name">${item.name_fa}</span>
+                                        <span class="checklist-detail">${item.detail}</span>
+                                    </div>
+                                `).join("")}
+                            </div>
+                        ` : ""}
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+}
+
+window.toggleChecklistDetails = function(idx) {
+    const el = document.getElementById(`checklist-details-${idx}`);
+    if (el) {
+        el.style.display = el.style.display === "none" ? "block" : "none";
+    }
+}
+
+// ------------------------------------------------------------
+// ۷. رندر بخش همبستگی و روابط بازارها (Relations)
+// ------------------------------------------------------------
+function renderRelationsTab() {
+    const d = globalData;
+    const rels = d.relationships;
+
+    if (!rels || !rels.available) return;
+
+    // پر کردن جدول ماتریس همبستگی
+    const relsTable = document.getElementById("relations-table-body");
+    if (relsTable && rels.relations) {
+        relsTable.innerHTML = rels.relations.map(r => `
+            <tr>
+                <td><b>${r.asset_b}</b></td>
+                <td style="color: ${r.pearson_20d >= 0 ? "#00e676" : "#ff1744"}">${formatNum(r.pearson_20d, 2)}</td>
+                <td style="color: ${r.pearson_60d >= 0 ? "#00e676" : "#ff1744"}">${formatNum(r.pearson_60d, 2)}</td>
+                <td>${r.lead_lag_days === 0 ? "همزمان" : (r.lead_lag_days > 0 ? `${r.lead_lag_days} روز جلو` : `${Math.abs(r.lead_lag_days)} روز عقب`)}</td>
+                <td>${formatNum(r.beta_30d, 2)}</td>
+                <td>${r.strength}</td>
+            </tr>
+        `).join("");
+    }
+}
+
+// ------------------------------------------------------------
+// ۸. شبیه‌ساز و بک‌تست تاریخی (Backtest)
+// ------------------------------------------------------------
+function renderBacktestTab() {
+    const d = globalData;
+    const bt = d.backtest;
+
+    if (!bt) return;
+
+    // فیلدهای راندمان بک‌تست
+    document.getElementById("backtest-gold-mape").innerText = bt.gold_mape !== null ? formatNum(bt.gold_mape, 2) + "%" : "--";
+    document.getElementById("backtest-usd-mape").innerText = bt.usd_mape !== null ? formatNum(bt.usd_mape, 2) + "%" : "--";
+    document.getElementById("backtest-gold-dir").innerText = bt.direction_accuracy !== null ? formatNum(bt.direction_accuracy, 1) + "%" : "--";
+    document.getElementById("backtest-usd-dir").innerText = bt.usd_direction_accuracy !== null ? formatNum(bt.usd_direction_accuracy, 1) + "%" : "--";
+    document.getElementById("backtest-info-label").innerText = bt.info || "";
+
+    // رسم چارت مقایسه‌ای پیش‌بینی با مقدار واقعی (بک‌تست ۶۰ روزه)
+    if (bt.gold && bt.gold.length > 0) {
+        destroyChart("backtest-chart");
+        const ctx = document.getElementById("backtest-chart").getContext("2d");
+        charts["backtest-chart"] = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: bt.gold.map(x => x.date),
+                datasets: [
+                    {
+                        label: "قیمت واقعی انس",
+                        data: bt.gold.map(x => x.actual),
+                        borderColor: "#ffffff",
+                        tension: 0.1,
+                        fill: false
+                    },
+                    {
+                        label: "پیش‌بینی انس طلا",
+                        data: bt.gold.map(x => x.predicted),
+                        borderColor: "#ffd700",
+                        borderDash: [4, 4],
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { grid: { color: "#222" } },
+                    x: { grid: { color: "#222" } }
+                }
+            }
+        });
+    }
+}
+
+async function runCustomBacktest() {
+    const daysInput = document.getElementById("backtest-days-input");
+    const days = daysInput ? parseInt(daysInput.value) : 60;
+
+    showLoader(true);
+    try {
+        const response = await fetch(`/api/backtest?days=${days}`);
+        const resJson = await response.json();
+
+        if (resJson.status === "success") {
+            // ساختاربندی برای هماهنگی با متد رندر چارت
+            globalData.backtest = {
+                gold_results: resJson.gold,
+                usd_results: resJson.usd,
+                iran_results: resJson.iran,
+                gold_mape: resJson.gold_mape,
+                usd_mape: resJson.usd_mape,
+                direction_accuracy: resJson.gold_direction,
+                usd_direction_accuracy: resJson.usd_direction,
+                info: resJson.info,
+                gold: resJson.gold
+            };
+            renderBacktestTab();
+            alert("محاسبات بک‌تست با موفقیت انجام شد.");
+        } else {
+            alert("خطا در اجرای بک‌تست: " + resJson.message);
+        }
+    } catch (err) {
+        alert("خطا در ارتباط با سرور بک‌تست جولیا.");
+    } finally {
+        showLoader(false);
+    }
+}
+
+// ------------------------------------------------------------
+// ۹. رندر گزارش سودآوری و منحنی رشد سرمایه (Reports)
+// ------------------------------------------------------------
+function renderReportsTab() {
+    const d = globalData;
+    const journal = d.trade_journal;
+
+    if (!journal) return;
+
+    // رندر کارت‌های آماری ژورنال
+    document.getElementById("report-winrate").innerText = formatNum(journal.win_rate, 1) + "%";
+    document.getElementById("report-profit-factor").innerText = formatNum(journal.profit_factor, 2);
+    document.getElementById("report-max-dd").innerText = formatNum(journal.max_drawdown, 2) + "%";
+    document.getElementById("report-total-trades").innerText = formatNum(journal.resolved_count) + " معامله";
+
+    // رسم چارت منحنی رشد سرمایه (Equity Curve)
+    if (journal.equity_points && journal.equity_points.length > 0) {
+        destroyChart("equity-chart");
+        const ctx = document.getElementById("equity-chart").getContext("2d");
+        charts["equity-chart"] = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: journal.equity_dates,
+                datasets: [
+                    {
+                        label: "رشد بالانس حساب ($)",
+                        data: journal.equity_points,
+                        borderColor: "#00e676",
+                        backgroundColor: "rgba(0, 230, 118, 0.1)",
+                        fill: true,
+                        tension: 0.2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { grid: { color: "#222" } },
+                    x: { grid: { color: "#222" } }
+                }
+            }
+        });
+    }
+}
+
+// ------------------------------------------------------------
+// ابزارهای عمومی فرانت‌اند
+// ------------------------------------------------------------
+function destroyChart(id) {
+    if (charts[id]) {
+        charts[id].destroy();
+        delete charts[id];
+    }
+}
+
+function showLoader(show) {
+    const loader = document.getElementById("loader-indicator");
+    if (loader) {
+        loader.style.display = show ? "block" : "none";
+    }
+}
+
+function updateLastUpdateTime(timeStr) {
+    const el = document.getElementById("last-update-time");
+    if (el) {
+        el.innerText = "آخرین به‌روزرسانی: " + timeStr;
+    }
+}
+
+function showLoadingOverlay(msg) {
+    const ov = document.getElementById("loading-overlay");
+    if (ov) {
+        ov.style.display = "flex";
+        document.getElementById("loading-msg").innerText = msg;
+    }
+}
+
+function showError(msg) {
+    alert("⚠️ خطا در سامانه: " + msg);
+}

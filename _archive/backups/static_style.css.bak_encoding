@@ -1,0 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Vazirmatn',sans-serif;background:#0f1114;color:#c8ccd0;min-height:100vh;direction:rtl;font-size:14px;line-height:1.6}
+.container{max-width:1440px;margin:0 auto;padding:16px}
+.header{background:#16181d;padding:20px 28px;margin-bottom:16px;border:1px solid #2a2d35;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.header-right h1{font-size:17px;font-weight:700;color:#d1d5db;margin-bottom:2px}
+.header-right p{font-size:11px;color:#6b7280}
+.header-left{display:flex;align-items:center;gap:14px}
+.header-left span{font-size:11px;color:#6b7280}
+.btn-refresh{background:#2563eb;border:none;padding:6px 16px;color:#fff;font-family:'Vazirmatn';font-size:12px;font-weight:500;cursor:pointer}
+.btn-refresh:hover{background:#1d4ed8}
+.status-bar{background:#16181d;border:1px solid #2a2d35;padding:6px 16px;margin-bottom:16px;display:flex;align-items:center;gap:16px;font-size:11px;color:#6b7280;overflow-x:auto;white-space:nowrap}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;flex-shrink:0}
+.status-dot.warn{background:#f59e0b}.status-dot.err{background:#ef4444}
+section{margin-bottom:16px}
+.section-title{font-size:12px;font-weight:600;color:#6b7280;letter-spacing:0.5px;padding:8px 0;border-bottom:1px solid #2a2d35;margin-bottom:12px}
+.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#2a2d35;border:1px solid #2a2d35}
+.price-cell{background:#16181d;padding:16px 20px}
+.price-label{font-size:10px;color:#6b7280;letter-spacing:0.3px;margin-bottom:4px}
+.price-value{font-size:22px;font-weight:700;color:#e5e7eb;font-variant-numeric:tabular-nums;direction:ltr;text-align:right}
+.price-unit{font-size:10px;color:#4b5563;margin-top:2px}
+.price-sub{font-size:11px;color:#6b7280;margin-top:6px;display:flex;gap:12px;justify-content:flex-end}
+.price-sub b{color:#9ca3af}
+.ind-cell{background:#16181d;padding:12px 20px}
+.ind-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
+.ind-label{color:#6b7280}.ind-val{color:#d1d5db;font-weight:600}
+.ind-val.red{color:#ef4444}.ind-val.green{color:#22c55e}.ind-val.yellow{color:#f59e0b}
+.pred-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#2a2d35;border:1px solid #2a2d35;margin-bottom:16px}
+.pred-cell{background:#16181d;padding:16px 20px}
+.pred-title{font-size:10px;color:#6b7280;letter-spacing:0.3px;margin-bottom:6px}
+.pred-value{font-size:20px;font-weight:700;color:#e5e7eb;font-variant-numeric:tabular-nums;direction:ltr;text-align:right}
+.pred-trend{font-size:12px;color:#9ca3af;margin-top:4px;text-align:right}
+.pred-range{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding:6px 0;border-top:1px solid #2a2d35;font-size:11px;direction:ltr}
+.pred-lo{color:#ef4444}.pred-hi{color:#22c55e}
+.pred-sep{flex:1;height:1px;background:linear-gradient(90deg,#ef4444,#6b7280,#22c55e);margin:0 8px}
+.conf-line{font-size:11px;color:#6b7280;margin-top:6px;text-align:right}
+.conf-line b{color:#d1d5db}
+.chart-panel{background:#16181d;border:1px solid #2a2d35;padding:16px 20px;margin-bottom:16px}
+.chart-title{font-size:11px;font-weight:600;color:#6b7280;margin-bottom:12px;letter-spacing:0.3px}
+.chart-panel.sm{max-width:420px}
+.sig-panel{background:#16181d;border:1px solid #2a2d35;padding:16px 20px;margin-bottom:16px}
+.sig-item{padding:5px 12px;margin-bottom:3px;font-size:12px;color:#d1d5db;border-right:2px solid #2a2d35;background:#1a1c22}
+.sig-item:nth-child(odd){border-right-color:#374151}
+.tbl-wrap{border:1px solid #2a2d35;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#1a1c22;color:#9ca3af;padding:10px 8px;text-align:center;font-weight:600;border-bottom:1px solid #2a2d35;white-space:nowrap;font-size:11px}
+td{padding:8px;text-align:center;border-bottom:1px solid #1e2028;font-variant-numeric:tabular-nums}
+tr:hover{background:#1a1c22}
+td.pos{color:#22c55e;font-weight:600}td.neg{color:#ef4444;font-weight:600}td.sig{color:#f59e0b;font-weight:600}
+.impact-bar{position:relative;background:#1e2028;height:18px;min-width:80px}
+.impact-fill{height:100%;background:#2563eb}
+.impact-bar span{position:absolute;right:4px;top:1px;font-size:10px;font-weight:600;color:#e5e7eb}
+footer{padding:16px 0;border-top:1px solid #2a2d35;font-size:11px;color:#4b5563;text-align:center;margin-top:8px}
+footer .warn{color:#ef4444;margin-bottom:4px}
+.sentiment-scores{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#2a2d35;border:1px solid #2a2d35;margin-bottom:8px}
+.sent-score{background:#16181d;padding:10px 14px;text-align:center}
+.sent-lbl{display:block;font-size:10px;color:#6b7280;letter-spacing:.3px;margin-bottom:4px}
+.sent-val{display:block;font-size:18px;font-weight:700}
+.news-row{background:#1a1c22;padding:7px 12px;margin-bottom:3px;border-right:2px solid #2a2d35;display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px}
+.news-src{color:#6b7280;font-size:10px;flex-shrink:0}
+.news-ttl{color:#d1d5db;flex:1;min-width:0}
+.news-sc{font-weight:700;font-size:11px;flex-shrink:0}
+.news-kw{color:#6366f1;font-size:10px;width:100%;margin-top:2px}
+.bt-stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:#2a2d35;border:1px solid #2a2d35;margin-bottom:12px}
+.bt-stat{background:#16181d;padding:10px 14px;text-align:center}
+.bt-label{display:block;font-size:10px;color:#6b7280;letter-spacing:.3px;margin-bottom:4px}
+.bt-val{display:block;font-size:16px;font-weight:700;color:#e5e7eb}
+@media(max-width:1100px){.price-grid,.pred-grid{grid-template-columns:repeat(2,1fr)}.sentiment-scores{grid-template-columns:repeat(3,1fr)}.bt-stats-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.price-grid,.pred-grid{grid-template-columns:1fr}.sentiment-scores{grid-template-columns:repeat(2,1fr)}.bt-stats-grid{grid-template-columns:repeat(2,1fr)}.container{padding:8px}table{font-size:10px}}

@@ -1,0 +1,89 @@
+module PairScanner
+
+using ..SetupDetector
+using ..MarketRegistry
+
+export scan_all_pairs, SetupCard
+
+struct SetupCard
+    symbol::String
+    base::String
+    quote_ccy::String
+    bias::String
+    setup_type::String
+    total_score::Float64
+    strength_score::Float64
+    trend_score::Float64
+    momentum_score::Float64
+    volatility_score::Float64
+    sr_score::Float64
+    levels::Any
+    entry_zone_low::Float64
+    entry_zone_high::Float64
+    target1::Float64
+    target2::Float64
+    stop_loss::Float64
+    risk_reward::Float64
+    reasons_for::Vector{String}
+    reasons_against::Vector{String}
+    trade_quality::String
+    confidence::Float64
+    timeframe_align::String
+    mtf_confluence::Bool
+    mtf_dominant_bias::String
+    advanced::Any
+    risk_info::Any
+    timing::Any
+end
+
+function scan_all_pairs(all_pairs::AbstractVector, rates_dict::Dict{String, Vector{Float64}}, strengths::Any)::Vector{SetupCard}
+    setups = SetupCard[]
+    
+    for pair in all_pairs
+        sym = string(pair.symbol)
+        prices = get(rates_dict, sym, Float64[])
+        
+        if isempty(prices) || length(prices) < 5
+            continue
+        end
+        
+        res = SetupDetector.detect_setup(sym, prices)
+        
+        push!(setups, SetupCard(
+            sym,
+            string(pair.base),
+            string(pair.quote_),
+            res.bias,
+            res.setup_type,
+            res.trend_score,
+            75.0,
+            res.trend_score,
+            res.momentum_score,
+            res.volatility_score,
+            80.0,
+            nothing,
+            res.entry_low,
+            res.entry_high,
+            res.target1,
+            res.target2,
+            res.stop_loss,
+            res.risk_reward,
+            res.reasons_for,
+            res.reasons_against,
+            res.trade_quality,
+            res.confidence,
+            res.timeframe,
+            true,
+            res.bias,
+            nothing,
+            nothing,
+            nothing
+        ))
+    end
+    
+    # مرتب‌سازی: اول ستاپ‌های با درصد اطمینان بالاتر
+    sort!(setups, by = s -> -s.confidence)
+    return setups
+end
+
+end

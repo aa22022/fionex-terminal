@@ -1,0 +1,418 @@
+module BacktestEngine
+
+using Statistics, LinearAlgebra, Dates, Random
+
+export run_historical_backtest, BacktestResult
+
+struct DayResult
+    date::String
+    actual::Float64
+    predicted::Float64
+    error_pct::Float64
+    direction_correct::Bool
+end
+
+struct BacktestResult
+    gold_results::Vector{DayResult}
+    usd_results::Vector{DayResult}
+    iran_results::Vector{DayResult}
+    gold_mape::Float64
+    usd_mape::Float64
+    iran_mape::Float64
+    gold_direction_accuracy::Float64
+    usd_direction_accuracy::Float64
+    iran_direction_accuracy::Float64
+    total_days::Int
+    info::String
+end
+
+# =============================================================
+# ابزارها
+# =============================================================
+
+function log_rets(prices::Vector{Float64})
+    n = length(prices)
+    n < 2 && return Float64[]
+    [log(prices[i+1]/prices[i]) for i in 1:n-1 if prices[i]>0 && prices[i+1]>0]
+end
+
+function ewma_vol(rets::Vector{Float64})
+    length(rets) < 3 && return 0.01
+    v = var(rets)
+    for r in rets[max(1,end-19):end]
+        v = 0.94*v + 0.06*r^2
+    end
+    return sqrt(v)
+end
+
+function jump_strength(prices::Vector{Float64})
+    n = length(prices)
+    n < 4 && return 0.0
+    r1 = abs(prices[end] - prices[end-1]) / prices[end-1]
+    r2 = abs(prices[end-1] - prices[end-2]) / prices[end-2]
+    r3 = n >= 5 ? abs(prices[end-2] - prices[end-3]) / prices[end-3] : 0.0
+    return 0.50*r1 + 0.30*r2 + 0.20*r3
+end
+
+function is_post_jump(prices::Vector{Float64}; threshold::Float64=0.018)
+    # آیا دیروز یا پریروز جهش بود؟
+    n = length(prices)
+    n < 3 && return false
+    jump_yesterday = abs(prices[end-1]-prices[end-2])/prices[end-2]
+    return jump_yesterday > threshold
+end
+
+function actual_direction_correct(pred::Float64, actual::Float64, last_price::Float64)
+    (pred > last_price) == (actual > last_price)
+end
+
+# =============================================================
+# مدل‌های 1 روزه
+# =============================================================
+
+function arima_1day(prices::Vector{Float64})
+    p = 3; n = length(prices)
+    n < p+8 && return last(prices)
+    d1 = diff(prices)
+    Y = d1[p+1:end]
+    X = zeros(length(Y), p)
+    for i in 1:p; X[:,i] = d1[p+1-i:end-i]; end
+    X = hcat(ones(length(Y)), X)
+    try
+        Im = Matrix{Float64}(LinearAlgebra.I, size(X,2), size(X,2)); Im[1,1]=0.0
+        co = (X'*X + 0.1*Im)\(X'*Y)
+        xv = vcat([1.0], reverse(d1[end-p+1:end]))
+        return last(prices) + dot(xv, co)
+    catch; return last(prices); end
+end
+
+function holt_1day(prices::Vector{Float64})
+    n = length(prices)
+    n < 8 && return last(prices)
+    lv = prices[1]; tr = mean(diff(prices[1:min(5,n)]))
+    for i in 2:n
+        nl = 0.25*prices[i] + 0.75*(lv+tr)
+        nt = 0.10*(nl-lv) + 0.90*tr
+        lv = nl; tr = nt
+    end
+    return lv + tr
+end
+
+function mc_1day(prices::Vector{Float64}; nsim::Int=1000)
+    n = length(prices)
+    n < 10 && return last(prices)
+    rets = log_rets(prices)
+    length(rets) < 5 && return last(prices)
+    sigma = ewma_vol(rets)
+    mu = mean(rets[max(1,end-9):end])
+    vals = [last(prices)*exp(mu-0.5*sigma^2+sigma*randn()) for _ in 1:nsim]
+    return mean(vals)
+end
+
+function naive_1day(prices::Vector{Float64})
+    n = length(prices)
+    n < 3 && return last(prices)
+    d = diff(prices)
+    if length(d) >= 5
+        w = [0.40, 0.25, 0.15, 0.12, 0.08]
+        return last(prices) + sum(d[end-4:end] .* w)
+    elseif length(d) >= 2
+        return last(prices) + mean(d[end-1:end])
+    else
+        return last(prices) + d[end]
+    end
+end
+
+# =============================================================
+# وزن‌دهی
+# =============================================================
+
+function compute_weights(prices::Vector{Float64}; val_days::Int=20)
+    n = length(prices)
+    n < val_days+15 && return [0.35, 0.25, 0.30, 0.10]
+
+    errs = zeros(4); cnt = 0
+    for offset in val_days:-1:1
+        idx = n - val_days - offset + 1
+        idx < 12 && continue
+        train = prices[1:idx]; actual = prices[idx+1]
+        preds = [arima_1day(train), holt_1day(train), mc_1day(train;nsim=150), naive_1day(train)]
+        for m in 1:4
+            actual > 0 && (errs[m] += abs(preds[m]-actual)/actual)
+        end
+        cnt += 1
+    end
+
+    cnt == 0 && return [0.35, 0.25, 0.30, 0.10]
+    errs ./= cnt
+
+    # [muted log] println("      خطاي مدل‌ها: AR=$(round(errs[1]*100,digits=2))% Holt=$(round(errs[2]*100,digits=2))% MC=$(round(errs[3]*100,digits=2))% Naive=$(round(errs[4]*100,digits=2))%")
+
+    accs = [1/(e+0.0001) for e in errs]
+    return accs ./ sum(accs)
+end
+
+# =============================================================
+# Raw Ensemble
+# =============================================================
+
+function raw_combo(prices::Vector{Float64}, w::Vector{Float64}; mc_sims::Int=600)
+    preds = [arima_1day(prices), holt_1day(prices), mc_1day(prices;nsim=mc_sims), naive_1day(prices)]
+    return sum(preds .* w)
+end
+
+# =============================================================
+# Residual Correction - فقط در بازار آرام
+# =============================================================
+
+function smart_bias(prices::Vector{Float64}, w::Vector{Float64};
+                    mc_sims::Int=120, cap_pct::Float64=0.010)
+    n = length(prices)
+    n < 20 && return 0.0
+
+    # اگر دیروز جهش بود → bias را خاموش کن
+    if is_post_jump(prices; threshold=0.020)
+        return 0.0
+    end
+
+    # فاصله بین واقعی و پیش‌بینی در روزهای اخیر
+    errs = Float64[]
+    for lookback in [1, 2, 3]
+        if n > lookback + 15
+            train = prices[1:end-lookback]
+            pred = raw_combo(train, w; mc_sims=mc_sims)
+            push!(errs, prices[end-lookback+1] - pred)
+        end
+    end
+
+    isempty(errs) && return 0.0
+
+    # وزن‌دهی به روزهای اخیر‌تر
+    weights_b = [0.60, 0.28, 0.12][1:length(errs)]
+    bias = sum(errs .* weights_b) / sum(weights_b)
+
+    # محدود کردن
+    capv = last(prices) * cap_pct
+    return clamp(bias, -capv, capv)
+end
+
+# =============================================================
+# Jump-Aware Ensemble
+# =============================================================
+
+function ensemble_1day_full(prices::Vector{Float64}, w::Vector{Float64})
+    jump = jump_strength(prices)
+    post_jump = is_post_jump(prices; threshold=0.018)
+
+    # تنظیم وزن بر اساس حالت بازار
+    wj = copy(w)
+    if jump > 0.020
+        wj .*= [0.90, 0.65, 1.25, 1.30]
+    elseif jump > 0.012
+        wj .*= [1.00, 0.82, 1.12, 1.12]
+    end
+    wj = wj ./ sum(wj)
+
+    raw = raw_combo(prices, wj; mc_sims=600)
+
+    # Residual فقط در بازار آرام
+    bias_factor = post_jump ? 0.0 : (jump > 0.012 ? 0.20 : 0.55)
+    bias = smart_bias(prices, wj; mc_sims=100, cap_pct=0.010)
+    pred = raw + bias_factor * bias
+
+    # محدود کردن انحراف
+    cur = last(prices)
+    max_dev = jump > 0.020 ? 0.032 : 0.020
+    if abs(pred-cur)/cur > max_dev
+        pred = 0.62*pred + 0.38*cur
+    end
+
+    return pred
+end
+
+# =============================================================
+# پیش‌بینی دلار
+# =============================================================
+
+function predict_usd_1day(usd::Vector{Float64}, w::Vector{Float64})
+    jump = jump_strength(usd)
+    post_jump = is_post_jump(usd; threshold=0.015)
+
+    wj = copy(w)
+    if jump > 0.015
+        wj .*= [0.92, 0.68, 1.18, 1.22]
+    elseif jump > 0.008
+        wj .*= [1.00, 0.85, 1.08, 1.10]
+    end
+    wj = wj ./ sum(wj)
+
+    raw = raw_combo(usd, wj; mc_sims=350)
+    bias_factor = post_jump ? 0.0 : (jump > 0.008 ? 0.22 : 0.48)
+    bias = smart_bias(usd, wj; mc_sims=80, cap_pct=0.009)
+    pred = raw + bias_factor * bias
+
+    cur = last(usd)
+    max_dev = jump > 0.015 ? 0.025 : 0.016
+    if abs(pred-cur)/cur > max_dev
+        pred = 0.60*pred + 0.40*cur
+    end
+
+    return pred
+end
+
+# =============================================================
+# طلا18 - Dynamic Blend با مکانیزم بهبودیافته
+# =============================================================
+
+function predict_iran_1day(g_pred::Float64, u_pred::Float64,
+                           g_hist::Vector{Float64}, u_hist::Vector{Float64},
+                           i_hist::Vector{Float64}, iran_w::Vector{Float64})
+
+    n = min(length(g_hist), length(u_hist), length(i_hist))
+
+    # --- روش 1: فرمول
+    formula_pred = last(i_hist)
+    mf_std = 0.025
+
+    if n >= 5
+        gp = g_hist[end-n+1:end]
+        up = u_hist[end-n+1:end]
+        ip = i_hist[end-n+1:end]
+        factors = Float64[]; wts = Float64[]
+        for i in max(1, n-29):n
+            th = gp[i]/31.1035*0.75*up[i]
+            if th > 0
+                push!(factors, ip[i]/th)
+                push!(wts, exp(-0.08*(n-i)))
+            end
+        end
+        if !isempty(factors)
+            mf = sum(factors.*wts)/sum(wts)
+            mf = clamp(mf, 0.87, 1.13)
+            mf_std = length(factors) >= 5 ? std(factors) : 0.025
+            formula_pred = g_pred/31.1035*0.75*u_pred*mf
+        end
+    end
+
+    # --- روش 2: مستقیم (بدون residual اگر پس از jump)
+    direct_raw = raw_combo(i_hist, iran_w; mc_sims=400)
+    post_jump_iran = is_post_jump(i_hist; threshold=0.016)
+    bias_factor_iran = post_jump_iran ? 0.0 : 0.35
+    direct_bias = smart_bias(i_hist, iran_w; mc_sims=80, cap_pct=0.009)
+    direct_pred = direct_raw + bias_factor_iran * direct_bias
+
+    # --- وزن پویا
+    formula_w = if mf_std < 0.010; 0.70
+                elseif mf_std < 0.018; 0.62
+                elseif mf_std < 0.028; 0.52
+                else; 0.43; end
+
+    jg = jump_strength(g_hist)
+    ju = jump_strength(u_hist)
+    ji = jump_strength(i_hist)
+    max_jump = max(jg, ju, ji)
+    if max_jump > 0.018; formula_w -= 0.08; end
+    if max_jump > 0.025; formula_w -= 0.06; end
+    formula_w = clamp(formula_w, 0.38, 0.72)
+
+    pred = formula_w * formula_pred + (1-formula_w) * direct_pred
+
+    # محافظت
+    cur = last(i_hist)
+    max_dev = max_jump > 0.020 ? 0.028 : 0.020
+    if abs(pred-cur)/cur > max_dev
+        pred = 0.55*pred + 0.45*cur
+    end
+
+    return pred
+end
+
+# =============================================================
+# بک‌تست اصلی
+# =============================================================
+
+function run_historical_backtest(gold_prices::Vector{Float64},
+                                 gold_dates::Vector,
+                                 usd_prices::Vector{Float64},
+                                 usd_dates::Vector,
+                                 iran_prices::Vector{Float64},
+                                 iran_dates::Vector;
+                                 test_days::Int=60,
+                                 min_train::Int=40)
+
+    ng = length(gold_prices)
+    nu = length(usd_prices)
+    ni = length(iran_prices)
+
+    actual_test = min(test_days, ng-min_train-20, nu-min_train-20, ni-min_train-20)
+    actual_test < 5 && return BacktestResult(
+        DayResult[],DayResult[],DayResult[],0.0,0.0,0.0,0.0,0.0,0.0,0,"داده ناكافي"
+    )
+
+    # [muted log] println("    محاسبه وزن‌ها...")
+    g_w = compute_weights(gold_prices[1:ng-actual_test]; val_days=20)
+    u_w = compute_weights(usd_prices[1:min(nu,ng-actual_test)]; val_days=20)
+    i_w = compute_weights(iran_prices[1:min(ni,ng-actual_test)]; val_days=20)
+
+    # [muted log] println("      وزن انس:    AR=$(round(g_w[1]*100,digits=1))% Holt=$(round(g_w[2]*100,digits=1))% MC=$(round(g_w[3]*100,digits=1))% Naive=$(round(g_w[4]*100,digits=1))%")
+    # [muted log] println("      وزن دلار:   AR=$(round(u_w[1]*100,digits=1))% Holt=$(round(u_w[2]*100,digits=1))% MC=$(round(u_w[3]*100,digits=1))% Naive=$(round(u_w[4]*100,digits=1))%")
+    # [muted log] println("      وزن طلا18:  AR=$(round(i_w[1]*100,digits=1))% Holt=$(round(i_w[2]*100,digits=1))% MC=$(round(i_w[3]*100,digits=1))% Naive=$(round(i_w[4]*100,digits=1))%")
+    # [muted log] println("    بك‌تست: $(actual_test) روز...")
+
+    gold_results = DayResult[]
+    usd_results  = DayResult[]
+    iran_results = DayResult[]
+
+    for offset in actual_test:-1:1
+        ge = ng-offset
+        ue = min(nu,ng-offset)
+        ie = min(ni,ng-offset)
+
+        g_tr = gold_prices[1:ge]
+        u_tr = usd_prices[1:ue]
+        i_tr = iran_prices[1:ie]
+
+        g_ac = gold_prices[ge+1]
+        u_ac = usd_prices[min(nu,ue+1)]
+        i_ac = iran_prices[min(ni,ie+1)]
+
+        di = ge+1
+        ds = di<=length(gold_dates) ? Dates.format(Date(gold_dates[di]),"yyyy-mm-dd") : "---"
+
+        g_pred = ensemble_1day_full(g_tr, g_w)
+        g_err  = g_ac>0 ? abs(g_pred-g_ac)/g_ac*100 : 0.0
+        g_dir  = actual_direction_correct(g_pred, g_ac, last(g_tr))
+        push!(gold_results, DayResult(ds,round(g_ac,digits=2),round(g_pred,digits=2),round(g_err,digits=3),g_dir))
+
+        u_pred = predict_usd_1day(u_tr, u_w)
+        u_err  = u_ac>0 ? abs(u_pred-u_ac)/u_ac*100 : 0.0
+        u_dir  = actual_direction_correct(u_pred, u_ac, last(u_tr))
+        push!(usd_results, DayResult(ds,round(u_ac,digits=0),round(u_pred,digits=0),round(u_err,digits=3),u_dir))
+
+        i_pred = predict_iran_1day(g_pred, u_pred, g_tr, u_tr, i_tr, i_w)
+        i_err  = i_ac>0 ? abs(i_pred-i_ac)/i_ac*100 : 0.0
+        i_dir  = actual_direction_correct(i_pred, i_ac, last(i_tr))
+        push!(iran_results, DayResult(ds,round(i_ac,digits=0),round(i_pred,digits=0),round(i_err,digits=3),i_dir))
+
+        if offset==actual_test || offset%15==0
+            gm = g_dir ? "✓" : "✗"
+            um = u_dir ? "✓" : "✗"
+            im = i_dir ? "✓" : "✗"
+            # [muted log] println("      روز $(actual_test-offset+1)/$(actual_test) | انس: $(round(g_err,digits=2))% $gm | دلار: $(round(u_err,digits=2))% $um | طلا: $(round(i_err,digits=2))% $im")
+        end
+    end
+
+    gm = mean([r.error_pct for r in gold_results])
+    um = mean([r.error_pct for r in usd_results])
+    im = mean([r.error_pct for r in iran_results])
+    gd = mean([r.direction_correct ? 1.0 : 0.0 for r in gold_results])*100
+    ud = mean([r.direction_correct ? 1.0 : 0.0 for r in usd_results])*100
+    id = mean([r.direction_correct ? 1.0 : 0.0 for r in iran_results])*100
+
+    info = "بك‌تست $(actual_test) روز | انس: $(round(gm,digits=2))% جهت=$(round(gd,digits=1))% | دلار: $(round(um,digits=2))% جهت=$(round(ud,digits=1))% | طلا18: $(round(im,digits=2))% جهت=$(round(id,digits=1))%"
+    # [muted log] println("    $info")
+
+    return BacktestResult(gold_results,usd_results,iran_results,gm,um,im,gd,ud,id,actual_test,info)
+end
+
+end

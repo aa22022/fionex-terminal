@@ -1,0 +1,556 @@
+﻿module EnsembleML
+
+using Statistics, LinearAlgebra, Dates, Random, DecisionTree
+
+export build_feature_matrix, train_direction_classifier, train_return_regressor,
+       ml_predict, detect_lead_lag, rolling_correlation_map,
+       compute_cross_asset_features, WFResult, walk_forward_weights
+
+# ============================================================
+# FEATURE FACTORY - عمومی برای هر بازار
+# ============================================================
+
+function safe_ret(prices::Vector{Float64}, i::Int, lag::Int)
+    j = i - lag
+    j < 1 && return 0.0
+    prices[j] <= 0 && return 0.0
+    r = (prices[i] - prices[j]) / prices[j] * 100
+    isfinite(r) ? clamp(r, -50.0, 50.0) : 0.0
+end
+
+function safe_vol(prices::Vector{Float64}, i::Int, window::Int)
+    st = max(1, i - window + 1)
+    slice = prices[st:i]
+    length(slice) < 2 && return 0.0
+    rets = diff(log.(max.(slice, 1e-10)))
+    isempty(rets) && return 0.0
+    v = std(rets) * sqrt(252) * 100
+    isfinite(v) ? v : 0.0
+end
+
+function calc_rsi_at(prices::Vector{Float64}, i::Int, period::Int=14)
+    st = i - period
+    st < 1 && return 50.0
+    ch = diff(prices[st:i])
+    ag = mean(max.(ch, 0.0))
+    al = mean(max.(-ch, 0.0))
+    al < 1e-15 && return 100.0
+    100.0 - 100.0 / (1.0 + ag / al)
+end
+
+function calc_zscore_at(prices::Vector{Float64}, i::Int, window::Int=20)
+    st = max(1, i - window + 1)
+    slice = prices[st:i]
+    length(slice) < 3 && return 0.0
+    mu = mean(slice)
+    sg = std(slice)
+    sg < 1e-10 && return 0.0
+    z = (prices[i] - mu) / sg
+    isfinite(z) ? clamp(z, -4.0, 4.0) : 0.0
+end
+
+function build_feature_matrix(
+    target::Vector{Float64},
+    aux_series::Dict{String, Vector{Float64}};
+    horizon::Int = 1,
+    lookback::Int = 20,
+    feature_horizons::Vector{Int} = [1, 3, 5, 7, 14, 20]
+)
+    n = length(target)
+    min_n = lookback + horizon + 5
+    if n < min_n
+        return zeros(0, 0), Int[], String[]
+    end
+
+    feat_names = String[]
+    feat_cols  = Vector{Vector{Float64}}()
+
+    # ── TARGET features ─────────────────────────────────────
+
+    # Returns at multiple lags
+    for lag in feature_horizons
+        col = [i > lag ? safe_ret(target, i, lag) : 0.0 for i in 1:n]
+        push!(feat_cols, col); push!(feat_names, "ret_$(lag)d")
+    end
+
+    # Volatility
+    for w in [5, 10, 20]
+        col = [safe_vol(target, i, w) for i in 1:n]
+        push!(feat_cols, col); push!(feat_names, "vol_$(w)d")
+    end
+
+    # RSI
+    col = [calc_rsi_at(target, i, 14) for i in 1:n]
+    push!(feat_cols, col); push!(feat_names, "rsi_14")
+
+    col = [calc_rsi_at(target, i, 7) for i in 1:n]
+    push!(feat_cols, col); push!(feat_names, "rsi_7")
+
+    # Z-Score
+    for w in [10, 20]
+        col = [calc_zscore_at(target, i, w) for i in 1:n]
+        push!(feat_cols, col); push!(feat_names, "zscore_$(w)d")
+    end
+
+    # MA ratios
+    for w in [10, 20, 50]
+        if n > w
+            col = zeros(n)
+            for i in w:n
+                ma = mean(target[i-w+1:i])
+                ma > 0 && (col[i] = (target[i] - ma) / ma * 100)
+            end
+            push!(feat_cols, col); push!(feat_names, "ma_ratio_$(w)")
+        end
+    end
+
+    # Bollinger %B
+    if n > 20
+        col = zeros(n)
+        for i in 20:n
+            sl = target[i-19:i]
+            mu = mean(sl); sg = std(sl)
+            if sg > 1e-10
+                col[i] = clamp((target[i] - (mu - 2sg)) / (4sg), -0.5, 1.5)
+            end
+        end
+        push!(feat_cols, col); push!(feat_names, "bb_pct")
+    end
+
+    # Momentum acceleration (momentum of momentum)
+    if n > 10
+        col = zeros(n)
+        for i in 11:n
+            m5  = safe_ret(target, i, 5)
+            m10 = safe_ret(target, i, 10)
+            col[i] = m5 - m10 / 2
+        end
+        push!(feat_cols, col); push!(feat_names, "mom_accel")
+    end
+
+    # High-Low range proxy
+    if n > 5
+        col = zeros(n)
+        for i in 6:n
+            sl = target[max(1,i-4):i]
+            rng = (maximum(sl) - minimum(sl)) / mean(sl) * 100
+            col[i] = isfinite(rng) ? rng : 0.0
+        end
+        push!(feat_cols, col); push!(feat_names, "range_5d")
+    end
+
+    # Drawdown from recent high
+    if n > 20
+        col = zeros(n)
+        for i in 20:n
+            hi = maximum(target[i-19:i])
+            col[i] = hi > 0 ? (target[i] - hi) / hi * 100 : 0.0
+        end
+        push!(feat_cols, col); push!(feat_names, "drawdown_20d")
+    end
+
+    # ── AUX SERIES features ──────────────────────────────────
+    for (name, series) in aux_series
+        m = length(series)
+        m < 6 && continue
+
+        # Align to target length
+        aligned = if m >= n
+            series[end-n+1:end]
+        else
+            vcat(zeros(n - m), series)
+        end
+
+        # Short-term return
+        col = [i > 5 ? safe_ret(aligned, i, 5) : 0.0 for i in 1:n]
+        push!(feat_cols, col); push!(feat_names, "$(name)_ret_5d")
+
+        # Level (normalized)
+        mu = mean(aligned[max(1,end-59):end])
+        sg = std(aligned[max(1,end-59):end])
+        if sg > 1e-10
+            col2 = clamp.((aligned .- mu) ./ sg, -4, 4)
+            push!(feat_cols, col2); push!(feat_names, "$(name)_level")
+        end
+
+        # Rolling correlation with target (20d)
+        if n > 25
+            col3 = zeros(n)
+            for i in 25:n
+                t_sl = target[i-19:i]
+                a_sl = aligned[i-19:i]
+                st_t = std(t_sl); st_a = std(a_sl)
+                if st_t > 1e-10 && st_a > 1e-10
+                    c = cor(t_sl, a_sl)
+                    col3[i] = isfinite(c) ? c : 0.0
+                end
+            end
+            push!(feat_cols, col3); push!(feat_names, "$(name)_corr_20d")
+        end
+    end
+
+    # ── BUILD MATRIX ─────────────────────────────────────────
+    nf = length(feat_cols)
+    X  = zeros(n, nf)
+    for j in 1:nf
+        fc = feat_cols[j]
+        ln = min(n, length(fc))
+        X[end-ln+1:end, j] .= fc[end-ln+1:end]
+    end
+
+    # Valid rows only
+    valid = lookback+1 : n-horizon
+    valid = [i for i in valid if all(isfinite, X[i, :])]
+
+    return X, valid, feat_names
+end
+
+# ============================================================
+# DIRECTION CLASSIFIER
+# ============================================================
+
+function train_direction_classifier(
+    target::Vector{Float64},
+    aux_series::Dict{String, Vector{Float64}};
+    horizon::Int = 1,
+    n_trees::Int = 100,
+    max_depth::Int = 6,
+    min_samples::Int = 5
+)
+    X, valid, feat_names = build_feature_matrix(target, aux_series; horizon=horizon)
+    isempty(valid) && return nothing, String[], "classifier: insufficient data"
+
+    n = length(target)
+    X_v = X[valid, :]
+    y_float = Float64[target[i+horizon] > target[i] ? 1.0 : 0.0 for i in valid]
+
+    nv = length(valid)
+    nv < 30 && return nothing, feat_names, "classifier: too few samples ($nv)"
+
+    split = max(20, Int(floor(nv * 0.80)))
+    X_tr = X_v[1:split, :];   y_tr = y_float[1:split]
+    X_te = X_v[split+1:end,:]; y_te = y_float[split+1:end]
+
+    try
+        model = build_forest(y_tr, X_tr, -1, n_trees, 0.7, max_depth, min_samples)
+
+        y_pred = apply_forest(model, X_te)
+        preds_bin = [p >= 0.5 ? 1.0 : 0.0 for p in y_pred]
+        acc = mean(preds_bin .== y_te) * 100
+
+        return model, feat_names, "RF-Classifier h=$(horizon)d acc=$(round(acc,digits=1))%"
+    catch e
+        return nothing, feat_names, "classifier error: $e"
+    end
+end
+
+# ============================================================
+# RETURN REGRESSOR
+# ============================================================
+
+function train_return_regressor(
+    target::Vector{Float64},
+    aux_series::Dict{String, Vector{Float64}};
+    horizon::Int = 1,
+    n_trees::Int = 100,
+    max_depth::Int = 6,
+    min_samples::Int = 5
+)
+    X, valid, feat_names = build_feature_matrix(target, aux_series; horizon=horizon)
+    isempty(valid) && return nothing, String[], "regressor: insufficient data"
+
+    n = length(target)
+    X_v = X[valid, :]
+    y_ret = Float64[safe_ret(target, i+horizon, horizon) for i in valid]
+
+    nv = length(valid)
+    nv < 30 && return nothing, feat_names, "regressor: too few samples"
+
+    split = Int(floor(nv * 0.80))
+    X_tr = X_v[1:split, :];    y_tr = y_ret[1:split]
+    X_te = X_v[split+1:end, :]; y_te = y_ret[split+1:end]
+
+    try
+        model = build_forest(y_tr, X_tr, -1, n_trees, 0.7, max_depth, min_samples)
+
+        y_pred = apply_forest(model, X_te)
+        mae  = mean(abs.(y_te .- y_pred))
+        corr = length(y_te) > 3 ? cor(y_te, y_pred) : 0.0
+
+        return model, feat_names, "RF-Regressor h=$(horizon)d mae=$(round(mae,digits=4)) corr=$(round(corr,digits=3))"
+    catch e
+        return nothing, feat_names, "regressor error: $e"
+    end
+end
+
+# ============================================================
+# PREDICTION
+# ============================================================
+
+function ml_predict(
+    clf_model, reg_model,
+    target::Vector{Float64},
+    aux_series::Dict{String, Vector{Float64}},
+    days::Int = 7;
+    horizon::Int = 1
+)
+    n = length(target)
+    n < 30 && return fill(last(target), days), 0.30, "ML: data low"
+
+    X, valid, _ = build_feature_matrix(target, aux_series; horizon=horizon)
+    isempty(valid) && return fill(last(target), days), 0.30, "ML: no valid rows"
+
+    preds = Float64[]
+    cur   = last(target)
+    conf_sum = 0.0
+
+    for d in 1:days
+        x_row = X[end, :]'  # last row as feature
+
+        # Direction
+        dir_prob = 0.5
+        if clf_model !== nothing
+            try
+                dp = apply_forest(clf_model, reshape(x_row, 1, :))
+                dir_prob = isfinite(dp[1]) ? clamp(dp[1], 0.01, 0.99) : 0.5
+            catch; end
+        end
+
+        # Return magnitude
+        ret_pct = 0.0
+        if reg_model !== nothing
+            try
+                rp = apply_forest(reg_model, reshape(x_row, 1, :))
+                ret_pct = isfinite(rp[1]) ? clamp(rp[1], -5.0, 5.0) : 0.0
+            catch; end
+        end
+
+        # Blend: use direction to sign the return
+        dir_sign = dir_prob > 0.5 ? 1.0 : -1.0
+        blended_ret = dir_sign * abs(ret_pct) * (2 * abs(dir_prob - 0.5))
+
+        # Decay over horizon
+        decay = exp(-0.1 * d)
+        cur = cur * (1.0 + blended_ret / 100.0 * decay)
+        push!(preds, cur)
+
+        conf_sum += abs(dir_prob - 0.5) * 2.0
+    end
+
+    conf = clamp(0.35 + conf_sum / days * 0.3, 0.35, 0.75)
+    return preds, conf, "ML: RF dir=$(round(conf_sum/days*50,digits=1))%"
+end
+
+# ============================================================
+# LEAD-LAG DETECTOR
+# ============================================================
+
+function detect_lead_lag(
+    series_a::Vector{Float64},
+    series_b::Vector{Float64};
+    max_lag::Int = 10,
+    window::Int = 60
+)
+    n = min(length(series_a), length(series_b), window)
+    n < max_lag + 10 && return 0, 0.0, "lead-lag: data low"
+
+    a = series_a[end-n+1:end]
+    b = series_b[end-n+1:end]
+
+    ra = diff(log.(max.(a, 1e-10)))
+    rb = diff(log.(max.(b, 1e-10)))
+
+    best_lag = 0
+    best_corr = 0.0
+
+    for lag in -max_lag:max_lag
+        if lag >= 0
+            xa = ra[1:end-lag]; xb = rb[1+lag:end]
+        else
+            xa = ra[1-lag:end]; xb = rb[1:end+lag]
+        end
+        length(xa) < 5 && continue
+
+        c = cor(xa, xb)
+        if isfinite(c) && abs(c) > abs(best_corr)
+            best_corr = c
+            best_lag  = lag
+        end
+    end
+
+    # best_lag > 0 means A leads B
+    return best_lag, round(best_corr, digits=3), "lead=$(best_lag)d corr=$(round(best_corr,digits=3))"
+end
+
+# ============================================================
+# ROLLING CORRELATION MAP
+# ============================================================
+
+function rolling_correlation_map(
+    target::Vector{Float64},
+    other_series::Dict{String, Vector{Float64}};
+    windows::Vector{Int} = [20, 60]
+)
+    result = Dict{String, Dict{String, Float64}}()
+    n = length(target)
+
+    for (name, series) in other_series
+        m = length(series)
+        m < 10 && continue
+
+        aligned = m >= n ? series[end-n+1:end] : vcat(zeros(n - m), series)
+        result[name] = Dict{String, Float64}()
+
+        for w in windows
+            n < w && continue
+            t_sl = target[end-w+1:end]
+            a_sl = aligned[end-w+1:end]
+            st_t = std(t_sl); st_a = std(a_sl)
+            if st_t > 1e-10 && st_a > 1e-10
+                c = cor(t_sl, a_sl)
+                result[name]["corr_$(w)d"] = isfinite(c) ? round(c, digits=4) : 0.0
+            end
+        end
+
+        # Lead-lag
+        lag, lag_corr, _ = detect_lead_lag(target, aligned; max_lag=7, window=min(n, 120))
+        result[name]["lead_lag_days"] = Float64(lag)
+        result[name]["lead_lag_corr"] = lag_corr
+    end
+
+    return result
+end
+
+# ============================================================
+# CROSS-ASSET FEATURES
+# ============================================================
+
+function compute_cross_asset_features(
+    target::Vector{Float64},
+    others::Dict{String, Vector{Float64}}
+)
+    n = length(target)
+    features = Dict{String, Float64}()
+
+    for (name, series) in others
+        m = length(series)
+        m < 6 && continue
+
+        aligned = m >= n ? series[end-n+1:end] : vcat(zeros(n - m), series)
+
+        # Momentum divergence
+        t_mom5 = n > 5 ? safe_ret(target, n, 5) : 0.0
+        a_mom5 = length(aligned) > 5 ? safe_ret(aligned, length(aligned), 5) : 0.0
+        features["$(name)_mom_div"] = t_mom5 - a_mom5
+
+        # Rolling beta (30d)
+        if n >= 30
+            t_r = diff(log.(max.(target[end-29:end], 1e-10)))
+            a_r = diff(log.(max.(aligned[end-29:end], 1e-10)))
+            vr  = var(a_r)
+            if vr > 1e-15
+                beta = cov(t_r, a_r) / vr
+                features["$(name)_beta_30d"] = isfinite(beta) ? clamp(beta, -5.0, 5.0) : 0.0
+            end
+        end
+
+        # Current correlation (20d)
+        if n >= 20
+            t_sl = target[end-19:end]
+            a_sl = aligned[end-19:end]
+            st_t = std(t_sl); st_a = std(a_sl)
+            if st_t > 1e-10 && st_a > 1e-10
+                c = cor(t_sl, a_sl)
+                features["$(name)_corr_20d"] = isfinite(c) ? c : 0.0
+            end
+        end
+    end
+
+    return features
+end
+
+# ============================================================
+# WALK-FORWARD WEIGHTS (backward compatible)
+# ============================================================
+
+struct WFResult
+    weights::Vector{Float64}
+    model_names::Vector{String}
+    window_errors::Vector{Dict{String,Float64}}
+    info::String
+end
+
+function walk_forward_weights(
+    gold_prices::Vector{Float64},
+    model_fns::Vector{Function},
+    model_names::Vector{String};
+    window::Int=30, step::Int=7
+)
+    n  = length(gold_prices)
+    nm = length(model_fns)
+    n < window + 30 && return WFResult(fill(1.0/nm, nm), model_names, Dict{String,Float64}[], "WF: data low")
+
+    all_errors = [Float64[] for _ in 1:nm]
+    window_errors = Dict{String,Float64}[]
+    start_pos = max(30, n - window - step * 5)
+
+    for pos in start_pos:step:n-1
+        train  = gold_prices[1:pos]
+        actual = gold_prices[pos+1]
+        we = Dict{String,Float64}()
+
+        for (m, fn) in enumerate(model_fns)
+            try
+                pred, _, _ = fn(train, 1)
+                if !isempty(pred) && actual > 0
+                    err = abs(pred[1] - actual) / actual
+                    if isfinite(err)
+                        push!(all_errors[m], err)
+                        we[model_names[m]] = err
+                    end
+                end
+            catch; end
+        end
+
+        !isempty(we) && push!(window_errors, we)
+    end
+
+    mapes = [isempty(all_errors[m]) ? 1.0 : mean(all_errors[m]) for m in 1:nm]
+    accs  = [1.0 / (e + 0.0001) for e in mapes]
+    total = sum(accs)
+    weights = accs ./ total
+
+    parts = [string(model_names[m], "=", round(weights[m]*100, digits=1), "%") for m in 1:nm]
+    return WFResult(weights, model_names, window_errors, "WF(w=$(window)): " * join(parts, " | "))
+end
+
+# Backward compatibility
+function train_gradient_boost(X, y; n_trees=50, max_depth=5, min_samples=5)
+    size(X, 1) < 20 && return nothing, "RF: data low"
+    n = size(X, 1)
+    split = Int(floor(n * 0.8))
+    try
+        model = build_forest(y[1:split], X[1:split, :], -1, n_trees, 0.7, max_depth, min_samples)
+        y_pred = apply_forest(model, X[split+1:end, :])
+        mae = mean(abs.(y[split+1:end] .- y_pred))
+        return model, "RF mae=$(round(mae, digits=4))"
+    catch e
+        return nothing, "RF error: $e"
+    end
+end
+
+function gb_predict(model, X_latest, gold_prices, days=7)
+    model === nothing && return fill(last(gold_prices), days), 0.2, "RF: no model"
+    cur = last(gold_prices)
+    preds = Float64[]
+    for _ in 1:days
+        try
+            r = apply_forest(model, X_latest)
+            cur *= (1.0 + clamp(r[1], -5.0, 5.0) / 100.0)
+        catch; end
+        push!(preds, cur)
+    end
+    return preds, 0.50, "RF predict"
+end
+
+end

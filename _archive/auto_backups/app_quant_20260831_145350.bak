@@ -1,0 +1,776 @@
+// ================================================================
+// 💎 FIONEX - Professional Persian Trading Terminal
+// Gold Predictor v5.0
+// ================================================================
+
+window.appState = null;
+let charts = {};
+
+// ================================================================
+// تقویم شمسی
+// ================================================================
+function gregorianToJalali(gy, gm, gd) {
+    const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    let jy = (gy <= 1600) ? 0 : 979;
+    gy -= (gy <= 1600) ? 621 : 1600;
+    const gy2 = (gm > 2) ? (gy + 1) : gy;
+    let days = (365 * gy) + parseInt((gy2 + 3) / 4) - parseInt((gy2 + 99) / 100) + parseInt((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
+    jy += 33 * parseInt(days / 12053);
+    days %= 12053;
+    jy += 4 * parseInt(days / 1461);
+    days %= 1461;
+    jy += parseInt((days - 1) / 365);
+    if (days > 0) days = (days - 1) % 365;
+    const jm = (days < 186) ? 1 + parseInt(days / 31) : 7 + parseInt((days - 186) / 30);
+    const jd = 1 + ((days < 186) ? (days % 31) : ((days - 186) % 30));
+    return [jy, jm, jd];
+}
+
+const PERSIAN_MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+
+function toPersianDate(dateStr, includeMonthName = false) {
+    if (!dateStr) return "--";
+    try {
+        const cleanStr = String(dateStr).split("T")[0].split(" ")[0];
+        const parts = cleanStr.split("-");
+        if (parts.length < 3) return dateStr;
+        const [jy, jm, jd] = gregorianToJalali(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]));
+        if (includeMonthName) return `${jd} ${PERSIAN_MONTHS[jm - 1]} ${jy}`;
+        return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
+    } catch (e) { return dateStr; }
+}
+
+function fmtNum(num, digits = 2) {
+    if (num === null || num === undefined || isNaN(num)) return "--";
+    return Number(num).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function fmtInt(num) {
+    if (num === null || num === undefined || isNaN(num)) return "--";
+    return Math.round(Number(num)).toLocaleString('en-US');
+}
+
+function pctSign(v) { return v >= 0 ? '+' : ''; }
+
+// ================================================================
+// ساعت زنده
+// ================================================================
+function updateClock() {
+    const el = document.getElementById("navTime");
+    if (!el) return;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    el.innerText = `${hh}:${mm}:${ss}`;
+}
+setInterval(updateClock, 1000);
+
+// ================================================================
+// چارت‌ها
+// ================================================================
+function destroyChart(id) {
+    if (charts[id]) { try { charts[id].destroy(); } catch (e) {} delete charts[id]; }
+}
+
+function renderLineChart(canvasId, labels, dataPoints, labelName, color, historicalDots = null) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    destroyChart(canvasId);
+
+    const persianLabels = labels.map(d => toPersianDate(d));
+    const canvasCtx = ctx.getContext('2d');
+    const gradient = canvasCtx.createLinearGradient(0, 0, 0, 400);
+    gradient.addColorStop(0, color + '50');
+    gradient.addColorStop(1, color + '00');
+    
+    const datasets = [{
+        label: labelName,
+        data: dataPoints,
+        borderColor: color,
+        backgroundColor: gradient,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointBackgroundColor: color,
+        pointBorderColor: '#0B0E14',
+        pointBorderWidth: 2,
+        tension: 0.3,
+        fill: true
+    }];
+
+    if (historicalDots && historicalDots.length > 0) {
+        const predVals = labels.map(d => {
+            const m = historicalDots.find(x => x.target_date === d);
+            return m ? m.predicted : null;
+        });
+        datasets.push({
+            label: 'پیش‌بینی‌های ثبت‌شده',
+            data: predVals,
+            borderColor: '#FDE047',
+            backgroundColor: '#FDE047',
+            pointRadius: 7,
+            pointHoverRadius: 10,
+            pointBorderColor: '#0B0E14',
+            pointBorderWidth: 2,
+            showLine: false,
+            fill: false
+        });
+    }
+
+    charts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: { labels: persianLabels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    align: 'end',
+                    labels: {
+                        color: '#9AA5C4',
+                        font: { family: 'Vazirmatn', size: 11 },
+                        padding: 10,
+                        usePointStyle: true,
+                        pointStyle: 'circle'
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#1A2030',
+                    titleColor: '#06D6D6',
+                    bodyColor: '#E4E9F5',
+                    borderColor: '#06D6D6',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 6,
+                    titleFont: { family: 'Vazirmatn', weight: '700' },
+                    bodyFont: { family: 'Vazirmatn' }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(42, 51, 80, 0.5)', drawBorder: false },
+                    ticks: { color: '#6B7699', font: { family: 'Vazirmatn', size: 10 }, maxTicksLimit: 8 }
+                },
+                y: {
+                    grid: { color: 'rgba(42, 51, 80, 0.5)', drawBorder: false },
+                    ticks: { color: '#6B7699', font: { family: 'Vazirmatn', size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+// ================================================================
+// تیکر بالای صفحه
+// ================================================================
+function updateTicker() {
+    if (!window.appState) return;
+    const cp = window.appState.current_prices;
+    const tk = document.getElementById("tickerContent");
+    if (!tk) return;
+    
+    const gh = window.appState.gold_history.prices;
+    const uh = window.appState.usd_history.prices;
+    const ih = window.appState.iran_gold_history.prices;
+    
+    function calcChange(arr) {
+        if (!arr || arr.length < 2) return 0;
+        return ((arr[arr.length - 1] - arr[arr.length - 2]) / arr[arr.length - 2]) * 100;
+    }
+    
+    const items = [
+        { sym: 'انس طلا', val: fmtNum(cp.gold_oz_usd), unit: ' USD', chg: calcChange(gh) },
+        { sym: 'دلار تهران', val: fmtInt(cp.usd_irr), unit: ' تومان', chg: calcChange(uh) },
+        { sym: 'طلای ۱۸', val: fmtInt(cp.iran_gold_gram18), unit: ' تومان', chg: calcChange(ih) },
+        { sym: 'سکه امامی', val: fmtInt(cp.coin_emami), unit: ' تومان', chg: 0 },
+        { sym: 'DXY', val: fmtNum(cp.dxy_real), unit: '', chg: 0 },
+        { sym: 'US10Y', val: fmtNum(cp.us10y), unit: '%', chg: 0 },
+        { sym: 'VIX', val: fmtNum(cp.vix), unit: '', chg: 0 }
+    ];
+    
+    const html = (items.concat(items)).map(i => {
+        const chgClass = i.chg >= 0 ? 'up' : 'down';
+        const chgText = i.chg === 0 ? '' : `<span class="${chgClass}">${pctSign(i.chg)}${fmtNum(i.chg)}%</span>`;
+        return `<span class="ticker-item"><span class="symbol">◆ ${i.sym}</span> <span class="value">${i.val}${i.unit}</span> ${chgText}</span>`;
+    }).join('');
+    
+    tk.innerHTML = html;
+}
+
+// ================================================================
+// نمای کلی
+// ================================================================
+function renderOverviewKpi() {
+    const cp = window.appState.current_prices;
+    const el = document.getElementById("ovKpiGrid");
+    if (!el) return;
+    
+    el.innerHTML = `
+        <div class="kpi-card">
+            <h4>💰 انس جهانی طلا</h4>
+            <div class="value">${fmtNum(cp.gold_oz_usd)}<span class="unit">USD</span></div>
+            <span class="source-badge">${cp.providers ? cp.providers.gold : 'زنده'}</span>
+        </div>
+        <div class="kpi-card">
+            <h4>💵 دلار آزاد تهران</h4>
+            <div class="value">${fmtInt(cp.usd_irr)}<span class="unit">تومان</span></div>
+            <span class="source-badge">${cp.providers ? cp.providers.usd : 'زنده'}</span>
+        </div>
+        <div class="kpi-card">
+            <h4>🥇 طلای ۱۸ عیار</h4>
+            <div class="value">${fmtInt(cp.iran_gold_gram18)}<span class="unit">تومان</span></div>
+            <span class="source-badge">${cp.providers ? cp.providers.iran : 'زنده'}</span>
+        </div>
+        <div class="kpi-card">
+            <h4>🪙 سکه امامی</h4>
+            <div class="value">${fmtInt(cp.coin_emami)}<span class="unit">تومان</span></div>
+            <span class="source-badge">فرمول رسمی</span>
+        </div>
+        <div class="kpi-card">
+            <h4>📈 شاخص دلار (DXY)</h4>
+            <div class="value">${fmtNum(cp.dxy_real)}</div>
+            <span class="source-badge">Stooq</span>
+        </div>
+        <div class="kpi-card">
+            <h4>🏛️ اوراق ۱۰ ساله آمریکا</h4>
+            <div class="value">${fmtNum(cp.us10y)}<span class="unit">%</span></div>
+            <span class="source-badge">Stooq</span>
+        </div>
+        <div class="kpi-card">
+            <h4>⚠️ شاخص ترس (VIX)</h4>
+            <div class="value">${fmtNum(cp.vix)}</div>
+            <span class="source-badge">CBOE</span>
+        </div>
+    `;
+}
+
+function renderHeatmap() {
+    const el = document.getElementById("marketHeatmap");
+    if (!el || !window.appState) return;
+    
+    const gh = window.appState.gold_history.prices;
+    const uh = window.appState.usd_history.prices;
+    const ih = window.appState.iran_gold_history.prices;
+    const btc = window.appState.btc_history ? window.appState.btc_history.prices : [];
+    const eth = window.appState.eth_history ? window.appState.eth_history.prices : [];
+    
+    function calcChange(arr, days) {
+        if (!arr || arr.length < days + 1) return 0;
+        return ((arr[arr.length - 1] - arr[arr.length - days - 1]) / arr[arr.length - days - 1]) * 100;
+    }
+    
+    const assets = [
+        { name: "💰 انس جهانی طلا", data: gh },
+        { name: "💵 دلار تهران", data: uh },
+        { name: "🥇 طلای ۱۸ عیار", data: ih },
+        { name: "₿ بیت‌کوین", data: btc },
+        { name: "Ξ اتریوم", data: eth }
+    ];
+    
+    el.innerHTML = assets.map(a => {
+        const c1 = calcChange(a.data, 1);
+        const c5 = calcChange(a.data, 5);
+        const c20 = calcChange(a.data, 20);
+        return `
+            <div class="heatmap-card">
+                <h4>${a.name}</h4>
+                <div class="row">
+                    <span class="lbl">۱ روزه</span>
+                    <span class="val ${c1 >= 0 ? 'up' : 'down'}">${pctSign(c1)}${fmtNum(c1)}%</span>
+                </div>
+                <div class="row">
+                    <span class="lbl">۵ روزه</span>
+                    <span class="val ${c5 >= 0 ? 'up' : 'down'}">${pctSign(c5)}${fmtNum(c5)}%</span>
+                </div>
+                <div class="row">
+                    <span class="lbl">۲۰ روزه</span>
+                    <span class="val ${c20 >= 0 ? 'up' : 'down'}">${pctSign(c20)}${fmtNum(c20)}%</span>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+function renderRegimeInfo() {
+    const el = document.getElementById("ovRegimeInfo");
+    if (!el || !window.appState) return;
+    const p = window.appState.prediction;
+    if (!p) { el.innerHTML = '<div style="color:#6B7699;text-align:center;padding:20px">داده‌ای موجود نیست</div>'; return; }
+    
+    el.innerHTML = `
+        <div class="regime-widget-inner">
+            <div class="row">
+                <span class="lbl">🎯 روند بازار</span>
+                <span class="val">${p.trend || '--'}</span>
+            </div>
+            <div class="row">
+                <span class="lbl">✨ اطمینان مدل</span>
+                <span class="val">${fmtNum(p.confidence)}%</span>
+            </div>
+            <div class="row">
+                <span class="lbl">📊 تعداد سیگنال</span>
+                <span class="val">${p.signals ? p.signals.length : 0}</span>
+            </div>
+            <div style="margin-top:12px">
+                ${(p.signals || []).map(s => `<div class="signal-item">✓ ${s}</div>`).join("")}
+            </div>
+        </div>
+    `;
+}
+
+function renderSetupRow(s) {
+    const bias = (s.bias || '').toLowerCase();
+    const biasClass = bias.includes('long') || bias.includes('buy') ? 'long' : 'short';
+    return `
+        <div class="setup-row">
+            <div class="sym-block">
+                <span class="sym">${s.symbol}</span>
+                <span class="bias ${biasClass}">${s.bias || '--'}</span>
+            </div>
+            <div class="meta">
+                <div class="meta-item"><span class="lbl">R/R:</span><span class="val">${fmtNum(s.risk_reward)}</span></div>
+                <div class="meta-item"><span class="lbl">تارگت:</span><span class="val">${fmtInt(s.target1)}</span></div>
+                <div class="meta-item"><span class="lbl">استاپ:</span><span class="val">${fmtInt(s.stop_loss)}</span></div>
+            </div>
+            <span class="quality">${s.trade_quality || 'A'}</span>
+        </div>
+    `;
+}
+
+function renderTopSetups() {
+    const el = document.getElementById("ovTopSetups");
+    if (!el || !window.appState) return;
+    const setups = (window.appState.fx_scan && window.appState.fx_scan.setups) || [];
+    const top5 = setups.slice(0, 5);
+    if (top5.length === 0) {
+        el.innerHTML = '<div style="text-align:center;color:#6B7699;padding:20px">در حال حاضر ستاپ فعالی یافت نشد.</div>';
+        return;
+    }
+    el.innerHTML = top5.map(s => renderSetupRow(s)).join("");
+}
+
+function renderOverview() {
+    if (!window.appState) return;
+    renderOverviewKpi();
+    renderHeatmap();
+    renderRegimeInfo();
+    renderTopSetups();
+    updateTicker();
+    
+    const gh = window.appState.gold_history;
+    if (gh) renderLineChart("ovChGoldMini", gh.dates, gh.prices, "انس جهانی طلا", "#06D6D6");
+    
+    const alertBanner = document.getElementById("alertBanner");
+    if (alertBanner && window.appState.market_alert) {
+        alertBanner.innerHTML = `<span class="alert-tag">${window.appState.market_alert.level || 'بازار'}</span><span>${window.appState.market_alert.message}</span>`;
+    }
+}
+
+// ================================================================
+// طلا و ارز
+// ================================================================
+function renderGold() {
+    if (!window.appState) return;
+    const gh = window.appState.gold_history;
+    const uh = window.appState.usd_history;
+    const ih = window.appState.iran_gold_history;
+    const hDots = window.appState.historical_prediction_dots || {};
+
+    renderLineChart("chGold", gh.dates, gh.prices, "انس جهانی طلا (USD)", "#FDE047", hDots.gold_oz);
+    renderLineChart("chUSD", uh.dates, uh.prices, "دلار تهران (تومان)", "#4ADE80", hDots.usd_irr);
+    renderLineChart("chIran", ih.dates, ih.prices, "طلای ۱۸ عیار (تومان)", "#FB923C", hDots.iran_gold);
+    
+    const p = window.appState.prediction;
+    const el = document.getElementById("goldPredGrid");
+    if (el && p) {
+        el.innerHTML = `
+            <div class="pred-card">
+                <h4>🎯 پیش‌بینی انس طلا</h4>
+                <div class="row"><span class="lbl">هدف:</span><span class="val">${fmtNum(p.gold_oz.point)} USD</span></div>
+                <div class="row"><span class="lbl">کف:</span><span class="val">${fmtNum(p.gold_oz.low)}</span></div>
+                <div class="row"><span class="lbl">سقف:</span><span class="val">${fmtNum(p.gold_oz.high)}</span></div>
+            </div>
+            <div class="pred-card">
+                <h4>🎯 پیش‌بینی دلار تهران</h4>
+                <div class="row"><span class="lbl">هدف:</span><span class="val">${fmtInt(p.usd_irr.point)}</span></div>
+                <div class="row"><span class="lbl">کف:</span><span class="val">${fmtInt(p.usd_irr.low)}</span></div>
+                <div class="row"><span class="lbl">سقف:</span><span class="val">${fmtInt(p.usd_irr.high)}</span></div>
+            </div>
+            <div class="pred-card">
+                <h4>🎯 پیش‌بینی طلای ۱۸</h4>
+                <div class="row"><span class="lbl">هدف:</span><span class="val">${fmtInt(p.iran_gold.point)}</span></div>
+                <div class="row"><span class="lbl">کف:</span><span class="val">${fmtInt(p.iran_gold.low)}</span></div>
+                <div class="row"><span class="lbl">سقف:</span><span class="val">${fmtInt(p.iran_gold.high)}</span></div>
+            </div>
+        `;
+    }
+}
+
+// ================================================================
+// فارکس و کریپتو
+// ================================================================
+// ================================================================
+// توابع کمکی فرمت‌بندی ایمن و بدون خطا
+// ================================================================
+function fmtNum(num) {
+    if (num === null || num === undefined || isNaN(num)) return "--";
+    return Number(num).toLocaleString('en-US');
+}
+
+function fmtDecimal(num, digits = 2) {
+    if (num === null || num === undefined || isNaN(num)) return "--";
+    return Number(num).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function pctSign(num) {
+    if (num === null || num === undefined || isNaN(num)) return "";
+    return num > 0 ? "+" : "";
+}
+
+function fmtSmart(num) {
+    if (num === null || num === undefined || isNaN(num) || num === 0) return "--";
+    const n = Math.abs(num);
+    if (n < 10) return Number(num).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+    if (n < 1000) return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Math.round(Number(num)).toLocaleString('en-US');
+}
+
+function strengthColor(score) {
+    if (score >= 75) return 'linear-gradient(90deg, #4ADE80, #22C55E)';
+    if (score >= 60) return 'linear-gradient(90deg, #06D6D6, #22D3EE)';
+    if (score >= 45) return 'linear-gradient(90deg, #FDE047, #FACC15)';
+    if (score >= 30) return 'linear-gradient(90deg, #FB923C, #F97316)';
+    return 'linear-gradient(90deg, #F87171, #EF4444)';
+}
+
+function biasClass(bias) {
+    if (!bias) return 'neutral';
+    const b = String(bias).toUpperCase();
+    if (b.includes('BUY') || b.includes('صعودی')) return 'buy';
+    if (b.includes('SELL') || b.includes('نزولی')) return 'sell';
+    return 'neutral';
+}
+
+function gradeColor(quality) {
+    if (quality === 'A+') return '#4ADE80';
+    if (quality === 'A') return '#06D6D6';
+    if (quality === 'B') return '#FDE047';
+    if (quality === 'C') return '#FB923C';
+    return '#F87171';
+}
+
+function renderProSetupCard(s) {
+    try {
+        const bias = (s.bias || '').toUpperCase();
+        const biasClassCard = bias === 'BUY' ? 'buy' : bias === 'SELL' ? 'sell' : 'neutral';
+        const biasIcon = bias === 'BUY' ? '📈' : bias === 'SELL' ? '📉' : '➖';
+        const biasText = bias === 'BUY' ? 'خرید' : bias === 'SELL' ? 'فروش' : 'خنثی';
+        const gradeCol = gradeColor(s.trade_quality || 'B');
+        const confidence = s.confidence || 50;
+
+        return `
+            <div class="pro-setup-card ${biasClassCard}">
+                <div class="pro-setup-header">
+                    <div class="pro-symbol-block">
+                        <span class="pro-symbol">${s.symbol}</span>
+                        <span class="pro-bias-badge ${biasClassCard}">${biasIcon} ${biasText}</span>
+                    </div>
+                    <div class="pro-grade" style="background: ${gradeCol}; color: #0B0E14">
+                        ${s.trade_quality || 'B'}
+                    </div>
+                </div>
+
+                <div class="pro-confidence">
+                    <div class="confidence-label">درصد اطمینان:</div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${confidence}%; background: ${gradeCol}"></div>
+                    </div>
+                    <div class="confidence-value">${fmtDecimal(confidence, 1)}%</div>
+                </div>
+
+                <div class="pro-setup-body">
+                    <div class="pro-metric">
+                        <span class="lbl">💵 ناحیه ورود:</span>
+                        <span class="val">${fmtSmart(s.entry_low)} - ${fmtSmart(s.entry_high)}</span>
+                    </div>
+                    <div class="pro-metric">
+                        <span class="lbl">🎯 تارگت ۱:</span>
+                        <span class="val up">${fmtSmart(s.target1)}</span>
+                    </div>
+                    <div class="pro-metric">
+                        <span class="lbl">🎯 تارگت ۲:</span>
+                        <span class="val up">${fmtSmart(s.target2)}</span>
+                    </div>
+                    <div class="pro-metric">
+                        <span class="lbl">🛑 حد ضرر:</span>
+                        <span class="val down">${fmtSmart(s.stop_loss)}</span>
+                    </div>
+                    <div class="pro-metric">
+                        <span class="lbl">⚖️ نسبت R/R:</span>
+                        <span class="val gold">${fmtDecimal(s.risk_reward, 2)}</span>
+                    </div>
+                    <div class="pro-metric">
+                        <span class="lbl">🕐 تایم‌فریم:</span>
+                        <span class="val">${s.timeframe_align || '1D'}</span>
+                    </div>
+                </div>
+
+                ${(s.reasons_for && s.reasons_for.length > 0) ? `
+                    <div class="pro-reasons">
+                        <div class="reasons-title">✅ دلایل تحلیلی:</div>
+                        ${s.reasons_for.slice(0, 3).map(r => `<div class="reason-item">• ${r}</div>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    } catch (e) {
+        console.error("خطا در رندر کارت ستاپ:", e);
+        return '';
+    }
+}
+
+// ================================================================
+// تابع رندر اسکنر فارکس و کریپتو (F3)
+// ================================================================
+function renderFX() {
+    try {
+        if (!window.appState || !window.appState.fx_scan) return;
+        const scan = window.appState.fx_scan;
+        const setups = scan.setups || [];
+        const strengths = scan.strengths || [];
+
+        const fxEl = document.getElementById("fxSetups");
+        const cryptoEl = document.getElementById("cryptoSetups");
+        if (!fxEl) return;
+
+        // ساخت پنل قدرت ارزها در بالای بخش فارکس
+        let strengthHtml = '';
+        if (strengths.length > 0) {
+            strengthHtml = `
+                <div class="strength-panel">
+                    <div class="strength-title">
+                        <span>⚡ قدرت لحظه‌ای ارزها (Currency Strength Meter)</span>
+                        <span class="strength-legend">قوی‌ترین → ضعیف‌ترین</span>
+                    </div>
+                    <div class="strength-grid">
+                        ${strengths.map((s, i) => `
+                            <div class="strength-card rank-${i + 1}">
+                                <div class="strength-rank">#${i + 1}</div>
+                                <div class="strength-symbol">${s.currency}</div>
+                                <div class="strength-name">${s.name_fa || s.currency}</div>
+                                <div class="strength-stars">${s.strength_level || '⭐⭐⭐'}</div>
+                                <div class="strength-score-bar">
+                                    <div class="score-fill" style="width: ${s.score || 50}%; background: ${strengthColor(s.score || 50)}"></div>
+                                </div>
+                                <div class="strength-score-num">${fmtDecimal(s.score, 1)}%</div>
+                                <div class="strength-bias ${biasClass(s.trend_bias)}">${s.trend_bias || 'خنثی'}</div>
+                                <div class="strength-momentum">
+                                    <span>۵ روزه:</span>
+                                    <span class="${(s.momentum_5d || 0) >= 0 ? 'up' : 'down'}">${pctSign(s.momentum_5d)}${fmtDecimal(s.momentum_5d, 2)}%</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${strengths.length >= 2 ? `
+                    <div class="best-pair-panel">
+                        <span class="best-pair-label">🎯 بهترین ترکیب معاملاتی امروز:</span>
+                        <span class="best-pair-value">${strengths[0].currency}/${strengths[strengths.length - 1].currency}</span>
+                        <span class="best-pair-hint">(خرید قوی‌ترین در برابر ضعیف‌ترین)</span>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // تفکیک ستاپ‌های فارکس و کریپتو
+        const fxSetups = setups.filter(s => s.category !== "crypto");
+        const cryptoSetups = setups.filter(s => s.category === "crypto");
+
+        fxEl.innerHTML = strengthHtml + `
+            <div class="setups-cards-grid">
+                ${fxSetups.length === 0
+                    ? '<div class="no-setup-msg">در حال حاضر ستاپ فعالی برای فارکس یافت نشد.</div>'
+                    : fxSetups.map(s => renderProSetupCard(s)).join('')}
+            </div>
+        `;
+
+        if (cryptoEl) {
+            cryptoEl.innerHTML = `
+                <div class="setups-cards-grid">
+                    ${cryptoSetups.length === 0
+                        ? '<div class="no-setup-msg">در حال حاضر ستاپ فعالی برای کریپتو یافت نشد.</div>'
+                        : cryptoSetups.map(s => renderProSetupCard(s)).join('')}
+                </div>
+            `;
+        }
+    } catch (e) {
+        console.error("خطا در رندر تب F3:", e);
+    }
+}
+
+function renderRelations() {
+    if (!window.appState || !window.appState.relationships) return;
+    const rels = window.appState.relationships.relations || [];
+    const container = document.getElementById("corrTbl");
+    if (!container) return;
+    container.innerHTML = `
+        <thead>
+            <tr>
+                <th>دارایی</th>
+                <th>همبستگی ۲۰ روزه</th>
+                <th>همبستگی ۶۰ روزه</th>
+                <th>بتا</th>
+                <th>قدرت رابطه</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${rels.map(r => `
+                <tr>
+                    <td>${r.asset_b}</td>
+                    <td class="num ${r.pearson_20d >= 0 ? 'up' : 'down'}">${fmtNum(r.pearson_20d)}</td>
+                    <td class="num ${r.pearson_60d >= 0 ? 'up' : 'down'}">${fmtNum(r.pearson_60d)}</td>
+                    <td class="num">${fmtNum(r.beta_30d)}</td>
+                    <td>${r.strength}</td>
+                </tr>
+            `).join("")}
+        </tbody>
+    `;
+}
+
+// ================================================================
+// بک‌تست
+// ================================================================
+function renderBacktestDefault() {
+    if (!window.appState || !window.appState.backtest) return;
+    const bt = window.appState.backtest;
+    const el = document.getElementById("btStats");
+    if (!el) return;
+    el.innerHTML = `
+        <div class="kpi-card">
+            <h4>📅 دوره بک‌تست</h4>
+            <div class="value">${bt.total_days || bt.days_used || 60}<span class="unit">روز</span></div>
+        </div>
+        <div class="kpi-card">
+            <h4>🎯 MAPE انس طلا</h4>
+            <div class="value">${fmtNum(bt.gold_mape)}<span class="unit">%</span></div>
+        </div>
+        <div class="kpi-card">
+            <h4>🎯 MAPE دلار</h4>
+            <div class="value">${fmtNum(bt.usd_mape)}<span class="unit">%</span></div>
+        </div>
+        <div class="kpi-card">
+            <h4>🎯 MAPE طلای ۱۸</h4>
+            <div class="value">${fmtNum(bt.iran_mape)}<span class="unit">%</span></div>
+        </div>
+        <div class="kpi-card">
+            <h4>🧭 صحت جهت انس</h4>
+            <div class="value up">${fmtNum(bt.gold_direction_accuracy || bt.direction_accuracy || 0)}<span class="unit">%</span></div>
+        </div>
+        <div class="kpi-card">
+            <h4>🧭 صحت جهت دلار</h4>
+            <div class="value up">${fmtNum(bt.usd_direction_accuracy || 0)}<span class="unit">%</span></div>
+        </div>
+    `;
+}
+
+// ================================================================
+// گزارش‌ها
+// ================================================================
+function renderReports() {
+    if (!window.appState) return;
+    const j = window.appState.trade_journal || {};
+    const el = document.getElementById("journalStatsWidget");
+    if (!el) return;
+    el.innerHTML = `
+        <div class="kpi-card">
+            <h4>🏆 نرخ برد</h4>
+            <div class="value up">${fmtNum(j.win_rate || 0)}<span class="unit">%</span></div>
+        </div>
+        <div class="kpi-card">
+            <h4>💎 فاکتور سود</h4>
+            <div class="value">${fmtNum(j.profit_factor || 0)}</div>
+        </div>
+        <div class="kpi-card">
+            <h4>📊 تعداد معاملات</h4>
+            <div class="value">${j.total_trades || 0}</div>
+        </div>
+    `;
+}
+
+// ================================================================
+// ناوبری
+// ================================================================
+function renderCurrentPage() {
+    const activeTab = document.querySelector(".nav-btn.active");
+    if (!activeTab) { renderOverview(); return; }
+    const pageId = activeTab.getAttribute("data-page");
+    if (pageId === "page-overview") renderOverview();
+    else if (pageId === "page-gold") renderGold();
+    else if (pageId === "page-fx") renderFX();
+    else if (pageId === "page-relations") renderRelations();
+    else if (pageId === "page-backtest") renderBacktestDefault();
+    else if (pageId === "page-reports") renderReports();
+}
+
+async function loadData() {
+    try {
+        const t0 = performance.now();
+        const resp = await fetch("/api/data");
+        if (resp.ok) {
+            window.appState = await resp.json();
+            renderCurrentPage();
+            
+            const ping = Math.round(performance.now() - t0);
+            const pingEl = document.getElementById("pingMs");
+            if (pingEl) pingEl.innerText = ping;
+            
+            const lastUp = document.getElementById("lastUp");
+            if (lastUp && window.appState.last_update) {
+                lastUp.innerText = toPersianDate(window.appState.last_update, true);
+            }
+        }
+    } catch (e) { console.error("خطا:", e); }
+}
+
+async function refreshData() {
+    try { await fetch("/api/refresh"); await loadData(); } catch (e) {}
+}
+
+// کیبورد شرت‌کات
+document.addEventListener("keydown", (e) => {
+    const keys = { F1: 'page-overview', F2: 'page-gold', F3: 'page-fx', F4: 'page-relations', F5: 'page-backtest', F6: 'page-reports' };
+    if (keys[e.key]) {
+        e.preventDefault();
+        const btn = document.querySelector(`.nav-btn[data-page="${keys[e.key]}"]`);
+        if (btn) btn.click();
+    }
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    const btns = document.querySelectorAll(".nav-btn");
+    btns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            btns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            document.querySelectorAll(".page-section").forEach(p => {
+                p.classList.remove("active");
+                p.style.display = "none";
+            });
+            const targetPage = btn.getAttribute("data-page");
+            const pageEl = document.getElementById(targetPage);
+            if (pageEl) { pageEl.classList.add("active"); pageEl.style.display = "block"; }
+            renderCurrentPage();
+        });
+    });
+
+    const refreshBtn = document.getElementById("btnRefresh");
+    if (refreshBtn) refreshBtn.addEventListener("click", refreshData);
+    
+    updateClock();
+    loadData();
+    setInterval(loadData, 45000);
+});

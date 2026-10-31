@@ -1,0 +1,458 @@
+﻿module StrengthEngine
+
+using Statistics, LinearAlgebra, Dates
+
+export CurrencyStrength, PairStrength, compute_all_strengths,
+       rank_currencies, rank_pairs
+
+# ============================================================
+# Data Types
+# ============================================================
+
+struct CurrencyStrength
+    currency::String
+    score::Float64              # نمره نهایی z-score
+    score_raw::Float64          # نمره خام قبل از نرمال‌سازی
+    momentum_1d::Float64
+    momentum_5d::Float64
+    momentum_20d::Float64
+    consistency::Float64        # 0-1 (چقدر پایدار قوی/ضعیف بوده)
+    trend_quality::Float64      # R² خط رگرسیون
+    acceleration::Float64       # آیا سرعت حرکت رو به افزایش است؟
+    volatility::Float64         # نوسان سالانه
+    sharpe_like::Float64        # بازده تعدیل شده با نوسان
+    divergence::Float64         # واگرایی قیمت-قدرت
+    trend_bias::String          # bullish/bearish/neutral/exhausted
+    strength_grade::String      # A+/A/B/C/D
+    rank::Int
+end
+
+struct PairStrength
+    symbol::String
+    base::String
+    quote_::String
+    strength_gap::Float64
+    direction::String
+    tradeability::Float64
+    momentum_align::Float64
+    consistency_align::Float64  # جدید: آیا هر دو ارز پایدار هستند
+    quality_gap::Float64        # جدید: تفاوت کیفیت روند
+    divergence_gap::Float64     # جدید: تفاوت واگرایی
+    conflict_score::Float64     # جدید: آیا این دو ارز در تضاد هستند؟
+    rank_long::Int
+    rank_short::Int
+end
+
+# ============================================================
+# Safe Math Helpers
+# ============================================================
+
+function safe_ret(prices::Vector{Float64}, lag::Int)
+    n = length(prices)
+    n <= lag && return 0.0
+    p0 = prices[end-lag]
+    p0 <= 0 && return 0.0
+    r = (prices[end] - p0) / p0 * 100
+    isfinite(r) ? clamp(r, -20.0, 20.0) : 0.0
+end
+
+function safe_std_returns(prices::Vector{Float64}, window::Int)
+    n = length(prices)
+    w = min(window, n)
+    w < 3 && return 0.01
+    sl = prices[end-w+1:end]
+    rets = diff(log.(max.(sl, 1e-10)))
+    isempty(rets) && return 0.01
+    s = std(rets) * sqrt(252) * 100
+    isfinite(s) && s > 0 ? s : 0.01
+end
+
+# ============================================================
+# Advanced Metrics
+# ============================================================
+
+# 1. Trend Quality — R² of linear regression (how "clean" the trend is)
+function trend_quality_r2(prices::Vector{Float64}, window::Int=20)
+    n = length(prices)
+    w = min(window, n)
+    w < 5 && return 0.0
+    sl = prices[end-w+1:end]
+
+    x = collect(1.0:Float64(w))
+    y = log.(max.(sl, 1e-10))
+
+    x_mean = mean(x)
+    y_mean = mean(y)
+    ss_xy = sum((x .- x_mean) .* (y .- y_mean))
+    ss_xx = sum((x .- x_mean).^2)
+    ss_xx < 1e-15 && return 0.0
+
+    slope = ss_xy / ss_xx
+    intercept = y_mean - slope * x_mean
+    y_pred = intercept .+ slope .* x
+    ss_res = sum((y .- y_pred).^2)
+    ss_tot = sum((y .- y_mean).^2)
+    ss_tot < 1e-15 && return 0.0
+
+    r2 = 1 - ss_res / ss_tot
+    return clamp(r2, 0.0, 1.0)
+end
+
+# 2. Consistency Score — چند دوره پشت سر هم قوی/ضعیف بوده
+function consistency_score(prices::Vector{Float64}; windows::Vector{Int}=[3,5,10])
+    signs = Int[]
+    for w in windows
+        r = safe_ret(prices, w)
+        push!(signs, r > 0.1 ? 1 : r < -0.1 ? -1 : 0)
+    end
+    isempty(signs) && return 0.0
+
+    non_zero = filter(x -> x != 0, signs)
+    isempty(non_zero) && return 0.0
+
+    same_dir = count(x -> x == non_zero[1], non_zero)
+    return same_dir / length(signs)
+end
+
+# 3. Acceleration — آیا سرعت حرکت افزایش یافته؟
+function acceleration_score(prices::Vector{Float64})
+    n = length(prices)
+    n < 12 && return 0.0
+
+    r_recent = safe_ret(prices, 3)         # 3 روز اخیر
+    r_older  = safe_ret(prices[1:end-3], 3) # 3 روز قبل از آن
+
+    accel = r_recent - r_older
+    return clamp(accel / 2.0, -3.0, 3.0)
+end
+
+# 4. Divergence — آیا قیمت بالا رفته ولی مومنتوم افت کرده؟
+function divergence_score(prices::Vector{Float64})
+    n = length(prices)
+    n < 20 && return 0.0
+
+    # قیمت در دو نیمه اخیر
+    half = 10
+    price_change_recent = safe_ret(prices, half)
+    price_change_older  = safe_ret(prices[1:end-half], half)
+
+    # اگر روند صعودی داشتیم ولی سرعت کم شده = واگرایی نزولی
+    # اگر روند نزولی داشتیم ولی سرعت کم شده = واگرایی صعودی
+    if price_change_older > 1 && price_change_recent < price_change_older * 0.4
+        return -1.0  # واگرایی نزولی
+    elseif price_change_older < -1 && price_change_recent > price_change_older * 0.4
+        return 1.0   # واگرایی صعودی
+    end
+    return 0.0
+end
+
+# 5. Sharpe-like ratio for currency strength
+function sharpe_like_score(prices::Vector{Float64}, window::Int=20)
+    n = length(prices)
+    w = min(window, n)
+    w < 5 && return 0.0
+    sl = prices[end-w+1:end]
+    rets = diff(log.(max.(sl, 1e-10)))
+    length(rets) < 3 && return 0.0
+    mu = mean(rets)
+    sg = std(rets)
+    sg < 1e-15 && return 0.0
+    sharpe = mu / sg * sqrt(252)
+    isfinite(sharpe) ? clamp(sharpe, -5.0, 5.0) : 0.0
+end
+
+# ============================================================
+# Compute Single Currency
+# ============================================================
+
+function compute_currency_advanced(
+    currency::String,
+    rates::Dict{String, Vector{Float64}},
+    pairs_map::Dict{String, Vector{Tuple{String,Int}}}
+)
+    !haskey(pairs_map, currency) && return nothing
+
+    pair_refs = pairs_map[currency]
+    metrics = Dict{String, Vector{Float64}}(
+        "ret_1d" => Float64[], "ret_3d" => Float64[], "ret_5d" => Float64[],
+        "ret_10d" => Float64[], "ret_20d" => Float64[],
+        "vol" => Float64[], "sharpe" => Float64[], "quality" => Float64[],
+        "consistency" => Float64[], "acceleration" => Float64[], "divergence" => Float64[]
+    )
+
+    valid_count = 0
+
+    for (pair_sym, sign) in pair_refs
+        prices = get(rates, pair_sym, Float64[])
+        length(prices) < 25 && continue
+
+        # Multi-period returns (اعمال sign برای جهت درست)
+        push!(metrics["ret_1d"],  safe_ret(prices, 1)  * sign)
+        push!(metrics["ret_3d"],  safe_ret(prices, 3)  * sign)
+        push!(metrics["ret_5d"],  safe_ret(prices, 5)  * sign)
+        push!(metrics["ret_10d"], safe_ret(prices, 10) * sign)
+        push!(metrics["ret_20d"], safe_ret(prices, 20) * sign)
+
+        # Volatility metrics
+        vol = safe_std_returns(prices, 20)
+        push!(metrics["vol"], vol)
+        push!(metrics["sharpe"], sharpe_like_score(prices, 20) * sign)
+
+        # Trend quality (independent of direction)
+        push!(metrics["quality"], trend_quality_r2(prices, 20))
+
+        # Directional metrics
+        push!(metrics["consistency"], consistency_score(prices) * sign)
+        push!(metrics["acceleration"], acceleration_score(prices) * sign)
+        push!(metrics["divergence"], divergence_score(prices) * sign)
+
+        valid_count += 1
+    end
+
+    valid_count == 0 && return nothing
+
+    # ── Aggregation with volatility weighting ──
+    # جفت‌ارزهای پرنوسان وزن کمتری می‌گیرند
+    vols = metrics["vol"]
+    vol_weights = [1.0 / max(v, 0.5) for v in vols]
+    w_sum = sum(vol_weights)
+    w_sum < 1e-10 && (vol_weights = ones(length(vols)); w_sum = length(vols))
+    vol_weights ./= w_sum
+
+    weighted_mean(values) = sum(values .* vol_weights)
+
+    # هسته اصلی نمره خام
+    raw = (
+        0.10 * weighted_mean(metrics["ret_1d"])   +
+        0.15 * weighted_mean(metrics["ret_3d"])   +
+        0.25 * weighted_mean(metrics["ret_5d"])   +
+        0.20 * weighted_mean(metrics["ret_10d"])  +
+        0.15 * weighted_mean(metrics["ret_20d"])  +
+        0.15 * weighted_mean(metrics["sharpe"]) * 0.5
+    )
+
+    return Dict{String,Any}(
+        "raw"          => raw,
+        "mom_1d"       => weighted_mean(metrics["ret_1d"]),
+        "mom_5d"       => weighted_mean(metrics["ret_5d"]),
+        "mom_20d"      => weighted_mean(metrics["ret_20d"]),
+        "vol"          => mean(vols),
+        "sharpe"       => weighted_mean(metrics["sharpe"]),
+        "quality"      => mean(metrics["quality"]),
+        "consistency"  => abs(weighted_mean(metrics["consistency"])),
+        "acceleration" => weighted_mean(metrics["acceleration"]),
+        "divergence"   => weighted_mean(metrics["divergence"]),
+        "count"        => valid_count
+    )
+end
+
+# ============================================================
+# Compute All Strengths
+# ============================================================
+
+function assign_grade(score::Float64, quality::Float64, consistency::Float64)
+    combined = abs(score) * 0.5 + quality * 0.3 + consistency * 0.2
+    if combined > 1.5;  return abs(score) > 1.0 ? "A+" : "A"
+    elseif combined > 1.0;  return "A"
+    elseif combined > 0.65; return "B"
+    elseif combined > 0.35; return "C"
+    else;                    return "D"
+    end
+end
+
+function determine_bias(score::Float64, divergence::Float64, acceleration::Float64)
+    # ارز قوی که واگرایی نزولی داره = خسته
+    if score > 0.5 && divergence < -0.5
+        return "exhausted_bull"
+    elseif score < -0.5 && divergence > 0.5
+        return "exhausted_bear"
+    elseif score > 0.7
+        return "bullish"
+    elseif score < -0.7
+        return "bearish"
+    else
+        return "neutral"
+    end
+end
+
+function compute_all_strengths(
+    rates::Dict{String, Vector{Float64}},
+    pairs_map::Dict{String, Vector{Tuple{String,Int}}},
+    currencies::Vector{String}
+)
+    all_data = Dict{String, Dict{String,Any}}()
+
+    for ccy in currencies
+        result = compute_currency_advanced(ccy, rates, pairs_map)
+        result !== nothing && (all_data[ccy] = result)
+    end
+
+    # Normalize raw scores to z-scores
+    raw_scores = [d["raw"] for d in values(all_data)]
+    isempty(raw_scores) && return CurrencyStrength[]
+
+    mu = mean(raw_scores)
+    sg = max(std(raw_scores), 0.01)
+
+    result = CurrencyStrength[]
+    for (ccy, d) in all_data
+        z = (d["raw"] - mu) / sg
+        bias = determine_bias(z, d["divergence"], d["acceleration"])
+        grade = assign_grade(z, d["quality"], d["consistency"])
+
+        push!(result, CurrencyStrength(
+            ccy,
+            round(z, digits=3),
+            round(d["raw"], digits=4),
+            round(d["mom_1d"], digits=3),
+            round(d["mom_5d"], digits=3),
+            round(d["mom_20d"], digits=3),
+            round(d["consistency"], digits=3),
+            round(d["quality"], digits=3),
+            round(d["acceleration"], digits=3),
+            round(d["vol"], digits=3),
+            round(d["sharpe"], digits=3),
+            round(d["divergence"], digits=3),
+            bias,
+            grade,
+            0
+        ))
+    end
+
+    # Sort and assign rank
+    sort!(result, by=s -> s.score, rev=true)
+    for i in 1:length(result)
+        result[i] = CurrencyStrength(
+            result[i].currency, result[i].score, result[i].score_raw,
+            result[i].momentum_1d, result[i].momentum_5d, result[i].momentum_20d,
+            result[i].consistency, result[i].trend_quality, result[i].acceleration,
+            result[i].volatility, result[i].sharpe_like, result[i].divergence,
+            result[i].trend_bias, result[i].strength_grade, i
+        )
+    end
+
+    return result
+end
+
+function rank_currencies(strengths::Vector{CurrencyStrength})
+    return sort(strengths, by=s -> s.score, rev=true)
+end
+
+# ============================================================
+# Pair Strength — Enhanced
+# ============================================================
+
+function compute_pair_strength(
+    pair_sym::String, base::String, quote_ccy::String,
+    strengths::Vector{CurrencyStrength},
+    rates::Dict{String, Vector{Float64}}
+)
+    base_s   = nothing
+    quote_s  = nothing
+    for s in strengths
+        s.currency == base       && (base_s = s)
+        s.currency == quote_ccy  && (quote_s = s)
+    end
+
+    (base_s === nothing || quote_s === nothing) && return nothing
+
+    gap = base_s.score - quote_s.score
+
+    # Consistency alignment
+    cons_align = (base_s.consistency + quote_s.consistency) / 2
+
+    # Quality alignment
+    qual_gap = abs(base_s.trend_quality - quote_s.trend_quality)
+
+    # Divergence alignment  
+    div_gap = abs(base_s.divergence - quote_s.divergence)
+
+    # Conflict: هر دو exhausted یا متضاد
+    conflict = 0.0
+    if base_s.trend_bias == "exhausted_bull" || quote_s.trend_bias == "exhausted_bear"
+        conflict += 0.5
+    end
+    if base_s.trend_bias == "exhausted_bear" || quote_s.trend_bias == "exhausted_bull"
+        conflict += 0.5
+    end
+
+    # Momentum alignment
+    prices = get(rates, pair_sym, Float64[])
+    mom_align = 0.0
+    if length(prices) >= 20
+        r5  = safe_ret(prices, 5)
+        r20 = safe_ret(prices, 20)
+        mom_align = 0.6 * r5 + 0.4 * r20
+    end
+
+    # Direction detection
+    direction = if abs(gap) < 0.3
+        "neutral"
+    elseif gap > 0
+        "long"
+    else
+        "short"
+    end
+
+    # Tradeability score
+    trade_score = (
+        abs(gap) * 0.35              +   # قدرت شکاف
+        cons_align * 0.25            +   # پایداری هر دو ارز
+        (1 - conflict) * 0.20        +   # عدم تضاد
+        min(abs(mom_align)/5, 1) * 0.20  # هم‌جهتی مومنتوم
+    )
+    tradeability = clamp(trade_score, 0.0, 1.0)
+
+    return PairStrength(
+        pair_sym, base, quote_ccy,
+        round(gap, digits=3), direction,
+        round(tradeability, digits=3),
+        round(mom_align, digits=3),
+        round(cons_align, digits=3),
+        round(qual_gap, digits=3),
+        round(div_gap, digits=3),
+        round(conflict, digits=3),
+        0, 0
+    )
+end
+
+function rank_pairs(
+    pairs::Vector,
+    strengths::Vector{CurrencyStrength},
+    rates::Dict{String, Vector{Float64}}
+)
+    results = PairStrength[]
+
+    for pair in pairs
+        ps = compute_pair_strength(pair.symbol, pair.base, pair.quote_, strengths, rates)
+        ps !== nothing && push!(results, ps)
+    end
+
+    # Rank
+    long_idx  = sort(findall(p -> p.direction == "long",  results), by=i -> -results[i].strength_gap)
+    short_idx = sort(findall(p -> p.direction == "short", results), by=i -> results[i].strength_gap)
+
+    ranked = copy(results)
+    for (r, idx) in enumerate(long_idx)
+        old = ranked[idx]
+        ranked[idx] = PairStrength(
+            old.symbol, old.base, old.quote_, old.strength_gap, old.direction,
+            old.tradeability, old.momentum_align, old.consistency_align,
+            old.quality_gap, old.divergence_gap, old.conflict_score,
+            r, old.rank_short
+        )
+    end
+    for (r, idx) in enumerate(short_idx)
+        old = ranked[idx]
+        ranked[idx] = PairStrength(
+            old.symbol, old.base, old.quote_, old.strength_gap, old.direction,
+            old.tradeability, old.momentum_align, old.consistency_align,
+            old.quality_gap, old.divergence_gap, old.conflict_score,
+            old.rank_long, r
+        )
+    end
+
+    return ranked
+end
+
+end

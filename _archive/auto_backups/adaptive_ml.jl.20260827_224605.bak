@@ -1,0 +1,283 @@
+﻿module AdaptiveML
+
+using Statistics, LinearAlgebra, DecisionTree
+using ..TradeJournal
+
+export AdaptiveInsight, train_setup_classifier, predict_setup_quality,
+       compute_feature_importance, get_adaptive_insights
+
+struct AdaptiveInsight
+    has_model::Bool
+    training_samples::Int
+    model_accuracy::Float64
+    feature_importances::Dict{String, Float64}
+    best_features::Vector{String}
+    worst_features::Vector{String}
+    recommended_filters::Vector{String}
+    grade_adjustments::Dict{String, Float64}
+    insights_fa::Vector{String}
+end
+
+# 1. استخراج ویژگی‌ها از ستاپ‌ها
+function extract_setup_features(setup)
+    features = Dict{String, Float64}()
+    
+    features["strength_score"] = abs(setup.strength_score)
+    features["trend_score"] = abs(setup.trend_score)
+    features["momentum_score"] = abs(setup.momentum_score)
+    features["volatility_score"] = setup.volatility_score
+    features["sr_score"] = setup.sr_score
+    features["total_score"] = setup.total_score
+    features["risk_reward"] = setup.risk_reward
+    features["mtf_confluence"] = setup.mtf_confluence
+    
+    # Advanced setup features
+    if setup.advanced !== nothing
+        features["confluence_score"] = setup.advanced.confluence_score
+        features["is_overextended"] = setup.advanced.is_overextended ? 1.0 : 0.0
+        features["has_divergence"] = setup.advanced.divergence.has_divergence ? 1.0 : 0.0
+        features["divergence_strength"] = setup.advanced.divergence.strength
+        features["structure_clarity"] = setup.advanced.structure.swing_clarity
+    else
+        features["confluence_score"] = 0.0
+        features["is_overextended"] = 0.0
+        features["has_divergence"] = 0.0
+        features["divergence_strength"] = 0.0
+        features["structure_clarity"] = 0.0
+    end
+    
+    # Timing features
+    if setup.timing !== nothing
+        features["timing_score"] = setup.timing.timing_score
+        features["candle_quality"] = setup.timing.candle_signal.pattern_quality
+    else
+        features["timing_score"] = 5.0
+        features["candle_quality"] = 0.3
+    end
+    
+    # Levels features
+    if setup.levels !== nothing
+        features["dist_to_support"] = setup.levels.dist_to_support
+        features["dist_to_resistance"] = setup.levels.dist_to_resistance
+        features["position_in_range"] = setup.levels.position_in_range
+        features["atr_pct"] = setup.levels.atr_pct
+    else
+        features["dist_to_support"] = 1.0
+        features["dist_to_resistance"] = 1.0
+        features["position_in_range"] = 0.5
+        features["atr_pct"] = 0.5
+    end
+    
+    return features
+end
+
+# 2. ساخت ماتریس آموزشی از ژورنال
+function build_training_data_from_journal()
+    stats = TradeJournal.get_journal_stats()
+    
+    resolved = filter(r -> r["status"] != "OPEN", stats["recent_signals"])
+    
+    if length(resolved) < 8
+        return nothing, nothing, nothing, "داده آموزشی کافی نیست (حداقل ۸ ترید بسته شده نیاز است)"
+    end
+    
+    feature_names = [
+        "strength_score", "trend_score", "momentum_score",
+        "volatility_score", "sr_score", "total_score",
+        "risk_reward", "mtf_confluence", "confluence_score",
+        "is_overextended", "has_divergence", "divergence_strength",
+        "structure_clarity", "timing_score", "candle_quality",
+        "dist_to_support", "dist_to_resistance", "position_in_range", "atr_pct"
+    ]
+    
+    n_features = length(feature_names)
+    X = zeros(length(resolved), n_features)
+    y = zeros(length(resolved))
+    
+    for (i, r) in enumerate(resolved)
+        is_win = r["status"] in ["WIN_TP1", "WIN_TP2"] ||
+                 (r["status"] == "EXPIRED" && r["pnl_pct"] > 0)
+        y[i] = is_win ? 1.0 : 0.0
+        
+        X[i, 1] = 30.0  # default strength
+        X[i, 2] = 20.0  # default trend
+        X[i, 3] = 10.0  # default momentum
+        X[i, 4] = 5.0   # default volatility
+        X[i, 5] = 10.0  # default sr
+        X[i, 6] = r["rr"] * 20  # proxy for total score
+        X[i, 7] = r["rr"]
+        X[i, 8] = 0.5   # default mtf
+        X[i, 9] = 50.0  # default confluence
+        X[i, 10] = 0.0  # overextended
+        X[i, 11] = 0.0  # divergence
+        X[i, 12] = 0.0  # div strength
+        X[i, 13] = 0.7  # structure clarity
+        X[i, 14] = 5.0  # timing
+        X[i, 15] = 0.3  # candle quality
+        X[i, 16] = 0.5  # dist support
+        X[i, 17] = 0.5  # dist resistance
+        X[i, 18] = 0.5  # position in range
+        X[i, 19] = 0.3  # atr
+    end
+    
+    return X, y, feature_names, ""
+end
+
+# 3. آموزش مدل دسته‌بندی
+function train_setup_classifier()
+    X, y, feature_names, err_msg = build_training_data_from_journal()
+    
+    if X === nothing
+        return nothing, feature_names === nothing ? String[] : feature_names, err_msg
+    end
+    
+    n = size(X, 1)
+    if n < 8
+        return nothing, feature_names, "تعداد نمونه‌ها کمتر از حد لازم است ($n < 8)"
+    end
+    
+    try
+        model = build_forest(y, X, -1, 80, 0.7, 5, 3)
+        
+        y_pred = apply_forest(model, X)
+        preds_bin = [p >= 0.5 ? 1.0 : 0.0 for p in y_pred]
+        accuracy = mean(preds_bin .== y) * 100
+        
+        return model, feature_names, "مدل آموزش داده شد | دقت: $(round(accuracy, digits=1))% | نمونه: $n"
+    catch e
+        return nothing, feature_names, "خطا در آموزش مدل: $e"
+    end
+end
+
+# 4. پیش‌بینی کیفیت ستاپ جدید
+function predict_setup_quality(model, setup, feature_names::Vector{String})
+    model === nothing && return 0.5, "مدل آموزش داده نشده"
+    
+    features = extract_setup_features(setup)
+    
+    x_row = zeros(1, length(feature_names))
+    for (j, fname) in enumerate(feature_names)
+        x_row[1, j] = get(features, fname, 0.0)
+    end
+    
+    try
+        prob = apply_forest(model, x_row)
+        win_prob = clamp(prob[1], 0.0, 1.0)
+        return win_prob, "احتمال موفقیت ML: $(round(win_prob*100, digits=1))%"
+    catch
+        return 0.5, "خطا در پیش‌بینی"
+    end
+end
+
+# 5. محاسبه اهمیت ویژگی‌ها
+function compute_feature_importance(model, X, y, feature_names)
+    model === nothing && return Dict{String, Float64}()
+    
+    n = size(X, 1)
+    n_features = length(feature_names)
+    n < 5 && return Dict{String, Float64}()
+    
+    base_pred = apply_forest(model, X)
+    base_acc = mean([p >= 0.5 ? 1.0 : 0.0 for p in base_pred] .== y)
+    
+    importances = Dict{String, Float64}()
+    
+    for j in 1:n_features
+        X_shuffled = copy(X)
+        perm = randperm(n)
+        X_shuffled[:, j] = X[perm, j]
+        
+        shuffled_pred = apply_forest(model, X_shuffled)
+        shuffled_acc = mean([p >= 0.5 ? 1.0 : 0.0 for p in shuffled_pred] .== y)
+        
+        importance = base_acc - shuffled_acc
+        importances[feature_names[j]] = round(max(0.0, importance) * 100, digits=2)
+    end
+    
+    return importances
+end
+
+# 6. تحلیل تطبیقی جامع
+function get_adaptive_insights()
+    stats = TradeJournal.get_journal_stats()
+    
+    if stats["resolved_count"] < 5
+        return AdaptiveInsight(
+            false, stats["total_signals"], 0.0,
+            Dict{String,Float64}(), String[], String[], String[],
+            Dict{String,Float64}(),
+            ["سیستم هنوز داده کافی برای یادگیری جمع نکرده است. حداقل ۸ ترید بسته‌شده نیاز است."]
+        )
+    end
+    
+    model, feature_names, train_info = train_setup_classifier()
+    
+    insights_fa = String[]
+    push!(insights_fa, train_info)
+    
+    importances = Dict{String, Float64}()
+    best_feats = String[]
+    worst_feats = String[]
+    filters = String[]
+    grade_adj = Dict{String, Float64}()
+    accuracy = 0.0
+    
+    if model !== nothing
+        X, y, _, _ = build_training_data_from_journal()
+        
+        if X !== nothing
+            y_pred = apply_forest(model, X)
+            preds_bin = [p >= 0.5 ? 1.0 : 0.0 for p in y_pred]
+            accuracy = mean(preds_bin .== y) * 100
+            
+            importances = compute_feature_importance(model, X, y, feature_names)
+            
+            sorted_imp = sort(collect(importances), by=x->-x[2])
+            
+            if length(sorted_imp) >= 3
+                best_feats = [k for (k, v) in sorted_imp[1:min(3, end)]]
+                worst_feats = [k for (k, v) in sorted_imp[end-min(2, length(sorted_imp)-1):end]]
+                
+                push!(insights_fa, "مهم‌ترین عوامل موفقیت: $(join(best_feats, ", "))")
+                push!(insights_fa, "کم‌اهمیت‌ترین عوامل: $(join(worst_feats, ", "))")
+            end
+            
+            # Grade adjustments
+            wr = stats["win_rate"]
+            if wr > 65
+                grade_adj["boost"] = 1.1
+                push!(insights_fa, "وین‌ریت بالا ($wr%) - سیستم عملکرد عالی دارد")
+            elseif wr < 45
+                grade_adj["penalty"] = 0.85
+                push!(insights_fa, "⚠️ وین‌ریت پایین ($wr%) - فیلترهای سخت‌گیرانه‌تری اعمال شود")
+                push!(filters, "فقط ستاپ‌های A+ و A صادر شوند")
+            end
+            
+            if stats["avg_loss"] > stats["avg_win"] * 1.5
+                push!(filters, "حد ضرر بهینه‌تری مورد نیاز است (نسبت ضرر به سود نامطلوب)")
+                push!(insights_fa, "⚠️ میانگین ضرر از میانگین سود بیشتر است: تنظیم SL ضروری")
+            end
+            
+            if stats["profit_factor"] < 1.0
+                push!(filters, "فاکتور سود زیر ۱ - سیستم در حال حاضر ضررده است")
+                push!(insights_fa, "🔴 پرافیت فاکتور زیر ۱: بازنگری جدی در استراتژی لازم است")
+            elseif stats["profit_factor"] > 2.0
+                push!(insights_fa, "🟢 پرافیت فاکتور عالی ($(stats["profit_factor"])): سیستم بسیار سودآور است")
+            end
+        end
+    end
+    
+    return AdaptiveInsight(
+        model !== nothing,
+        stats["total_signals"],
+        round(accuracy, digits=1),
+        importances,
+        best_feats,
+        worst_feats,
+        filters,
+        grade_adj,
+        insights_fa
+    )
+end
+
+end

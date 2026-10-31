@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fionex Terminal v5.0 - ترمینال معاملات طلا و ارز</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- سربرگ -->
+        <header>
+            <h1>🏦 Fionex Terminal v5.0</h1>
+            <p>ترمینال معاملات حرفه‌ای برای طلا، ارز، سکه و کریپتو</p>
+        </header>
+
+        <!-- منو Tab ها -->
+        <nav class="tab-menu">
+            <button class="tab-button" data-tab="1">F1 - نمای کلی</button>
+            <button class="tab-button" data-tab="2">F2 - طلا و ارز</button>
+            <button class="tab-button" data-tab="3">F3 - روابط بازار</button>
+            <button class="tab-button" data-tab="4">F4 - بک‌تست</button>
+        </nav>
+
+        <!-- محتوای Tab ها -->
+        <main>
+            <!-- F1: نمای کلی -->
+            <div id="tab1" class="tab-content">
+                <div id="dashboard-overview"></div>
+            </div>
+
+            <!-- F2: طلا و ارز -->
+            <div id="tab2" class="tab-content" style="display:none;">
+                <div id="gold-dollar-analysis"></div>
+            </div>
+
+            <!-- F3: روابط بازار -->
+            <div id="tab3" class="tab-content" style="display:none;">
+                <div id="correlation-analysis"></div>
+            </div>
+
+            <!-- F4: بک‌تست -->
+            <div id="tab4" class="tab-content" style="display:none;">
+                <div id="backtest-validation"></div>
+            </div>
+        </main>
+
+        <!-- پاورقی -->
+        <footer>
+            <p>🔄 به‌روزرسانی خودکار هر ۵ ثانیه | آخرین به‌روزرسانی: <span id="lastUpdate">...</span></p>
+            <p>ساخته شده با ❤️ برای سرمایه‌گذاران و معاملگران</p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

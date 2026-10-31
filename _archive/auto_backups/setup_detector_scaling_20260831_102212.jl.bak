@@ -1,0 +1,154 @@
+module SetupDetector
+
+using Statistics, Dates
+
+export detect_setup, SetupResult
+
+# ساختار نگهداری خروجی آنالیز تکنیکال
+struct SetupResult
+    symbol::String
+    bias::String        # BUY, SELL, NO_TRADE
+    setup_type::String  # Pullback, Breakout, RangeBound, etc.
+    entry_low::Float64
+    entry_high::Float64
+    target1::Float64
+    target2::Float64
+    stop_loss::Float64
+    risk_reward::Float64
+    trade_quality::String # A+, A, B
+    trend_score::Float64
+    momentum_score::Float64
+    volatility_score::Float64
+    reasons_for::Vector{String}
+    reasons_against::Vector{String}
+end
+
+# محاسبه اندیکاتورهای پایه تکنیکال به صورت بومی و بدون تداخل
+function calculate_ema(prices::Vector{Float64}, period::Int)::Vector{Float64}
+    n = length(prices)
+    ema = copy(prices)
+    n < period && return ema
+    
+    k = 2.0 / (period + 1.0)
+    ema[period] = mean(prices[1:period])
+    for i in (period + 1):n
+        ema[i] = prices[i] * k + ema[i-1] * (1.0 - k)
+    end
+    return ema
+end
+
+function calculate_rsi(prices::Vector{Float64}, period::Int=14)::Float64
+    n = length(prices)
+    n < period + 1 && return 50.0
+    
+    gains = 0.0
+    losses = 0.0
+    for i in (n - period + 1):n
+        diff = prices[i] - prices[i-1]
+        if diff > 0
+            gains += diff
+        else
+            losses -= diff
+        end
+    end
+    
+    avg_gain = gains / period
+    avg_loss = losses / period
+    avg_loss == 0.0 && return 100.0
+    
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1.0 + rs))
+end
+
+# ------------------------------------------------------------------
+# موتور اصلی آنالیز و صادرکننده سیگنال‌های پویا (پرایس اکشن زنده)
+# ------------------------------------------------------------------
+function detect_setup(symbol::String, prices::Vector{Float64})::SetupResult
+    n = length(prices)
+    
+    # گارد محافظ برای آرایه‌های خالی یا کوتاه
+    if n < 20
+        return SetupResult(symbol, "NO_TRADE", "داده ناکافی", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "C", 0.0, 0.0, 0.0, String[], String[])
+    end
+
+    last_price = prices[end]
+    
+    # محاسبه میانگین‌های متحرک روندنما
+    ema9 = calculate_ema(prices, 9)
+    ema21 = calculate_ema(prices, 21)
+    ema50 = calculate_ema(prices, 50)
+    
+    # محاسبه اندیکاتورهای مومنتوم و نوسان (ATR تقریبی)
+    rsi = calculate_rsi(prices, 14)
+    std_dev = std(prices[max(1, n-20):end])
+    atr = max(std_dev, last_price * 0.005) # گارد محافظ برای نوسان صفر
+
+    bias = "NO_TRADE"
+    setup_type = "تحلیل رنج"
+    trade_quality = "B"
+    
+    entry_low = last_price * 0.998
+    entry_high = last_price * 1.002
+    target1 = 0.0
+    target2 = 0.0
+    stop_loss = 0.0
+    
+    reasons_for = String[]
+    reasons_against = String[]
+
+    # ۱. سیگنال خرید (BULLISH BUY)
+    # تلاقی قیمت بالای میانگین متحرک ۵۰ روزه + پولبک به EMA 9 یا اشباع فروش نسبی rsi
+    if last_price > ema50[end]
+        bias = "BUY"
+        setup_type = "پولبک روند صعودی"
+        trade_quality = rsi < 45 ? "A+" : "A"
+        
+        stop_loss = last_price - (atr * 1.5)
+        target1 = last_price + (atr * 1.8)
+        target2 = last_price + (atr * 3.0)
+        
+        push!(reasons_for, "قیمت در روند صعودی بلندمدت (بالای EMA50)")
+        rsi < 50 && push!(reasons_for, "اندیکاتور RSI در موقعیت پولبک بهینه قرار دارد")
+        last_price > ema9[end] && push!(reasons_for, "مومنتوم کوتاه‌مدت صعودی فعال است")
+        
+    # ۲. سیگنال فروش (BEARISH SELL)
+    # تلاقی قیمت پایین میانگین متحرک ۵۰ روزه + پولبک نزولی
+    elseif last_price < ema50[end]
+        bias = "SELL"
+        setup_type = "ریجکشن روند نزولی"
+        trade_quality = rsi > 55 ? "A+" : "A"
+        
+        stop_loss = last_price + (atr * 1.5)
+        target1 = last_price - (atr * 1.8)
+        target2 = last_price - (atr * 3.0)
+        
+        push!(reasons_for, "قیمت در روند نزولی بلندمدت (پایین EMA50)")
+        rsi > 50 && push!(reasons_for, "اندیکاتور RSI در موقعیت ریجکشن قیمت قرار دارد")
+        last_price < ema9[end] && push!(reasons_for, "مومنتوم کوتاه‌مدت نزولی فعال است")
+    end
+
+    # محاسبه واقعی نسبت ریسک به ریوار (Risk-to-Reward)
+    risk = abs(last_price - stop_loss)
+    reward = abs(target1 - last_price)
+    rr_ratio = risk > 0.0 ? round(reward / risk, digits=2) : 1.5
+
+    return SetupResult(
+        symbol,
+        bias,
+        setup_type,
+        entry_low,
+        entry_high,
+        target1,
+        target2,
+        stop_loss,
+        rr_ratio,
+        trade_quality,
+        80.0, # Trend Score
+        rsi,  # Momentum Score
+        atr,  # Volatility Score
+        reasons_for,
+        reasons_against
+    )
+end
+
+end

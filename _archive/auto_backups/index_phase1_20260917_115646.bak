@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fionex Terminal v5.0 | ترمینال تحلیلی طلا، ارز و کریپتو</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/chart.min.js"></script>
+</head>
+<body class="terminal-body">
+    <!-- 🔷 هدر بلومبرگ -->
+    <header class="terminal-header">
+        <div class="terminal-brand">
+            <span class="terminal-logo">F</span>
+            <div class="brand-text">
+                <h1>FIONEX</h1>
+                <span class="sub">ترمینال تحلیلی معاملات</span>
+            </div>
+        </div>
+
+        <!-- 🔷 منوی ۵ صفحه‌ای منظم F1 تا F5 -->
+        <nav class="terminal-nav">
+            <button class="nav-btn active" data-page="page-overview">
+                <span class="hotkey">F1</span>
+                <span>نمای کلی</span>
+            </button>
+            <button class="nav-btn" data-page="page-gold">
+                <span class="hotkey">F2</span>
+                <span>طلا و ارز</span>
+            </button>
+            <button class="nav-btn" data-page="page-relations">
+                <span class="hotkey">F3</span>
+                <span>روابط بازارها</span>
+            </button>
+            <button class="nav-btn" data-page="page-backtest">
+                <span class="hotkey">F4</span>
+                <span>بک‌تست</span>
+            </button>
+            <button class="nav-btn" data-page="page-reports">
+                <span class="hotkey">F5</span>
+                <span>گزارش‌ها</span>
+            </button>
+        </nav>
+
+        <div class="terminal-widgets">
+            <div class="live-clock" id="navTime">--:--:--</div>
+            <button class="terminal-btn" id="btnRefresh">
+                <span>⟳</span>
+                <span>بروزرسانی</span>
+            </button>
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span>زنده</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 🔷 نوار هشدار -->
+    <div class="alert-strip" id="alertBanner">
+        <span>در حال اتصال به سرور داده‌ها...</span>
+    </div>
+
+    <main class="terminal-main">
+        <!-- 📊 F1 - نمای کلی -->
+        <section class="page-section active" id="page-overview">
+            <div class="panel-title-bar accent-cyan">
+                <span class="panel-code">F1</span>
+                <h2>نمای کلی بازار</h2>
+                <span class="panel-subtitle">// خلاصه لحظه‌ای وضعیت طلا، ارز و شاخص‌های کلان</span>
+            </div>
+
+            <div class="kpi-grid" id="ovKpiGrid"></div>
+
+            <div class="overview-grid">
+                <div class="term-panel chart-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">📊</span>
+                        <span>روند انس جهانی طلا (XAU/USD)</span>
+                        <span class="panel-meta">آخرین ۱۸۰ روز</span>
+                    </div>
+                    <div class="panel-body chart-body">
+                        <canvas id="ovChGoldMini"></canvas>
+                    </div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-purple">
+                        <span class="panel-icon">🎯</span>
+                        <span>وضعیت رژیم بازار</span>
+                    </div>
+                    <div class="panel-body" id="ovRegimeInfo"></div>
+                </div>
+            </div>
+
+            <div class="term-panel">
+                <div class="panel-head accent-orange">
+                    <span class="panel-icon">🔥</span>
+                    <span>نقشه حرارتی بازدهی دارایی‌ها</span>
+                    <span class="panel-meta">۱ روزه / ۵ روزه / ۲۰ روزه</span>
+                </div>
+                <div class="heatmap-grid" id="marketHeatmap"></div>
+            </div>
+
+            <div class="term-panel">
+                <div class="panel-head accent-green">
+                    <span class="panel-icon">🔮</span>
+                    <span>اهداف کلیدی و پیش‌بینی ۷ روزه هوش مصنوعی</span>
+                </div>
+                <div class="panel-body" id="ovTargets"></div>
+            </div>
+        </section>
+
+        <!-- 💰 F2 - طلا و ارز ایران -->
+        <section class="page-section" id="page-gold">
+            <div class="panel-title-bar accent-gold">
+                <span class="panel-code">F2</span>
+                <h2>طلا و ارز ایران</h2>
+                <span class="panel-subtitle">// نمودار و پیش‌بینی طلا، دلار و طلای ۱۸ عیار</span>
+            </div>
+
+            <div class="charts-three-grid">
+                <div class="term-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">💰</span>
+                        <span>نمودار انس جهانی طلا (XAU/USD)</span>
+                    </div>
+                    <div class="panel-body chart-body-tall">
+                        <canvas id="chGold"></canvas>
+                    </div>
+                </div>
+                <div class="term-panel">
+                    <div class="panel-head accent-gold">
+                        <span class="panel-icon">💵</span>
+                        <span>نمودار دلار آزاد تهران</span>
+                    </div>
+                    <div class="panel-body chart-body-tall">
+                        <canvas id="chUSD"></canvas>
+                    </div>
+                </div>
+                <div class="term-panel">
+                    <div class="panel-head accent-pink">
+                        <span class="panel-icon">🥇</span>
+                        <span>نمودار طلای ۱۸ عیار</span>
+                    </div>
+                    <div class="panel-body chart-body-tall">
+                        <canvas id="chIran"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kpi-grid" id="goldPredGrid" style="margin-top: 15px;"></div>
+        </section>
+
+        <!-- 🔗 F3 - روابط بازارها -->
+        <section class="page-section" id="page-relations">
+            <div class="panel-title-bar accent-purple">
+                <span class="panel-code">F3</span>
+                <h2>روابط و همبستگی بازارها</h2>
+                <span class="panel-subtitle">// ماتریس همبستگی پیرسون و بتای دارایی‌ها</span>
+            </div>
+            <div class="term-panel">
+                <div class="table-container">
+                    <table class="term-table" id="corrTbl"></table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 📅 F4 - بک‌تست و اعتبارسنجی -->
+        <section class="page-section" id="page-backtest">
+            <div class="panel-title-bar accent-blue">
+                <span class="panel-code">F4</span>
+                <h2>بک‌تست و اعتبارسنجی</h2>
+                <span class="panel-subtitle">// ارزیابی دقت مدل‌های پیش‌بینی هوش مصنوعی</span>
+            </div>
+            <div class="kpi-grid" id="btStats"></div>
+        </section>
+
+        <!-- 📋 F5 - گزارش‌ها و احساسات -->
+        <section class="page-section" id="page-reports">
+            <div class="panel-title-bar accent-orange">
+                <span class="panel-code">F5</span>
+                <h2>گزارش‌های جامع و احساسات</h2>
+                <span class="panel-subtitle">// تحلیل اخبار، احساسات و ژورنال معاملات</span>
+            </div>
+            <div class="kpi-grid" id="journalStatsWidget"></div>
+        </section>
+    </main>
+
+    <!-- 🔷 فوتر بلومبرگ -->
+    <footer class="terminal-footer">
+        <div class="footer-item">سرور: <span class="up">متصل</span></div>
+        <div class="footer-item">تاخیر: <span class="gold" id="footerLatency">--</span> میلی‌ثانیه</div>
+        <div class="footer-item">آخرین بروزرسانی: <span class="cyan" id="footerLastUpdate">--</span></div>
+        <div class="footer-item copyright">FIONEX نسخه ۵.۰</div>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gold Predictor v5.0 - سیستم معاملاتی و پیش‌بینی هوشمند</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- لود روان کتابخانه نمودار به صورت لوکال یا CDN Fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* استایل‌های تکمیلی برای بخش‌های جدید داشبورد */
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px; }
+        .dashboard-card { background: #151821; border: 1px solid #232836; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .dashboard-card h3 { color: #fff; margin-top: 0; border-bottom: 1px solid #232836; padding-bottom: 10px; font-size: 1.1rem; }
+        .regime-badge { font-size: 1.3rem; font-weight: bold; color: #ffd700; margin: 15px 0; display: block; }
+        .setup-mini-card { background: #1c2130; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #00e676; }
+        .setup-mini-card.short { border-left-color: #ff1744; }
+        .news-item-overview { border-bottom: 1px solid #232836; padding: 10px 0; }
+        .news-item-overview:last-child { border: none; }
+        .news-title { font-weight: bold; color: #e2e8f0; font-size: 0.95rem; margin-bottom: 5px; }
+        .news-meta { font-size: 0.8rem; color: #718096; display: flex; justify-content: space-between; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- سایدبار ناوبری -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <h3>GOLD PREDICTOR</h3>
+                <span class="version-tag">نسخه ۵.۰ نهایی</span>
+            </div>
+            <nav class="sidebar-menu">
+                <a href="#" class="nav-link active" data-tab="overview">📊 نمای کلی بازار</a>
+                <a href="#" class="nav-link" data-tab="gold">💰 طلا و ارز ایران</a>
+                <a href="#" class="nav-link" data-tab="fx">⚡ اسکنر فارکس و کریپتو</a>
+                <a href="#" class="nav-link" data-tab="relations">🔄 روابط بازارها</a>
+                <a href="#" class="nav-link" data-tab="backtest">⏳ بک‌تست تاریخی</a>
+                <a href="#" class="nav-link" data-tab="reports">📈 ژورنال و پورتفولیو</a>
+            </nav>
+            <div class="sidebar-footer">
+                <div id="last-update-time">بروزرسانی: --:--:--</div>
+                <button id="refresh-btn" class="btn btn-primary btn-block">🔄 بروزرسانی زنده</button>
+            </div>
+        </aside>
+
+        <!-- بخش محتوای اصلی -->
+        <main class="main-content">
+            <!-- هدر همگانی کارت‌های وضعیت -->
+            <header class="main-header">
+                <div class="header-card">
+                    <span class="card-label">انس جهانی طلا</span>
+                    <h2 id="gold-live-price" class="gold-text">$0.00</h2>
+                </div>
+                <div class="header-card">
+                    <span class="card-label">دلار تهران</span>
+                    <h2 id="usd-live-price" class="usd-text">0 ریال</h2>
+                </div>
+                <div class="header-card">
+                    <span class="card-label">طلای ۱۸ عیار</span>
+                    <h2 id="gold18-live-price" class="gold18-text">0 تومان</h2>
+                </div>
+                <div class="header-card">
+                    <span class="card-label">ترس و طمع جهانی</span>
+                    <h2 id="fear-greed-val">--</h2>
+                </div>
+            </header>
+
+            <div id="market-alert-box" class="alert-banner low" style="margin-bottom: 20px;">
+                <span>در حال دریافت وضعیت نوسان بازار...</span>
+            </div>
+
+            <!-- ۱. تب نمای کلی -->
+            <section id="overview" class="tab-content active">
+                <div class="overview-grid">
+                    <div class="chart-container-large dashboard-card">
+                        <h3>📈 چارت روند زنده انس جهانی طلا</h3>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="overview-chart"></canvas>
+                        </div>
+                    </div>
+                    <div id="sentiment-overview-card" class="dashboard-card">
+                        <h3>سنتیمنت اخبار جهانی</h3>
+                        <div class="loading-text">در حال دریافت و تحلیل هوشمند اخبار...</div>
+                    </div>
+                </div>
+
+                <div class="grid-3">
+                    <div class="dashboard-card">
+                        <h3>⚡ وضعیت رژیم بازار طلا</h3>
+                        <div id="regime-status-val" class="regime-badge">در حال بارگذاری وضعیت رژیم بازار...</div>
+                        <p id="regime-status-desc" style="font-size: 0.9rem; color: #a0aec0; line-height: 1.5;"></p>
+                    </div>
+
+                    <div class="dashboard-card">
+                        <h3>🔥 بهترین فرصت‌های ترید امروز</h3>
+                        <div id="top-setups-overview">
+                            <div class="loading-text">در حال اسکن عمیق بازار...</div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-card">
+                        <h3>📅 تقویم رویدادهای اقتصادی</h3>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>تاریخ</th>
+                                    <th>اهمیت</th>
+                                    <th>عنوان رویداد</th>
+                                </tr>
+                            </thead>
+                            <tbody id="events-table-body">
+                                <tr><td colspan="3" style="text-align: center;">در حال دریافت تقویم...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ۲. تب طلا و ارز ایران -->
+            <section id="gold" class="tab-content">
+                <div class="grid-3">
+                    <div class="dashboard-card">
+                        <h3>انس جهانی طلا (۷ روزه)</h3>
+                        <h2 id="gold-pred-point" class="gold-text">--</h2>
+                        <p id="gold-pred-range"></p>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>دلار آزاد تهران (۷ روزه)</h3>
+                        <h2 id="usd-pred-point" class="usd-text">--</h2>
+                        <p id="usd-pred-range"></p>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>طلای ۱۸ عیار ایران (۷ روزه)</h3>
+                        <h2 id="gold18-pred-point" class="gold18-text">--</h2>
+                        <p id="gold18-pred-range"></p>
+                    </div>
+                </div>
+
+                <div class="overview-grid" style="margin-top: 20px;">
+                    <div class="chart-container-large dashboard-card">
+                        <h3>📈 چارت پیش‌بینی و اهداف قیمتی ۷ روزه</h3>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="prediction-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>🎯 سیگنال‌ها و اهداف معاملاتی هوش مصنوعی</h3>
+                        <div id="ai-signals-list" class="signals-list">
+                            <div class="loading-text">در حال محاسبه برآیند مدل‌ها...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ۳. تب اسکنر فارکس و کریپتو -->
+            <section id="fx" class="tab-content">
+                <div class="overview-grid">
+                    <div class="dashboard-card">
+                        <h3>📊 جدول مانیتورینگ قدرت نسبی ارزها (Currency Strength)</h3>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>نام ارز</th>
+                                    <th>نمره z-score</th>
+                                    <th>نمودار قدرت نسبی</th>
+                                    <th>روند اختصاصی</th>
+                                </tr>
+                            </thead>
+                            <tbody id="strength-table-body">
+                                <tr><td colspan="4" style="text-align: center;">در حال محاسبه ماتریس قدرت...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="dashboard-card">
+                        <h3>🔥 ستاپ‌های فعال اسکنر هوشمند</h3>
+                        <div id="setups-container">
+                            <div class="loading-text">در حال مانیتورینگ زنده مارکت...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ۴. تب روابط بازارها -->
+            <section id="relations" class="tab-content">
+                <div class="dashboard-card">
+                    <h3>🔄 ماتریس همبستگی متقاطع و تاخیر زمانی دارایی‌ها با طلا</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>دارایی مقایسه‌ای</th>
+                                <th>همبستگی ۲۰ روزه</th>
+                                <th>همبستگی ۶۰ روزه</th>
+                                <th>تاخیر زمانی (Lead/Lag)</th>
+                                <th>ضریب بتا (Beta)</th>
+                                <th>قدرت همبستگی</th>
+                            </tr>
+                        </thead>
+                        <tbody id="relations-table-body">
+                            <tr><td colspan="6" style="text-align: center;">در حال پایش همبستگی‌ها...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ۵. تب بک‌تست تاریخی -->
+            <section id="backtest" class="tab-content">
+                <div class="dashboard-card">
+                    <h3>⏳ شبیه‌ساز و اعتبارسنجی بک‌تست تاریخی مدل‌ها</h3>
+                    <div class="backtest-controls" style="margin-bottom: 20px;">
+                        <label>بازه بک‌تست (روز): </label>
+                        <input type="number" id="backtest-days-input" value="60" min="5" max="240" style="background: #1c2130; border: 1px solid #232836; color: #fff; padding: 5px; border-radius: 4px; width: 80px; text-align: center;">
+                        <button id="run-backtest-btn" class="btn btn-primary" style="margin-right: 10px;">⚡ اجرای بک‌تست جدید</button>
+                    </div>
+                    <div class="grid-3" style="margin-bottom: 20px;">
+                        <div class="header-card">خطای پیش‌بینی طلا (MAPE): <b id="backtest-gold-mape">--</b></div>
+                        <div class="header-card">خطای پیش‌بینی دلار (MAPE): <b id="backtest-usd-mape">--</b></div>
+                        <div class="header-card">دقت جهت‌یابی طلا: <b id="backtest-gold-dir">--</b></div>
+                    </div>
+                    <div style="height: 320px; position: relative;">
+                        <canvas id="backtest-chart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ۶. تب ژورنال و گزارش‌ها -->
+            <section id="reports" class="tab-content">
+                <div class="grid-3">
+                    <div class="header-card">وین‌ریت کل تریدها: <b id="report-winrate">--</b></div>
+                    <div class="header-card">پرافیت فاکتور: <b id="report-profit-factor">--</b></div>
+                    <div class="header-card">حداکثر دروداون حساب (Max DD): <b id="report-max-dd">--</b></div>
+                </div>
+                <div class="overview-grid" style="margin-top: 20px;">
+                    <div class="chart-container-large dashboard-card">
+                        <h3>📈 منحنی رشد و بازدهی پورتفولیو (Equity Curve)</h3>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="equity-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>📊 آمار کلی ژورنال معاملاتی</h3>
+                        <div id="report-total-trades" style="font-size: 1.2rem; font-weight: bold; color: #ffd700; margin-top: 15px;">--</div>
+                        <p style="color: #a0aec0; font-size: 0.9rem; line-height: 1.6; margin-top: 10px;">آمار به طور مستقیم از دیتابیس ثبت سیگنال‌های SQLite تولید و شبیه‌سازی سود مرکب در هر ترید را منعکس می‌کند.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- لودینگ بارگذاری اولیه -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div id="loading-msg" class="loading-text">در حال همگام‌سازی دادهای لایو بازار...</div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

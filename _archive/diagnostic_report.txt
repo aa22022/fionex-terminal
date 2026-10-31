@@ -1,0 +1,10 @@
+﻿=== GOLD PREDICTOR DIAGNOSTIC REPORT ===
+زمان: 2026-08-29 10:30:40
+
+Nobitex API: FAILED - The remote name could not be resolved: 'api.nobitex.ir'
+CoinGecko API: OK | PAXG = 4458.13 USD
+File OK: src\data_fetcher.jl (5765 bytes)
+File OK: src\web_server.jl (33632 bytes)
+File OK: src\storage.jl (12007 bytes)
+File OK: src\main.jl (94 bytes)
+File OK: data\forecast.db (57344 bytes)

@@ -1,0 +1,8 @@
+﻿# فايل اصلي اجرا
+println("بارگذاري ماژول‌ها...")
+
+include("web_server.jl")
+using .WebServer
+
+# اجراي سرور روي پورت 8080
+start_server(8080)

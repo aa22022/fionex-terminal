@@ -1,0 +1,574 @@
+// ================================================================
+// 💼 GOLDTERMINAL PRO - Bloomberg Style Frontend
+// Gold Predictor v5.0
+// ================================================================
+
+window.appState = null;
+let charts = {};
+
+// ================================================================
+// تقویم شمسی و فرمت اعداد
+// ================================================================
+function gregorianToJalali(gy, gm, gd) {
+    const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    let jy = (gy <= 1600) ? 0 : 979;
+    gy -= (gy <= 1600) ? 621 : 1600;
+    const gy2 = (gm > 2) ? (gy + 1) : gy;
+    let days = (365 * gy) + parseInt((gy2 + 3) / 4) - parseInt((gy2 + 99) / 100) + parseInt((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
+    jy += 33 * parseInt(days / 12053);
+    days %= 12053;
+    jy += 4 * parseInt(days / 1461);
+    days %= 1461;
+    jy += parseInt((days - 1) / 365);
+    if (days > 0) days = (days - 1) % 365;
+    const jm = (days < 186) ? 1 + parseInt(days / 31) : 7 + parseInt((days - 186) / 30);
+    const jd = 1 + ((days < 186) ? (days % 31) : ((days - 186) % 30));
+    return [jy, jm, jd];
+}
+
+function toPersianDate(dateStr) {
+    if (!dateStr) return "--";
+    try {
+        const cleanStr = String(dateStr).split("T")[0].split(" ")[0];
+        const parts = cleanStr.split("-");
+        if (parts.length < 3) return dateStr;
+        const [jy, jm, jd] = gregorianToJalali(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]));
+        return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
+    } catch (e) { return dateStr; }
+}
+
+function fmtNum(num, digits = 2) {
+    if (num === null || num === undefined || isNaN(num)) return "--";
+    return Number(num).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function fmtInt(num) {
+    if (num === null || num === undefined || isNaN(num)) return "--";
+    return Math.round(Number(num)).toLocaleString('en-US');
+}
+
+function pctColor(v) {
+    return v >= 0 ? 'up' : 'down';
+}
+
+function pctSign(v) {
+    return v >= 0 ? '+' : '';
+}
+
+// ================================================================
+// ساعت زنده
+// ================================================================
+function updateClock() {
+    const el = document.getElementById("navTime");
+    if (!el) return;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    el.innerText = `${hh}:${mm}:${ss}`;
+}
+setInterval(updateClock, 1000);
+
+// ================================================================
+// چارت ها
+// ================================================================
+function destroyChart(id) {
+    if (charts[id]) { try { charts[id].destroy(); } catch (e) {} delete charts[id]; }
+}
+
+function renderLineChart(canvasId, labels, dataPoints, labelName, color, historicalDots = null) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    destroyChart(canvasId);
+
+    const persianLabels = labels.map(d => toPersianDate(d));
+    const datasets = [{
+        label: labelName,
+        data: dataPoints,
+        borderColor: color,
+        backgroundColor: color + "20",
+        borderWidth: 1.5,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.15,
+        fill: true
+    }];
+
+    if (historicalDots && historicalDots.length > 0) {
+        const predVals = labels.map(d => {
+            const m = historicalDots.find(x => x.target_date === d);
+            return m ? m.predicted : null;
+        });
+        datasets.push({
+            label: 'Historical Predictions',
+            data: predVals,
+            borderColor: '#FFD700',
+            backgroundColor: '#FFD700',
+            pointRadius: 5,
+            pointHoverRadius: 8,
+            showLine: false,
+            fill: false
+        });
+    }
+
+    charts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: { labels: persianLabels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { color: '#A0A0A0', font: { family: 'JetBrains Mono', size: 10 } }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: '#1F1F1F' },
+                    ticks: { color: '#606060', font: { family: 'JetBrains Mono', size: 9 }, maxTicksLimit: 10 }
+                },
+                y: {
+                    grid: { color: '#1F1F1F' },
+                    ticks: { color: '#606060', font: { family: 'JetBrains Mono', size: 9 } }
+                }
+            }
+        }
+    });
+}
+
+// ================================================================
+// تیکر بالای صفحه
+// ================================================================
+function updateTicker() {
+    if (!window.appState) return;
+    const cp = window.appState.current_prices;
+    const tk = document.getElementById("tickerContent");
+    if (!tk) return;
+    
+    const items = [
+        { sym: 'XAU/USD', val: fmtNum(cp.gold_oz_usd), unit: '' },
+        { sym: 'USD/IRT', val: fmtInt(cp.usd_irr), unit: 'T' },
+        { sym: 'GOLD-18K', val: fmtInt(cp.iran_gold_gram18), unit: 'T' },
+        { sym: 'COIN', val: fmtInt(cp.coin_emami), unit: 'T' },
+        { sym: 'DXY', val: fmtNum(cp.dxy_real), unit: '' },
+        { sym: 'US10Y', val: fmtNum(cp.us10y), unit: '%' },
+        { sym: 'VIX', val: fmtNum(cp.vix), unit: '' }
+    ];
+    
+    const html = items.map(i => 
+        `<span class="ticker-item"><span class="symbol">${i.sym}</span> <span>${i.val}${i.unit}</span></span>`
+    ).join('') + items.map(i => 
+        `<span class="ticker-item"><span class="symbol">${i.sym}</span> <span>${i.val}${i.unit}</span></span>`
+    ).join('');
+    
+    tk.innerHTML = html;
+}
+
+// ================================================================
+// نمای کلی
+// ================================================================
+function renderOverviewKpi() {
+    const cp = window.appState.current_prices;
+    const el = document.getElementById("ovKpiGrid");
+    if (!el) return;
+    
+    el.innerHTML = `
+        <div class="kpi-card">
+            <h4>◆ XAU/USD SPOT</h4>
+            <div class="value">${fmtNum(cp.gold_oz_usd)}</div>
+            <span class="source-badge">${cp.providers ? cp.providers.gold : 'LIVE'}</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ USD/IRT MARKET</h4>
+            <div class="value">${fmtInt(cp.usd_irr)}</div>
+            <span class="source-badge">${cp.providers ? cp.providers.usd : 'LIVE'}</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ GOLD 18K TEHRAN</h4>
+            <div class="value">${fmtInt(cp.iran_gold_gram18)}</div>
+            <span class="source-badge">${cp.providers ? cp.providers.iran : 'LIVE'}</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ COIN EMAMI</h4>
+            <div class="value">${fmtInt(cp.coin_emami)}</div>
+            <span class="source-badge">FORMULA</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ DXY INDEX</h4>
+            <div class="value">${fmtNum(cp.dxy_real)}</div>
+            <span class="source-badge">STOOQ</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ US10Y YIELD</h4>
+            <div class="value">${fmtNum(cp.us10y)}%</div>
+            <span class="source-badge">STOOQ</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ VIX FEAR INDEX</h4>
+            <div class="value">${fmtNum(cp.vix)}</div>
+            <span class="source-badge">CBOE</span>
+        </div>
+    `;
+}
+
+function renderHeatmap() {
+    const el = document.getElementById("marketHeatmap");
+    if (!el || !window.appState) return;
+    
+    const gh = window.appState.gold_history.prices;
+    const uh = window.appState.usd_history.prices;
+    const ih = window.appState.iran_gold_history.prices;
+    const btc = window.appState.btc_history ? window.appState.btc_history.prices : [];
+    const eth = window.appState.eth_history ? window.appState.eth_history.prices : [];
+    
+    function calcChange(arr, days) {
+        if (!arr || arr.length < days + 1) return 0;
+        return ((arr[arr.length - 1] - arr[arr.length - days - 1]) / arr[arr.length - days - 1]) * 100;
+    }
+    
+    const assets = [
+        { name: "XAU/USD", data: gh },
+        { name: "USD/IRT", data: uh },
+        { name: "GOLD-18K", data: ih },
+        { name: "BTC/USD", data: btc },
+        { name: "ETH/USD", data: eth }
+    ];
+    
+    el.innerHTML = assets.map(a => {
+        const c1 = calcChange(a.data, 1);
+        const c5 = calcChange(a.data, 5);
+        const c20 = calcChange(a.data, 20);
+        return `
+            <div class="heatmap-card">
+                <h4>${a.name}</h4>
+                <div class="row"><span class="lbl">1D</span> <span class="${pctColor(c1)}">${pctSign(c1)}${fmtNum(c1)}%</span></div>
+                <div class="row"><span class="lbl">5D</span> <span class="${pctColor(c5)}">${pctSign(c5)}${fmtNum(c5)}%</span></div>
+                <div class="row"><span class="lbl">20D</span> <span class="${pctColor(c20)}">${pctSign(c20)}${fmtNum(c20)}%</span></div>
+            </div>
+        `;
+    }).join("");
+}
+
+function renderRegimeInfo() {
+    const el = document.getElementById("ovRegimeInfo");
+    if (!el || !window.appState) return;
+    
+    const p = window.appState.prediction;
+    if (!p) { el.innerHTML = '<div style="color:#606060">NO DATA</div>'; return; }
+    
+    el.innerHTML = `
+        <div class="regime-widget-inner">
+            <div class="row">
+                <span class="lbl">MARKET TREND</span>
+                <span class="val">${p.trend}</span>
+            </div>
+            <div class="row">
+                <span class="lbl">CONFIDENCE</span>
+                <span class="val">${fmtNum(p.confidence)}%</span>
+            </div>
+            <div class="row">
+                <span class="lbl">SIGNALS</span>
+                <span class="val">${p.signals ? p.signals.length : 0}</span>
+            </div>
+            <div style="margin-top:10px">
+                ${(p.signals || []).map(s => `<div class="signal-item">▸ ${s}</div>`).join("")}
+            </div>
+        </div>
+    `;
+}
+
+function renderTopSetups() {
+    const el = document.getElementById("ovTopSetups");
+    if (!el || !window.appState) return;
+    
+    const setups = (window.appState.fx_scan && window.appState.fx_scan.setups) || [];
+    const top5 = setups.slice(0, 5);
+    
+    if (top5.length === 0) {
+        el.innerHTML = '<div style="text-align:center;color:#606060;padding:20px">NO ACTIVE SETUPS</div>';
+        return;
+    }
+    
+    el.innerHTML = top5.map(s => {
+        const biasClass = (s.bias || '').toLowerCase().includes('long') || (s.bias || '').toLowerCase().includes('buy') ? 'bias-long' : 'bias-short';
+        return `
+            <div class="setup-row">
+                <span class="sym">${s.symbol}</span>
+                <span class="meta">
+                    <span class="${biasClass}">[${s.bias}]</span>
+                    &nbsp;R/R: ${fmtNum(s.risk_reward)}
+                    &nbsp;| T1: ${fmtInt(s.target1)}
+                    &nbsp;| SL: ${fmtInt(s.stop_loss)}
+                </span>
+                <span class="quality">${s.trade_quality || 'A'}</span>
+            </div>
+        `;
+    }).join("");
+}
+
+function renderOverview() {
+    if (!window.appState) return;
+    renderOverviewKpi();
+    renderHeatmap();
+    renderRegimeInfo();
+    renderTopSetups();
+    updateTicker();
+    
+    const gh = window.appState.gold_history;
+    if (gh) renderLineChart("ovChGoldMini", gh.dates, gh.prices, "XAU/USD", "#FF9E00");
+    
+    const alertBanner = document.getElementById("alertBanner");
+    if (alertBanner && window.appState.market_alert) {
+        alertBanner.innerHTML = `<span class="alert-tag">${window.appState.market_alert.level || 'MKT'}</span><span>${window.appState.market_alert.message}</span>`;
+    }
+}
+
+// ================================================================
+// طلا و ارز (F2)
+// ================================================================
+function renderGold() {
+    if (!window.appState) return;
+    const gh = window.appState.gold_history;
+    const uh = window.appState.usd_history;
+    const ih = window.appState.iran_gold_history;
+    const hDots = window.appState.historical_prediction_dots || {};
+
+    renderLineChart("chGold", gh.dates, gh.prices, "XAU/USD Spot", "#FF9E00", hDots.gold_oz);
+    renderLineChart("chUSD", uh.dates, uh.prices, "USD/IRT Tehran", "#00FF41", hDots.usd_irr);
+    renderLineChart("chIran", ih.dates, ih.prices, "Gold 18K", "#00B4FF", hDots.iran_gold);
+    
+    const p = window.appState.prediction;
+    const el = document.getElementById("goldPredGrid");
+    if (el && p) {
+        el.innerHTML = `
+            <div class="pred-card">
+                <h4>◆ XAU/USD FORECAST</h4>
+                <div class="row"><span class="lbl">Target</span> <span class="val">${fmtNum(p.gold_oz.point)}</span></div>
+                <div class="row"><span class="lbl">Low</span> <span class="val">${fmtNum(p.gold_oz.low)}</span></div>
+                <div class="row"><span class="lbl">High</span> <span class="val">${fmtNum(p.gold_oz.high)}</span></div>
+            </div>
+            <div class="pred-card">
+                <h4>◆ USD/IRT FORECAST</h4>
+                <div class="row"><span class="lbl">Target</span> <span class="val">${fmtInt(p.usd_irr.point)}</span></div>
+                <div class="row"><span class="lbl">Low</span> <span class="val">${fmtInt(p.usd_irr.low)}</span></div>
+                <div class="row"><span class="lbl">High</span> <span class="val">${fmtInt(p.usd_irr.high)}</span></div>
+            </div>
+            <div class="pred-card">
+                <h4>◆ GOLD-18K FORECAST</h4>
+                <div class="row"><span class="lbl">Target</span> <span class="val">${fmtInt(p.iran_gold.point)}</span></div>
+                <div class="row"><span class="lbl">Low</span> <span class="val">${fmtInt(p.iran_gold.low)}</span></div>
+                <div class="row"><span class="lbl">High</span> <span class="val">${fmtInt(p.iran_gold.high)}</span></div>
+            </div>
+        `;
+    }
+}
+
+// ================================================================
+// اسکنر فارکس و کریپتو (F3)
+// ================================================================
+function renderFX() {
+    if (!window.appState || !window.appState.fx_scan) return;
+    const setups = window.appState.fx_scan.setups || [];
+    const fxEl = document.getElementById("fxSetups");
+    const cryptoEl = document.getElementById("cryptoSetups");
+    
+    function renderList(list) {
+        if (list.length === 0) return '<div style="text-align:center;color:#606060;padding:20px">NO SETUPS DETECTED</div>';
+        return list.map(s => {
+            const biasClass = (s.bias || '').toLowerCase().includes('long') || (s.bias || '').toLowerCase().includes('buy') ? 'bias-long' : 'bias-short';
+            return `
+                <div class="setup-row">
+                    <span class="sym">${s.symbol}</span>
+                    <span class="meta">
+                        <span class="${biasClass}">[${s.bias}]</span>
+                        &nbsp;R/R: ${fmtNum(s.risk_reward)}
+                        &nbsp;| T1: ${fmtInt(s.target1)}
+                        &nbsp;| SL: ${fmtInt(s.stop_loss)}
+                    </span>
+                    <span class="quality">${s.trade_quality || 'A'}</span>
+                </div>
+            `;
+        }).join("");
+    }
+    
+    if (fxEl) fxEl.innerHTML = renderList(setups.filter(s => s.category !== "crypto"));
+    if (cryptoEl) cryptoEl.innerHTML = renderList(setups.filter(s => s.category === "crypto"));
+}
+
+// ================================================================
+// روابط بازارها (F4)
+// ================================================================
+function renderRelations() {
+    if (!window.appState || !window.appState.relationships) return;
+    const rels = window.appState.relationships.relations || [];
+    const container = document.getElementById("corrTbl");
+    if (!container) return;
+    
+    container.innerHTML = `
+        <thead>
+            <tr><th>ASSET</th><th>CORR 20D</th><th>CORR 60D</th><th>BETA</th><th>STRENGTH</th></tr>
+        </thead>
+        <tbody>
+            ${rels.map(r => `
+                <tr>
+                    <td>${r.asset_b}</td>
+                    <td class="num ${pctColor(r.pearson_20d)}">${fmtNum(r.pearson_20d)}</td>
+                    <td class="num ${pctColor(r.pearson_60d)}">${fmtNum(r.pearson_60d)}</td>
+                    <td class="num">${fmtNum(r.beta_30d)}</td>
+                    <td>${r.strength}</td>
+                </tr>
+            `).join("")}
+        </tbody>
+    `;
+}
+
+// ================================================================
+// بک‌تست (F5)
+// ================================================================
+function renderBacktestDefault() {
+    if (!window.appState || !window.appState.backtest) return;
+    const bt = window.appState.backtest;
+    const el = document.getElementById("btStats");
+    if (!el) return;
+    el.innerHTML = `
+        <div class="kpi-card">
+            <h4>◆ TEST PERIOD</h4>
+            <div class="value">${bt.total_days || bt.days_used || 60} D</div>
+            <span class="source-badge">DAYS</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ MAPE GOLD</h4>
+            <div class="value">${fmtNum(bt.gold_mape)}%</div>
+            <span class="source-badge">ERROR</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ MAPE USD</h4>
+            <div class="value">${fmtNum(bt.usd_mape)}%</div>
+            <span class="source-badge">ERROR</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ MAPE GOLD-18K</h4>
+            <div class="value">${fmtNum(bt.iran_mape)}%</div>
+            <span class="source-badge">ERROR</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ DIRECTION GOLD</h4>
+            <div class="value">${fmtNum(bt.gold_direction_accuracy || bt.direction_accuracy || 0)}%</div>
+            <span class="source-badge">ACCURACY</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ DIRECTION USD</h4>
+            <div class="value">${fmtNum(bt.usd_direction_accuracy || 0)}%</div>
+            <span class="source-badge">ACCURACY</span>
+        </div>
+    `;
+}
+
+// ================================================================
+// گزارش‌ها (F6)
+// ================================================================
+function renderReports() {
+    if (!window.appState) return;
+    const j = window.appState.trade_journal || {};
+    const el = document.getElementById("journalStatsWidget");
+    if (!el) return;
+    el.innerHTML = `
+        <div class="kpi-card">
+            <h4>◆ WIN RATE</h4>
+            <div class="value">${fmtNum(j.win_rate || 0)}%</div>
+            <span class="source-badge">SUCCESS</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ PROFIT FACTOR</h4>
+            <div class="value">${fmtNum(j.profit_factor || 0)}</div>
+            <span class="source-badge">P/L RATIO</span>
+        </div>
+        <div class="kpi-card">
+            <h4>◆ TOTAL TRADES</h4>
+            <div class="value">${j.total_trades || 0}</div>
+            <span class="source-badge">EXECUTED</span>
+        </div>
+    `;
+}
+
+// ================================================================
+// ناوبری و لود
+// ================================================================
+function renderCurrentPage() {
+    const activeTab = document.querySelector(".nav-btn.active");
+    if (!activeTab) { renderOverview(); return; }
+    const pageId = activeTab.getAttribute("data-page");
+    
+    if (pageId === "page-overview") renderOverview();
+    else if (pageId === "page-gold") renderGold();
+    else if (pageId === "page-fx") renderFX();
+    else if (pageId === "page-relations") renderRelations();
+    else if (pageId === "page-backtest") renderBacktestDefault();
+    else if (pageId === "page-reports") renderReports();
+}
+
+async function loadData() {
+    try {
+        const t0 = performance.now();
+        const resp = await fetch("/api/data");
+        if (resp.ok) {
+            window.appState = await resp.json();
+            renderCurrentPage();
+            
+            const ping = Math.round(performance.now() - t0);
+            const pingEl = document.getElementById("pingMs");
+            if (pingEl) pingEl.innerText = ping;
+            
+            const lastUp = document.getElementById("lastUp");
+            if (lastUp && window.appState.last_update) {
+                lastUp.innerText = window.appState.last_update.split(" ")[1] || "--";
+            }
+        }
+    } catch (e) {
+        console.error("خطا در ارتباط با سرور:", e);
+    }
+}
+
+async function refreshData() {
+    try {
+        await fetch("/api/refresh");
+        await loadData();
+    } catch (e) {}
+}
+
+// کیبورد شرت‌کات: F1 تا F6
+document.addEventListener("keydown", (e) => {
+    const keys = { F1: 'page-overview', F2: 'page-gold', F3: 'page-fx', F4: 'page-relations', F5: 'page-backtest', F6: 'page-reports' };
+    if (keys[e.key]) {
+        e.preventDefault();
+        const btn = document.querySelector(`.nav-btn[data-page="${keys[e.key]}"]`);
+        if (btn) btn.click();
+    }
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    const btns = document.querySelectorAll(".nav-btn");
+    btns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            btns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            document.querySelectorAll(".page-section").forEach(p => {
+                p.classList.remove("active");
+                p.style.display = "none";
+            });
+            const targetPage = btn.getAttribute("data-page");
+            const pageEl = document.getElementById(targetPage);
+            if (pageEl) { pageEl.classList.add("active"); pageEl.style.display = "block"; }
+            renderCurrentPage();
+        });
+    });
+
+    const refreshBtn = document.getElementById("btnRefresh");
+    if (refreshBtn) refreshBtn.addEventListener("click", refreshData);
+    
+    updateClock();
+    loadData();
+    setInterval(loadData, 45000);
+});

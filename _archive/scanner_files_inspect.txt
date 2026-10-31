@@ -1,0 +1,244 @@
+﻿===== srv/setup_detector.jl =====
+module SetupDetector
+
+using Statistics, Dates
+
+export detect_setup, SetupResult
+
+struct SetupResult
+    symbol::String
+    bias::String        # BUY, SELL, NO_TRADE
+    setup_type::String  # Pullback, Breakout, RangeBound
+    entry_low::Float64
+    entry_high::Float64
+    target1::Float64
+    target2::Float64
+    stop_loss::Float64
+    risk_reward::Float64
+    trade_quality::String # A+, A, B
+    trend_score::Float64
+    momentum_score::Float64
+    volatility_score::Float64
+    reasons_for::Vector{String}
+    reasons_against::Vector{String}
+end
+
+# ------------------------------------------------------------------
+# Ø³ÛŒØ³ØªÙ… Ù…Ø­Ø§Ø³Ø¨Ù‡ Ù…ÛŒØ§Ù†Ú¯ÛŒÙ† Ù…ØªØ­Ø±Ú© Ù¾ÙˆÛŒØ§ (Dynamic EMA)
+# Ø§Ú¯Ø± Ø·ÙˆÙ„ Ø¯Ø§Ø¯Ù‡â€ŒÙ‡Ø§ÛŒ ØªØ§Ø±ÛŒØ®ÛŒ Ú©Ù…ØªØ± Ø§Ø² Ø¯ÙˆØ±Ù‡ Ø¨Ø§Ø´Ø¯ØŒ Ø¯ÙˆØ±Ù‡ Ø±Ø§ Ø¨Ù‡ Ø§Ù†Ø¯Ø§Ø²Ù‡ Ø¯Ø§Ø¯Ù‡â€ŒÙ‡Ø§ Ú©ÙˆÚ†Ú© Ù…ÛŒâ€ŒÚ©Ù†Ø¯
+# ------------------------------------------------------------------
+function calculate_ema(prices::Vector{Float64}, period::Int)::Vector{Float64}
+    n = length(prices)
+    p = min(period, n) # Ù¾ÙˆÛŒØ§Ø³Ø§Ø²ÛŒ Ø®ÙˆØ¯Ú©Ø§Ø± Ø¯ÙˆØ±Ù‡ Ù…ÛŒØ§Ù†Ú¯ÛŒÙ†
+    ema = copy(prices)
+    p <= 1 && return ema
+    
+    k = 2.0 / (p + 1.0)
+    ema[p] = mean(prices[1:p])
+    for i in (p + 1):n
+        ema[i] = prices[i] * k + ema[i-1] * (1.0 - k)
+    end
+    return ema
+end
+
+function calculate_rsi(prices::Vector{Float64}, period::Int=14)::Float64
+    n = length(prices)
+    p = min(period, n - 1)
+    p <= 2 && return 50.0
+    
+    gains = 0.0
+    losses = 0.0
+    for i in (n - p + 1):n
+        diff = prices[i] - prices[i-1]
+        if diff > 0
+            gains += diff
+        else
+            losses -= diff
+        end
+    end
+    
+    avg_gain = gains / p
+    avg_loss = losses / p
+    avg_loss == 0.0 && return 100.0
+    
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1.0 + rs))
+end
+
+# ------------------------------------------------------------------
+# Ù…ÙˆØªÙˆØ± Ù‡ÙˆØ´Ù…Ù†Ø¯ ØªØ­Ù„ÛŒÙ„ Ø³ØªØ§Ù¾â€ŒÙ‡Ø§
+# ------------------------------------------------------------------
+function detect_setup(symbol::String, prices::Vector{Float64})::SetupResult
+    n = length(prices)
+    
+    if n < 5
+        return SetupResult(symbol, "NO_TRADE", "Ø¯Ø§Ø¯Ù‡ Ù†Ø§Ú©Ø§ÙÛŒ", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "C", 0.0, 0.0, 0.0, String[], String[])
+    end
+
+    last_price = prices[end]
+    
+    # Ù…Ø­Ø§Ø³Ø¨Ù‡ Ù¾ÙˆÛŒØ§ Ùˆ Ø¨Ø¯ÙˆÙ† Ø®Ø·Ø§ÛŒ Ù…ÛŒØ§Ù†Ú¯ÛŒÙ†â€ŒÙ‡Ø§ÛŒ Ù…ØªØ­Ø±Ú© Ú©ÙˆØªØ§Ù‡ØŒ Ù…ÛŒØ§Ù† Ùˆ Ø¨Ù„Ù†Ø¯Ù…Ø¯Øª
+    ema9 = calculate_ema(prices, 9)
+    ema21 = calculate_ema(prices, 21)
+    ema50 = calculate_ema(prices, 50)
+    
+    rsi = calculate_rsi(prices, 14)
+    std_dev = std(prices[max(1, n-20):end])
+    atr = max(std_dev, last_price * 0.005) # Ú¯Ø§Ø±Ø¯ Ù…Ø­Ø§ÙØ¸ Ø¯Ø± Ø¨Ø±Ø§Ø¨Ø± Ù†ÙˆØ³Ø§Ù† ØµÙØ±
+
+    bias = "NO_TRADE"
+    setup_type = "ØªØ­Ù„ÛŒÙ„ Ø±Ù†Ø¬"
+    trade_quality = "B"
+    
+    entry_low = last_price * 0.998
+    entry_high = last_price * 1.002
+    target1 = 0.0
+    target2 = 0.0
+    stop_loss = 0.0
+    
+    reasons_for = String[]
+    reasons_against = String[]
+
+    # Û±. Ø³ÛŒÚ¯Ù†Ø§Ù„ Ø®Ø±ÛŒØ¯ Ø¯Ø§ÛŒÙ†Ø§Ù…ÛŒÚ©
+    # Ø§Ú¯Ø± Ù‚ÛŒÙ…Øª Ø¨Ø§Ù„Ø§ÛŒ Ù…ÛŒØ§Ù†Ú¯ÛŒÙ† Ù…ØªØ­Ø±Ú© Ø¨Ø§Ø´Ø¯ØŒ ÛŒØ§ Ù…ÛŒØ§Ù†Ú¯ÛŒÙ† Ú©ÙˆØªØ§Ù‡â€ŒÙ…Ø¯Øª Ø¨Ø§Ù„Ø§ÛŒ Ù…ÛŒØ§Ù†â€ŒÙ…Ø¯Øª Ù‚Ø±Ø§Ø± Ú¯ÛŒØ±Ø¯
+    if last_price > ema21[end] || ema9[end] > ema21[end]
+        bias = "BUY"
+        setup_type = "Ù¾ÙˆÙ„Ø¨Ú© Ø±ÙˆÙ†Ø¯ ØµØ¹ÙˆØ¯ÛŒ"
+        trade_quality = rsi < 45 ? "A+" : "A"
+        
+        stop_loss = last_price - (atr * 1.5)
+        target1 = last_price + (atr * 1.8)
+        target2 = last_price + (atr * 3.0)
+        
+        push!(reasons_for, "Ù‚ÛŒÙ…Øª Ø¯Ø± ÙØ§Ø² ØµØ¹ÙˆØ¯ÛŒ Ù¾ÙˆÛŒØ§")
+        rsi < 50 && push!(reasons_for, "Ø§Ø´Ø¨Ø§Ø¹ ÙØ±ÙˆØ´ Ù†Ø³Ø¨ÛŒ Ø¯Ø± Ù†ÙˆØ³Ø§Ù†â€ŒÙ†Ù…Ø§")
+        
+    # Û². Ø³ÛŒÚ¯Ù†Ø§Ù„ ÙØ±ÙˆØ´ Ø¯Ø§ÛŒÙ†Ø§Ù…ÛŒÚ©
+    # Ø§Ú¯Ø± Ù‚ÛŒÙ…Øª Ù¾Ø§ÛŒÛŒÙ† Ù…ÛŒØ§Ù†Ú¯ÛŒÙ† Ù…ØªØ­Ø±Ú© Ø¨Ø§Ø´Ø¯ØŒ ÛŒØ§ Ù…ÛŒØ§Ù†Ú¯ÛŒÙ† Ú©ÙˆØªØ§Ù‡â€ŒÙ…Ø¯Øª Ù¾Ø§ÛŒÛŒÙ† Ù…ÛŒØ§Ù†â€ŒÙ…Ø¯Øª Ù‚Ø±Ø§Ø± Ú¯ÛŒØ±Ø¯
+    elseif last_price < ema21[end] || ema9[end] < ema21[end]
+        bias = "SELL"
+        setup_type = "Ø±ÛŒØ¬Ú©Ø´Ù† Ø±ÙˆÙ†Ø¯ Ù†Ø²ÙˆÙ„ÛŒ"
+        trade_quality = rsi > 55 ? "A+" : "A"
+        
+        stop_loss = last_price + (atr * 1.5)
+        target1 = last_price - (atr * 1.8)
+        target2 = last_price - (atr * 3.0)
+        
+        push!(reasons_for, "Ù‚ÛŒÙ…Øª Ø¯Ø± ÙØ§Ø² Ù†Ø²ÙˆÙ„ÛŒ Ù¾ÙˆÛŒØ§")
+        rsi > 50 && push!(reasons_for, "Ø§Ø´Ø¨Ø§Ø¹ Ø®Ø±ÛŒØ¯ Ù†Ø³Ø¨ÛŒ Ø¯Ø± Ù†ÙˆØ³Ø§Ù†â€ŒÙ†Ù…Ø§")
+    end
+
+    # Ù…Ø­Ø§Ø³Ø¨Ù‡ Ø±ÛŒØ§Ø¶ÛŒ Ø¯Ù‚ÛŒÙ‚ Ù†Ø³Ø¨Øª Ø±ÛŒØ³Ú© Ø¨Ù‡ Ø±ÛŒÙˆØ§Ø± Ø¨Ø± Ø§Ø³Ø§Ø³ ÙÙˆØ§ØµÙ„ ÙˆØ§Ù‚Ø¹ÛŒ
+    risk = abs(last_price - stop_loss)
+    reward = abs(target1 - last_price)
+    rr_ratio = risk > 0.0 ? round(reward / risk, digits=2) : 1.5
+
+    return SetupResult(
+        symbol,
+        bias,
+        setup_type,
+        entry_low,
+        entry_high,
+        target1,
+        target2,
+        stop_loss,
+        rr_ratio,
+        trade_quality,
+        80.0,
+        rsi,
+        atr,
+        reasons_for,
+        reasons_against
+    )
+end
+
+end
+
+
+===== srv/pair_scanner.jl =====
+module PairScanner
+
+using ..SetupDetector
+using ..MarketRegistry
+
+export scan_all_pairs, SetupCard
+
+# Ø³Ø§Ø®ØªØ§Ø± Ø³Ø§Ø²Ú¯Ø§Ø± Ø¨Ø§ Ù…Ø§Ú˜ÙˆÙ„â€ŒÙ‡Ø§ÛŒ Ø¯ÛŒÚ¯Ø± Ø¨Ø±Ø§ÛŒ Ù‡Ø± Ø³ØªØ§Ù¾ Ø´Ù†Ø§Ø³Ø§ÛŒÛŒ Ø´Ø¯Ù‡
+struct SetupCard
+    symbol::String
+    base::String
+    quote_ccy::String
+    bias::String
+    setup_type::String
+    total_score::Float64
+    strength_score::Float64
+    trend_score::Float64
+    momentum_score::Float64
+    volatility_score::Float64
+    sr_score::Float64
+    levels::Any
+    entry_zone_low::Float64
+    entry_zone_high::Float64
+    target1::Float64
+    target2::Float64
+    stop_loss::Float64
+    risk_reward::Float64
+    reasons_for::Vector{String}
+    reasons_against::Vector{String}
+    trade_quality::String
+    timeframe_align::String
+    mtf_confluence::Bool
+    mtf_dominant_bias::String
+    advanced::Any
+    risk_info::Any
+    timing::Any
+end
+
+function scan_all_pairs(all_pairs::Vector{Any}, rates_dict::Dict{String, Vector{Float64}}, strengths::Any)::Vector{SetupCard}
+    setups = SetupCard[]
+    
+    for pair in all_pairs
+        # Ø§Ø³ØªØ®Ø±Ø§Ø¬ Ù‡ÛŒØ³ØªÙˆØ±ÛŒ Ø¬ÙØªâ€ŒØ§Ø±Ø² Ø®Ø§Ù…
+        prices = get(rates_dict, pair.symbol, Float64[])
+        if isempty(prices) || length(prices) < 20
+            continue
+        end
+        
+        # Ø§Ø¬Ø±Ø§ÛŒ Ø¢Ù†Ø§Ù„ÛŒØ² ØªÚ©Ù†ÛŒÚ©Ø§Ù„ Ù¾ÙˆÛŒØ§ÛŒ Fionex
+        res = SetupDetector.detect_setup(pair.symbol, prices)
+        
+        # Ø§Ú¯Ø± Ø¨Ø§ÛŒØ§Ø³ Ù…Ø¹Ø§Ù…Ù„Ø§ØªÛŒ Ù¾ÙˆÛŒØ§ ØµØ§Ø¯Ø± Ø´Ø¯ØŒ Ú©Ø§Ø±Øª Ø³ØªØ§Ù¾ Ø±Ø§ Ø«Ø¨Øª Ú©Ù†
+        push!(setups, SetupCard(
+            pair.symbol,
+            pair.base,
+            pair.quote_,
+            res.bias,
+            res.setup_type,
+            res.trend_score,
+            75.0, # Strength Score
+            res.trend_score,
+            res.momentum_score,
+            res.volatility_score,
+            80.0, # S/R Score
+            nothing, # Levels
+            res.entry_low,
+            res.entry_high,
+            res.target1,
+            res.target2,
+            res.stop_loss,
+            res.risk_reward,
+            res.reasons_for,
+            res.reasons_against,
+            res.trade_quality,
+            "1D Confluence",
+            true,
+            res.bias,
+            nothing, # Advanced
+            nothing, # Risk Info
+            nothing  # Timing
+        ))
+    end
+    return setups
+end
+
+end

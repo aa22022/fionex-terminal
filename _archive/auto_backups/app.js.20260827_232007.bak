@@ -1,0 +1,534 @@
+// ============================================================
+// GOLD PREDICTOR DASHBOARD - ROBUST APP ENGINE
+// ============================================================
+
+let globalData = null;
+let charts = {};
+
+function safeSetText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.innerText = text;
+}
+
+function safeSetHtml(id, html) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    initTabs();
+    fetchData();
+    
+    const refreshBtn = document.getElementById("refresh-btn");
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => triggerManualRefresh());
+    }
+
+    const runBacktestBtn = document.getElementById("run-backtest-btn");
+    if (runBacktestBtn) {
+        runBacktestBtn.addEventListener("click", () => runCustomBacktest());
+    }
+});
+
+function initTabs() {
+    const navLinks = document.querySelectorAll(".nav-link");
+    const tabContents = document.querySelectorAll(".tab-content");
+
+    navLinks.forEach(link => {
+        link.addEventListener("click", (e) => {
+            e.preventDefault();
+            const targetTab = link.getAttribute("data-tab");
+
+            navLinks.forEach(l => l.classList.remove("active"));
+            tabContents.forEach(c => c.classList.remove("active"));
+
+            link.classList.add("active");
+            const activeContent = document.getElementById(targetTab);
+            if (activeContent) {
+                activeContent.classList.add("active");
+            }
+
+            if (globalData) {
+                renderChartsForTab(targetTab);
+            }
+        });
+    });
+}
+
+async function fetchData() {
+    showLoader(true);
+    let resJson;
+    try {
+        const response = await fetch("/api/data");
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        resJson = await response.json();
+    } catch (netErr) {
+        console.error("Network / API Error:", netErr);
+        showError("عدم برقراری ارتباط با وب‌سرویس جولیا: " + netErr.message);
+        showLoader(false);
+        return;
+    }
+
+    try {
+        if (resJson.status === "success") {
+            globalData = resJson;
+            updateLastUpdateTime(resJson.last_update);
+            renderAllSections();
+        } else if (resJson.status === "loading") {
+            showLoadingOverlay(resJson.message);
+            setTimeout(fetchData, 3000);
+        } else {
+            showError(resJson.message || "خطای نامشخص در بارگذاری داده‌ها");
+        }
+    } catch (renderErr) {
+        console.error("UI Render Error:", renderErr);
+    } finally {
+        showLoader(false);
+    }
+}
+
+async function triggerManualRefresh() {
+    const btn = document.getElementById("refresh-btn");
+    if (btn) btn.disabled = true;
+    showLoader(true);
+    try {
+        const response = await fetch("/api/refresh");
+        const resJson = await response.json();
+        if (resJson.status === "success") {
+            await fetchData();
+        } else {
+            alert("خطا در به‌روزرسانی: " + resJson.message);
+        }
+    } catch (err) {
+        alert("خطا در ارتباط با سرور.");
+    } finally {
+        if (btn) btn.disabled = false;
+        showLoader(false);
+    }
+}
+
+function renderAllSections() {
+    const activeLink = document.querySelector(".nav-link.active");
+    const activeTab = activeLink ? activeLink.getAttribute("data-tab") : "overview";
+    
+    renderOverviewHeader();
+    renderChartsForTab(activeTab);
+}
+
+function renderChartsForTab(tabId) {
+    if (!globalData) return;
+    try {
+        if (tabId === "overview") renderOverviewTab();
+        else if (tabId === "gold") renderGoldIranTab();
+        else if (tabId === "fx") renderForexScannerTab();
+        else if (tabId === "relations") renderRelationsTab();
+        else if (tabId === "backtest") renderBacktestTab();
+        else if (tabId === "reports") renderReportsTab();
+    } catch (e) {
+        console.error("Error rendering tab " + tabId, e);
+    }
+}
+
+function formatNum(val, decimals = 0) {
+    if (val === null || val === undefined || isNaN(val)) return "--";
+    return Number(val).toLocaleString("fa-IR", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
+function formatToman(val) {
+    if (!val) return "--";
+    const toman = Math.round(val / 10.0);
+    return formatNum(toman) + " تومان";
+}
+
+function renderOverviewHeader() {
+    const cp = globalData.current_prices;
+    if (!cp) return;
+    
+    safeSetText("gold-live-price", "$" + formatNum(cp.gold_oz_usd, 2));
+    safeSetText("usd-live-price", formatNum(cp.usd_irr) + " ریال");
+    safeSetText("gold18-live-price", formatToman(cp.iran_gold_gram18));
+    
+    const fg = document.getElementById("fear-greed-val");
+    if (fg && cp.fear_greed !== undefined) {
+        fg.innerText = formatNum(cp.fear_greed) + " / ۱۰۰";
+        fg.style.color = cp.fear_greed > 70 ? "#00e676" : (cp.fear_greed < 30 ? "#ff1744" : "#ffc107");
+    }
+
+    const alertBox = document.getElementById("market-alert-box");
+    if (alertBox && globalData.market_alert) {
+        const ma = globalData.market_alert;
+        alertBox.className = "alert-banner " + (ma.level ? ma.level.toLowerCase() : "low");
+        alertBox.innerHTML = `<span>⚠️ ${ma.message} (نوسان طلا: ${formatNum(ma.gold_move, 2)}% | دلار: ${formatNum(ma.usd_move, 2)}%)</span>`;
+    }
+}
+
+function renderOverviewTab() {
+    const d = globalData;
+    const canvas = document.getElementById("overview-chart");
+    if (canvas && d.gold_history && d.gold_history.prices) {
+        destroyChart("overview-chart");
+        const ctx = canvas.getContext("2d");
+        charts["overview-chart"] = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: d.gold_history.dates,
+                datasets: [{
+                    label: "انس جهانی طلا (USD)",
+                    data: d.gold_history.prices,
+                    borderColor: "#ffd700",
+                    backgroundColor: "rgba(255, 215, 0, 0.1)",
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: "#222" } },
+                    x: { grid: { color: "#222" } }
+                }
+            }
+        });
+    }
+
+    if (d.events && Array.isArray(d.events)) {
+        safeSetHtml("events-table-body", d.events.map(ev => `
+            <tr>
+                <td>${ev.date}</td>
+                <td><span class="badge ${ev.impact === "بحرانی" ? "high" : "medium"}">${ev.impact}</span></td>
+                <td>${ev.title}</td>
+                <td>${ev.asset}</td>
+            </tr>
+        `).join(""));
+    }
+
+    const sent = d.sentiment;
+    const sentBox = document.getElementById("sentiment-overview-card");
+    if (sentBox && sent && sent.available) {
+        sentBox.innerHTML = `
+            <div class="sentiment-header">
+                <h4>شاخص هوش مصنوعی سنجش اخبار جهانی</h4>
+                <span class="badge ${sent.alert_level ? sent.alert_level.toLowerCase() : "low"}">ریسک: ${sent.alert_level}</span>
+            </div>
+            <div class="sentiment-score-value" style="color: ${sent.overall_score >= 0 ? "#00e676" : "#ff1744"}">
+                ${sent.overall_score > 0 ? "+" : ""}${sent.overall_score}%
+            </div>
+            <p class="sentiment-summary-text">${sent.summary}</p>
+            <div class="sentiment-breakdown">
+                <div>انس جهانی: <b style="color: ${sent.gold_score >= 0 ? "#00e676" : "#ff1744"}">${sent.gold_score}%</b></div>
+                <div>دلار بازار تهران: <b style="color: ${sent.usd_score >= 0 ? "#00e676" : "#ff1744"}">${sent.usd_score}%</b></div>
+            </div>
+        `;
+    }
+}
+
+function renderGoldIranTab() {
+    const d = globalData;
+    const p = d.prediction;
+    if (!p) return;
+
+    if (p.gold_oz) {
+        safeSetText("gold-pred-point", "$" + formatNum(p.gold_oz.point, 2));
+        safeSetText("gold-pred-range", `بازه ایمن: $${formatNum(p.gold_oz.low, 0)} - $${formatNum(p.gold_oz.high, 0)}`);
+    }
+    if (p.usd_irr) {
+        safeSetText("usd-pred-point", formatNum(p.usd_irr.point) + " ریال");
+        safeSetText("usd-pred-range", `بازه ایمن: ${formatNum(p.usd_irr.low)} - ${formatNum(p.usd_irr.high)}`);
+    }
+    if (p.iran_gold) {
+        safeSetText("gold18-pred-point", formatToman(p.iran_gold.point));
+        safeSetText("gold18-pred-range", `بازه ایمن: ${formatToman(p.iran_gold.low)} - ${formatToman(p.iran_gold.high)}`);
+    }
+
+    safeSetText("prediction-confidence-val", formatNum(p.confidence, 1) + "%");
+    safeSetText("prediction-trend-label", p.trend || "--");
+
+    const canvas = document.getElementById("prediction-chart");
+    if (canvas && p.target_dates && p.gold_oz && p.gold_oz.daily) {
+        destroyChart("prediction-chart");
+        const ctx = canvas.getContext("2d");
+        charts["prediction-chart"] = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: p.target_dates,
+                datasets: [
+                    {
+                        label: "پیش‌بینی انس جهانی طلا ($)",
+                        data: p.gold_oz.daily,
+                        borderColor: "#ffd700",
+                        borderDash: [5, 5],
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { grid: { color: "#222" } },
+                    x: { grid: { color: "#222" } }
+                }
+            }
+        });
+    }
+
+    if (p.signals && Array.isArray(p.signals)) {
+        safeSetHtml("ai-signals-list", p.signals.map(sig => `
+            <div class="signal-item">
+                <span class="signal-bullet">🎯</span>
+                <span class="signal-text">${sig}</span>
+            </div>
+        `).join(""));
+    }
+}
+
+function renderForexScannerTab() {
+    const d = globalData;
+    const scan = d.fx_scan;
+    if (!scan || !scan.available) return;
+
+    if (scan.strengths && Array.isArray(scan.strengths)) {
+        safeSetHtml("strength-table-body", scan.strengths.map(s => {
+            const barLen = Math.max(0, Math.min(100, (s.score + 3) * 16));
+            return `
+                <tr>
+                    <td><b>${s.currency}</b></td>
+                    <td>${s.score > 0 ? "+" : ""}${formatNum(s.score, 2)}</td>
+                    <td>
+                        <div class="strength-bar-container">
+                            <div class="strength-bar" style="width: ${barLen}%; background: ${s.score >= 0 ? "#00e676" : "#ff1744"}"></div>
+                        </div>
+                    </td>
+                    <td><span class="badge ${(s.trend_bias || "").includes("bull") ? "bullish" : "bearish"}">${s.trend_bias}</span></td>
+                </tr>
+            `;
+        }).join(""));
+    }
+
+    const setupsContainer = document.getElementById("setups-container");
+    if (setupsContainer && scan.setups) {
+        if (scan.setups.length === 0) {
+            setupsContainer.innerHTML = `<div class="no-setup-message">هیچ موقعیت معاملاتی فعالی در این لحظه یافت نشد.</div>`;
+            return;
+        }
+
+        setupsContainer.innerHTML = scan.setups.map((s, idx) => {
+            const hasChecklist = s.checklist !== null && s.checklist !== undefined;
+            return `
+                <div class="setup-card">
+                    <div class="setup-header">
+                        <h4>${s.symbol} <span class="badge quality-${(s.trade_quality || "b").toLowerCase()}">${s.trade_quality}</span></h4>
+                        <span class="setup-bias bias-${s.bias}">${(s.bias || "").toUpperCase()}</span>
+                    </div>
+                    <div class="setup-body">
+                        <div class="setup-metric">نوع ستاپ: <span>${s.setup_name_fa || s.setup_type}</span></div>
+                        <div class="setup-metric">امتیاز کلی: <span>${s.total_score} / ۱۰۰</span></div>
+                        <div class="setup-metric">ریسک به ریوارد: <span>1:${s.risk_reward}</span></div>
+                        
+                        <div class="setup-targets">
+                            <div>ورود بهینه: <b>${formatNum(s.entry_low, 4)} - ${formatNum(s.entry_high, 4)}</b></div>
+                            <div>حد سود اول: <b style="color: #00e676">${formatNum(s.target1, 4)}</b></div>
+                            <div>حد ضرر (SL): <b style="color: #ff1744">${formatNum(s.stop_loss, 4)}</b></div>
+                        </div>
+
+                        ${hasChecklist ? `
+                            <div class="setup-checklist-trigger" onclick="toggleChecklistDetails(${idx})">
+                                📋 چک‌لیست قبل ترید: <b>${s.checklist.approval_fa || "مشاهده وضعیت"}</b>
+                            </div>
+                            <div id="checklist-details-${idx}" class="setup-checklist-details" style="display: none;">
+                                ${(s.checklist.items || []).map(item => `
+                                    <div class="checklist-item-row">
+                                        <span class="checklist-status">${item.passed ? "✅" : "❌"}</span>
+                                        <span class="checklist-name">${item.name_fa}</span>
+                                        <span class="checklist-detail">${item.detail}</span>
+                                    </div>
+                                `).join("")}
+                            </div>
+                        ` : ""}
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+}
+
+window.toggleChecklistDetails = function(idx) {
+    const el = document.getElementById(`checklist-details-${idx}`);
+    if (el) {
+        el.style.display = el.style.display === "none" ? "block" : "none";
+    }
+}
+
+function renderRelationsTab() {
+    const d = globalData;
+    const rels = d.relationships;
+    if (!rels || !rels.available || !rels.relations) return;
+
+    safeSetHtml("relations-table-body", rels.relations.map(r => `
+        <tr>
+            <td><b>${r.asset_b}</b></td>
+            <td style="color: ${r.pearson_20d >= 0 ? "#00e676" : "#ff1744"}">${formatNum(r.pearson_20d, 2)}</td>
+            <td style="color: ${r.pearson_60d >= 0 ? "#00e676" : "#ff1744"}">${formatNum(r.pearson_60d, 2)}</td>
+            <td>${r.lead_lag_days === 0 ? "همزمان" : (r.lead_lag_days > 0 ? `${r.lead_lag_days} روز جلو` : `${Math.abs(r.lead_lag_days)} روز عقب`)}</td>
+            <td>${formatNum(r.beta_30d, 2)}</td>
+            <td>${r.strength}</td>
+        </tr>
+    `).join(""));
+}
+
+function renderBacktestTab() {
+    const d = globalData;
+    const bt = d.backtest;
+    if (!bt) return;
+
+    safeSetText("backtest-gold-mape", bt.gold_mape !== null ? formatNum(bt.gold_mape, 2) + "%" : "--");
+    safeSetText("backtest-usd-mape", bt.usd_mape !== null ? formatNum(bt.usd_mape, 2) + "%" : "--");
+    safeSetText("backtest-gold-dir", bt.direction_accuracy !== null ? formatNum(bt.direction_accuracy, 1) + "%" : "--");
+    safeSetText("backtest-usd-dir", bt.usd_direction_accuracy !== null ? formatNum(bt.usd_direction_accuracy, 1) + "%" : "--");
+    safeSetText("backtest-info-label", bt.info || "");
+
+    const canvas = document.getElementById("backtest-chart");
+    if (canvas && bt.gold && bt.gold.length > 0) {
+        destroyChart("backtest-chart");
+        const ctx = canvas.getContext("2d");
+        charts["backtest-chart"] = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: bt.gold.map(x => x.date),
+                datasets: [
+                    {
+                        label: "قیمت واقعی انس",
+                        data: bt.gold.map(x => x.actual),
+                        borderColor: "#ffffff",
+                        tension: 0.1,
+                        fill: false
+                    },
+                    {
+                        label: "پیش‌بینی انس طلا",
+                        data: bt.gold.map(x => x.predicted),
+                        borderColor: "#ffd700",
+                        borderDash: [4, 4],
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { grid: { color: "#222" } },
+                    x: { grid: { color: "#222" } }
+                }
+            }
+        });
+    }
+}
+
+async function runCustomBacktest() {
+    const daysInput = document.getElementById("backtest-days-input");
+    const days = daysInput ? parseInt(daysInput.value) : 60;
+
+    showLoader(true);
+    try {
+        const response = await fetch(`/api/backtest?days=${days}`);
+        const resJson = await response.json();
+
+        if (resJson.status === "success") {
+            globalData.backtest = {
+                gold_results: resJson.gold,
+                usd_results: resJson.usd,
+                iran_results: resJson.iran,
+                gold_mape: resJson.gold_mape,
+                usd_mape: resJson.usd_mape,
+                direction_accuracy: resJson.gold_direction,
+                usd_direction_accuracy: resJson.usd_direction,
+                info: resJson.info,
+                gold: resJson.gold
+            };
+            renderBacktestTab();
+            alert("بک‌تست با موفقیت به‌روزرسانی شد.");
+        } else {
+            alert("خطا در اجرای بک‌تست: " + resJson.message);
+        }
+    } catch (err) {
+        alert("خطا در ارتباط با سرور بک‌تست.");
+    } finally {
+        showLoader(false);
+    }
+}
+
+function renderReportsTab() {
+    const d = globalData;
+    const journal = d.trade_journal;
+    if (!journal) return;
+
+    safeSetText("report-winrate", formatNum(journal.win_rate, 1) + "%");
+    safeSetText("report-profit-factor", formatNum(journal.profit_factor, 2));
+    safeSetText("report-max-dd", formatNum(journal.max_drawdown, 2) + "%");
+    safeSetText("report-total-trades", formatNum(journal.resolved_count) + " معامله");
+
+    const canvas = document.getElementById("equity-chart");
+    if (canvas && journal.equity_points && journal.equity_points.length > 0) {
+        destroyChart("equity-chart");
+        const ctx = canvas.getContext("2d");
+        charts["equity-chart"] = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: journal.equity_dates || [],
+                datasets: [{
+                    label: "رشد بالانس حساب ($)",
+                    data: journal.equity_points,
+                    borderColor: "#00e676",
+                    backgroundColor: "rgba(0, 230, 118, 0.1)",
+                    fill: true,
+                    tension: 0.2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { grid: { color: "#222" } },
+                    x: { grid: { color: "#222" } }
+                }
+            }
+        });
+    }
+}
+
+function destroyChart(id) {
+    if (charts[id]) {
+        charts[id].destroy();
+        delete charts[id];
+    }
+}
+
+function showLoader(show) {
+    const loader = document.getElementById("loader-indicator");
+    if (loader) {
+        loader.style.display = show ? "block" : "none";
+    }
+}
+
+function updateLastUpdateTime(timeStr) {
+    safeSetText("last-update-time", "آخرین به‌روزرسانی: " + (timeStr || "--"));
+}
+
+function showLoadingOverlay(msg) {
+    const ov = document.getElementById("loading-overlay");
+    if (ov) {
+        ov.style.display = "flex";
+        safeSetText("loading-msg", msg);
+    }
+}
+
+function showError(msg) {
+    console.warn("DASHBOARD WARNING:", msg);
+}

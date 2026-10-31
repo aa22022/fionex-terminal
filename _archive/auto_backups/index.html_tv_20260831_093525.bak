@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>گلد پردیکتور | داشبورد هوشمند طلا و ارز</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/chart.min.js"></script>
+</head>
+<body>
+
+<div class="app-layout">
+
+    <!-- 🔷 سایدبار سمت راست -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-logo">
+                <div class="logo-circle">✦</div>
+            </div>
+            <div class="brand-text">
+                <h1>گلد پردیکتور</h1>
+                <p>هوشمند تحلیل بازار</p>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section-title">منوی اصلی</div>
+            <button class="nav-btn active" data-page="page-overview">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">نمای کلی</span>
+            </button>
+            <button class="nav-btn" data-page="page-gold">
+                <span class="nav-icon">💰</span>
+                <span class="nav-label">طلا و ارز ایران</span>
+            </button>
+            <button class="nav-btn" data-page="page-fx">
+                <span class="nav-icon">💱</span>
+                <span class="nav-label">فارکس و کریپتو</span>
+            </button>
+            <button class="nav-btn" data-page="page-relations">
+                <span class="nav-icon">🔗</span>
+                <span class="nav-label">روابط بازارها</span>
+            </button>
+            <button class="nav-btn" data-page="page-backtest">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">بک‌تست</span>
+            </button>
+            <button class="nav-btn" data-page="page-reports">
+                <span class="nav-icon">📋</span>
+                <span class="nav-label">گزارش‌ها</span>
+            </button>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-status">
+                <div class="status-dot" id="statusDot"></div>
+                <div class="status-info">
+                    <span class="status-title">اتصال زنده</span>
+                    <span class="status-time" id="lastUp">--</span>
+                </div>
+            </div>
+            <div class="sidebar-version">نسخه ۵.۰ • ۱۴۰۳</div>
+        </div>
+    </aside>
+
+    <!-- 🔷 محتوای اصلی -->
+    <main class="main-content">
+        
+        <!-- هدر بالای صفحه -->
+        <header class="top-header">
+            <div class="header-left">
+                <div class="header-title" id="pageTitle">نمای کلی بازار</div>
+                <div class="header-subtitle" id="pageSubtitle">خلاصه لحظه‌ای وضعیت طلا، ارز و شاخص‌های کلان</div>
+            </div>
+            <div class="header-right">
+                <div class="header-clock">
+                    <span class="clock-icon">🕐</span>
+                    <span id="navTime">--:--:--</span>
+                </div>
+                <button class="btn-refresh" id="btnRefresh">
+                    <span>🔄</span>
+                    <span>بروزرسانی</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- بنر هشدار -->
+        <div class="alert-banner" id="alertBanner">
+            <span class="alert-icon">💡</span>
+            <span class="alert-text">در حال بارگذاری وضعیت بازار...</span>
+        </div>
+
+        <!-- 📊 صفحه نمای کلی -->
+        <section class="page-section active" id="page-overview">
+            
+            <div class="kpi-grid" id="ovKpiGrid"></div>
+            
+            <div class="two-col-grid">
+                <div class="widget-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon-bg gold">💰</span>
+                            <div>
+                                <h3>روند انس جهانی طلا</h3>
+                                <p>نمایش ۱۸۰ روز اخیر</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-wrap">
+                            <canvas id="ovChGoldMini"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="widget-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <span class="card-icon-bg purple">🎯</span>
+                            <div>
+                                <h3>وضعیت رژیم بازار</h3>
+                                <p>تحلیل هوشمند روند فعلی</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body" id="ovRegimeInfo"></div>
+                </div>
+            </div>
+            
+            <div class="widget-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon-bg orange">🔥</span>
+                        <div>
+                            <h3>نقشه حرارتی بازار</h3>
+                            <p>بازدهی دارایی‌ها در بازه‌های مختلف</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="heatmap-grid" id="marketHeatmap"></div>
+                </div>
+            </div>
+            
+            <div class="widget-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon-bg green">⚡</span>
+                        <div>
+                            <h3>بهترین فرصت‌های معاملاتی</h3>
+                            <p>ستاپ‌های کیفیت بالا</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" id="ovTopSetups"></div>
+            </div>
+        </section>
+
+        <!-- 🥇 صفحه طلا و ارز -->
+        <section class="page-section" id="page-gold" style="display:none">
+            
+            <div class="kpi-grid" id="goldPredGrid"></div>
+            
+            <div class="widget-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon-bg gold">💰</span>
+                        <div>
+                            <h3>نمودار انس جهانی طلا</h3>
+                            <p>XAU/USD - قیمت دلاری</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-wrap large">
+                        <canvas id="chGold"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="widget-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon-bg green">💵</span>
+                        <div>
+                            <h3>نمودار دلار آزاد تهران</h3>
+                            <p>USD/IRT - قیمت تومانی</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-wrap large">
+                        <canvas id="chUSD"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="widget-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon-bg orange">🥇</span>
+                        <div>
+                            <h3>نمودار طلای ۱۸ عیار</h3>
+                            <p>قیمت هر گرم به تومان</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-wrap large">
+                        <canvas id="chIran"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 💱 فارکس و کریپتو -->
+        <section class="page-section" id="page-fx" style="display:none">
+            <div class="widget-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon-bg blue">📊</span>
+                        <div>
+                            <h3>ستاپ‌های فارکس</h3>
+                            <p>جفت‌ارزهای اصلی جهانی</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" id="fxSetups"></div>
+            </div>
+            
+            <div class="widget-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon-bg orange">₿</span>
+                        <div>
+                            <h3>ستاپ‌های کریپتو</h3>
+                            <p>ارزهای دیجیتال</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" id="cryptoSetups"></div>
+            </div>
+        </section>
+
+        <!-- 🔗 روابط بازارها -->
+        <section class="page-section" id="page-relations" style="display:none">
+            <div class="widget-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="card-icon-bg purple">🔗</span>
+                        <div>
+                            <h3>ماتریس همبستگی بازارها</h3>
+                            <p>روابط بین‌بازاری</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-wrap">
+                        <table class="modern-table" id="corrTbl"></table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 📉 بک‌تست -->
+        <section class="page-section" id="page-backtest" style="display:none">
+            <div class="kpi-grid" id="btStats"></div>
+        </section>
+
+        <!-- 📋 گزارش‌ها -->
+        <section class="page-section" id="page-reports" style="display:none">
+            <div class="kpi-grid" id="journalStatsWidget"></div>
+        </section>
+
+    </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

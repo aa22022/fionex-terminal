@@ -1,0 +1,833 @@
+/* ================================================================
+   🌌 MIDNIGHT BLUE PRO STYLE
+   Gold Predictor v5.0 - Modern Professional Dashboard
+   ================================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* Background Layers */
+    --bg-main: #0F172A;
+    --bg-secondary: #1E293B;
+    --bg-tertiary: #334155;
+    --bg-hover: #475569;
+    --bg-card: #1E293B;
+    --bg-card-alt: #263449;
+    
+    /* Text Colors */
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
+    --text-tertiary: #64748B;
+    --text-muted: #475569;
+    
+    /* Brand Colors */
+    --brand-blue: #3B82F6;
+    --brand-blue-light: #60A5FA;
+    --brand-blue-dark: #2563EB;
+    
+    /* Accent Colors */
+    --gold: #F59E0B;
+    --gold-light: #FBBF24;
+    --gold-dark: #D97706;
+    --purple: #8B5CF6;
+    --purple-light: #A78BFA;
+    --orange: #F97316;
+    --orange-light: #FB923C;
+    --green: #10B981;
+    --green-light: #34D399;
+    --red: #EF4444;
+    --red-light: #F87171;
+    --cyan: #06B6D4;
+    
+    /* Borders & Shadows */
+    --border-color: #334155;
+    --border-hover: #475569;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.4);
+    --shadow-glow: 0 0 24px rgba(59, 130, 246, 0.15);
+    
+    /* Border Radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+}
+
+html { direction: rtl; }
+
+body {
+    font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+    background: var(--bg-main);
+    background-image: 
+        radial-gradient(circle at 20% 0%, rgba(59, 130, 246, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 80% 100%, rgba(139, 92, 246, 0.05) 0%, transparent 40%);
+    color: var(--text-primary);
+    line-height: 1.7;
+    min-height: 100vh;
+    font-size: 14px;
+}
+
+/* ================================================================
+   🔷 لایه اصلی برنامه
+   ================================================================ */
+.app-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 100vh;
+}
+
+/* ================================================================
+   🔷 سایدبار سمت راست
+   ================================================================ */
+.sidebar {
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 16px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px 20px 12px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.logo-circle {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--brand-blue) 0%, var(--purple) 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 22px;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.brand-text h1 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.brand-text p {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.sidebar-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nav-section-title {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+}
+
+.nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    text-align: right;
+    position: relative;
+}
+
+.nav-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    transform: translateX(-2px);
+}
+
+.nav-btn.active {
+    background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-blue-dark) 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.nav-btn.active::before {
+    content: "";
+    position: absolute;
+    right: -16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 24px;
+    background: white;
+    border-radius: 2px;
+}
+
+.nav-icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+}
+
+.nav-label {
+    flex: 1;
+    font-weight: 500;
+}
+
+.sidebar-footer {
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    margin-top: 20px;
+}
+
+.sidebar-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulseLive 1.5s infinite alternate;
+}
+
+@keyframes pulseLive {
+    0% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.status-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.status-title {
+    font-size: 12px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.status-time {
+    font-size: 10px;
+    color: var(--text-tertiary);
+}
+
+.sidebar-version {
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    padding-top: 8px;
+}
+
+/* ================================================================
+   🔷 محتوای اصلی
+   ================================================================ */
+.main-content {
+    padding: 24px 32px;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+/* هدر بالای صفحه */
+.top-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.header-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.header-subtitle {
+    font-size: 13px;
+    color: var(--text-tertiary);
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-clock {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    direction: ltr;
+    min-width: 110px;
+    justify-content: center;
+}
+
+.clock-icon {
+    font-size: 14px;
+}
+
+.btn-refresh {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-blue-dark) 100%);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-refresh:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+}
+
+/* ================================================================
+   🔷 بنر هشدار
+   ================================================================ */
+.alert-banner {
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-right: 3px solid var(--brand-blue);
+    padding: 14px 18px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.alert-icon {
+    font-size: 20px;
+}
+
+.alert-text {
+    flex: 1;
+}
+
+/* ================================================================
+   🔷 بخش‌های صفحه
+   ================================================================ */
+.page-section {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ================================================================
+   🔷 گرید KPI و کارت‌ها
+   ================================================================ */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.kpi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 80px;
+    height: 80px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+    border-radius: 50%;
+    transform: translate(30px, -30px);
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--brand-blue);
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+}
+
+.kpi-card h4 {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+
+.kpi-card .value {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+    position: relative;
+}
+
+.kpi-card .value.up { color: var(--green-light); }
+.kpi-card .value.down { color: var(--red-light); }
+
+.source-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--brand-blue-light);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    font-weight: 500;
+}
+
+/* ================================================================
+   🔷 کارت ویجت‌ها
+   ================================================================ */
+.widget-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+
+.widget-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.card-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.card-icon-bg {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.card-icon-bg.gold { background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%); }
+.card-icon-bg.green { background: linear-gradient(135deg, var(--green) 0%, #059669 100%); }
+.card-icon-bg.blue { background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-blue-dark) 100%); }
+.card-icon-bg.orange { background: linear-gradient(135deg, var(--orange) 0%, #EA580C 100%); }
+.card-icon-bg.purple { background: linear-gradient(135deg, var(--purple) 0%, #7C3AED 100%); }
+.card-icon-bg.red { background: linear-gradient(135deg, var(--red) 0%, #DC2626 100%); }
+
+.card-title h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.card-title p {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.card-body {
+    padding: 20px 24px;
+}
+
+.two-col-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+    .two-col-grid { grid-template-columns: 1fr; }
+}
+
+.chart-wrap {
+    height: 260px;
+    position: relative;
+}
+
+.chart-wrap.large { height: 380px; }
+
+.chart-wrap canvas { max-height: 100%; }
+
+/* ================================================================
+   🔷 نقشه حرارتی
+   ================================================================ */
+.heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.heatmap-card {
+    background: var(--bg-card-alt);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    transition: all 0.2s ease;
+}
+
+.heatmap-card:hover {
+    border-color: var(--brand-blue);
+    transform: translateY(-2px);
+}
+
+.heatmap-card h4 {
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.heatmap-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 12px;
+}
+
+.heatmap-row .lbl {
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+.heatmap-row .val {
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.val.up {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--green-light);
+}
+
+.val.down {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--red-light);
+}
+
+/* ================================================================
+   🔷 رژیم بازار
+   ================================================================ */
+.regime-info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--border-color);
+}
+
+.regime-info-row:last-of-type { border-bottom: none; }
+
+.regime-info-row .lbl {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.regime-info-row .val {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.signal-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(59, 130, 246, 0.08);
+    border-right: 3px solid var(--brand-blue);
+    border-radius: 6px;
+    margin-top: 8px;
+    color: var(--brand-blue-light);
+    font-size: 13px;
+}
+
+/* ================================================================
+   🔷 ستاپ‌ها
+   ================================================================ */
+.setup-card {
+    background: var(--bg-card-alt);
+    border: 1px solid var(--border-color);
+    border-right: 3px solid var(--brand-blue);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    margin-bottom: 12px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.setup-card:hover {
+    transform: translateX(-4px);
+    border-color: var(--brand-blue);
+    box-shadow: var(--shadow-md);
+}
+
+.setup-symbol {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.setup-symbol .sym {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+}
+
+.setup-symbol .bias {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+    display: inline-block;
+    width: fit-content;
+}
+
+.bias.long, .bias.buy {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--green-light);
+}
+
+.bias.short, .bias.sell {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--red-light);
+}
+
+.setup-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.setup-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.setup-meta-item .lbl {
+    color: var(--text-tertiary);
+}
+
+.setup-meta-item .val {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.setup-quality {
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+/* ================================================================
+   🔷 کارت پیش‌بینی
+   ================================================================ */
+.pred-card {
+    background: var(--bg-card-alt);
+    border: 1px solid var(--border-color);
+    border-top: 3px solid var(--gold);
+    border-radius: var(--radius-md);
+    padding: 20px;
+}
+
+.pred-card h4 {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pred-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border-color);
+    font-size: 13px;
+}
+
+.pred-row:last-child { border-bottom: none; }
+
+.pred-row .lbl { color: var(--text-secondary); }
+.pred-row .val { color: var(--text-primary); font-weight: 700; }
+
+/* ================================================================
+   🔷 جدول مدرن
+   ================================================================ */
+.table-wrap {
+    overflow-x: auto;
+}
+
+.modern-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.modern-table th {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 14px 16px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--brand-blue);
+}
+
+.modern-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.modern-table tr:hover td {
+    background: var(--bg-card-alt);
+}
+
+.modern-table td.up { color: var(--green-light); font-weight: 600; }
+.modern-table td.down { color: var(--red-light); font-weight: 600; }
+
+/* ================================================================
+   🔷 اسکرول بار
+   ================================================================ */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track { background: var(--bg-main); }
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover { background: var(--bg-hover); }
+
+/* ================================================================
+   🔷 ریسپانسیو
+   ================================================================ */
+@media (max-width: 1024px) {
+    .app-layout {
+        grid-template-columns: 1fr;
+    }
+    .sidebar {
+        position: relative;
+        height: auto;
+        border-left: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .sidebar-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+    .nav-btn { flex-shrink: 0; }
+    .sidebar-footer { display: none; }
+}
+
+@media (max-width: 640px) {
+    .main-content { padding: 16px; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .setup-card { grid-template-columns: 1fr; }
+    .header-title { font-size: 20px; }
+}

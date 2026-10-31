@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fionex | ترمینال طلا و ارز</title>
+<link rel="stylesheet" href="/static/style.css?v=7">
+<script src="/static/chart.min.js"></script>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <div class="brand-logo">F</div>
+    <div class="brand-text">
+      <h1>FIONEX</h1>
+      <span>ترمینال طلا و ارز</span>
+    </div>
+  </div>
+  <nav class="nav">
+    <button class="nav-btn active" data-page="p-home"><span class="hotkey">F1</span> میز کار</button>
+    <button class="nav-btn" data-page="p-coins"><span class="hotkey">F2</span> سکه و طلا</button>
+    <button class="nav-btn" data-page="p-currencies"><span class="hotkey">F3</span> ارز</button>
+    <button class="nav-btn" data-page="p-calc"><span class="hotkey">F4</span> ماشین‌حساب</button>
+    <button class="nav-btn" data-page="p-charts"><span class="hotkey">F5</span> نمودارها</button>
+    <button class="nav-btn" data-page="p-alerts"><span class="hotkey">F6</span> هشدارها</button>
+    <button class="nav-btn" data-page="p-predict"><span class="hotkey">F7</span> 🔮 پیش‌بینی</button>
+  </nav>
+  <div class="widgets">
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="btn-refresh" id="btnRefresh">⟳ بروزرسانی</button>
+    <div class="status"><span class="dot" id="dot"></span> زنده</div>
+  </div>
+</header>
+
+<div class="banner" id="banner">در حال اتصال...</div>
+
+<main class="main">
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- F1: میز کار                                            -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="page active" id="p-home">
+  <div class="page-head">
+    <span class="code">F1</span>
+    <h2>میز کار</h2>
+    <span class="sub">// نرخ‌های لحظه‌ای بازار</span>
+  </div>
+
+  <div class="quick-kpi" id="homeKpi"></div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-head">🪙 خلاصه سکه‌ها</div>
+      <div class="panel-body" id="homeCoins"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">💵 خلاصه ارزها</div>
+      <div class="panel-body" id="homeCurrencies"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">🥇 خلاصه طلا</div>
+    <div class="panel-body" id="homeMetals"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- F2: سکه و طلا                                          -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="page" id="p-coins">
+  <div class="page-head">
+    <span class="code">F2</span>
+    <h2>سکه و طلا</h2>
+    <span class="sub">// قیمت لحظه‌ای + حباب</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">🪙 قیمت لحظه‌ای سکه‌ها</div>
+    <div class="panel-body" id="coinsTable"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">🥇 قیمت طلا و فلزات</div>
+    <div class="panel-body" id="metalsTable"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">💎 محاسبه حباب سکه</div>
+    <div class="panel-body" id="bubbleBox"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- F3: ارز                                                 -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="page" id="p-currencies">
+  <div class="page-head">
+    <span class="code">F3</span>
+    <h2>ارز</h2>
+    <span class="sub">// نرخ لحظه‌ای ارزهای اصلی</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">💱 جدول نرخ ارز</div>
+    <div class="panel-body" id="currenciesTable"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- F4: ماشین‌حساب                                          -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="page" id="p-calc">
+  <div class="page-head">
+    <span class="code">F4</span>
+    <h2>ماشین‌حساب</h2>
+    <span class="sub">// تبدیل گرم، مثقال، سکه، دلار</span>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-head">🔄 تبدیل ارز به ارز</div>
+      <div class="panel-body">
+        <div class="calc-row">
+          <input type="number" id="calcAmount" value="1" step="any" class="calc-input">
+          <select id="calcFrom" class="calc-select"></select>
+          <span class="calc-arrow">→</span>
+          <select id="calcTo" class="calc-select"></select>
+        </div>
+        <div class="calc-result" id="calcResult">--</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">🪙 تبدیل طلا و سکه</div>
+      <div class="panel-body">
+        <div class="calc-row">
+          <input type="number" id="goldAmount" value="1" step="any" class="calc-input">
+          <select id="goldFrom" class="calc-select">
+            <option value="gram18">گرم طلای ۱۸</option>
+            <option value="mesghal">مثقال</option>
+            <option value="emami">سکه امامی</option>
+            <option value="bahar">سکه بهار</option>
+            <option value="nim">نیم سکه</option>
+            <option value="rob">ربع سکه</option>
+            <option value="gerami">سکه گرمی</option>
+            <option value="oz">اونس طلا</option>
+          </select>
+          <span class="calc-arrow">→</span>
+          <select id="goldTo" class="calc-select">
+            <option value="gram18">گرم طلای ۱۸</option>
+            <option value="mesghal">مثقال</option>
+            <option value="emami">سکه امامی</option>
+            <option value="bahar">سکه بهار</option>
+            <option value="nim">نیم سکه</option>
+            <option value="rob">ربع سکه</option>
+            <option value="gerami">سکه گرمی</option>
+            <option value="oz">اونس طلا</option>
+          </select>
+        </div>
+        <div class="calc-result" id="goldResult">--</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- F5: نمودارها                                            -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="page" id="p-charts">
+  <div class="page-head">
+    <span class="code">F5</span>
+    <h2>نمودارها</h2>
+    <span class="sub">// روند ۱۸۰ روزه</span>
+  </div>
+
+  <div class="grid-3">
+    <div class="panel">
+      <div class="panel-head">💰 انس جهانی (USD)</div>
+      <div class="chart-body"><canvas id="cGoldOz"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">💵 دلار آزاد (تومان)</div>
+      <div class="chart-body"><canvas id="cUsd"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">🥇 طلای ۱۸ عیار (تومان)</div>
+      <div class="chart-body"><canvas id="cGold18"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- F6: هشدارها                                             -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="page" id="p-alerts">
+  <div class="page-head">
+    <span class="code">F6</span>
+    <h2>هشدارهای قیمتی</h2>
+    <span class="sub">// تعیین آستانه و اعلان</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">➕ افزودن هشدار جدید</div>
+    <div class="panel-body">
+      <div class="alert-form">
+        <select id="alertItem" class="calc-select"></select>
+        <select id="alertOp" class="calc-select">
+          <option value=">">بالاتر از</option>
+          <option value="<">پایین‌تر از</option>
+        </select>
+        <input type="number" id="alertPrice" step="any" class="calc-input" placeholder="قیمت">
+        <button class="btn-add" id="btnAddAlert">افزودن</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">🔔 هشدارهای فعال</div>
+    <div class="panel-body" id="alertsList"></div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- F7: پیش‌بینی هوش مصنوعی                                -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="page" id="p-predict">
+  <div class="page-head">
+    <span class="code">F7</span>
+    <h2>پیش‌بینی هوش مصنوعی</h2>
+    <span class="sub">// اهداف قیمتی ۷ روزه با اطمینان مدل</span>
+  </div>
+
+  <!-- سیگنال کلی بازار -->
+  <div class="signal-panel" id="overallSignal">
+    <div class="signal-loading">در حال بارگذاری سیگنال...</div>
+  </div>
+
+  <!-- ۴ کارت پیش‌بینی اصلی -->
+  <div class="pred-grid" id="predGrid"></div>
+
+  <!-- دلیل‌ها و سیگنال‌های تحلیلی -->
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-head">🎯 سیگنال‌های تحلیلی مدل</div>
+      <div class="panel-body" id="predSignals"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">⚖️ سهم روش‌ها در پیش‌بینی</div>
+      <div class="panel-body" id="predWeights"></div>
+    </div>
+  </div>
+
+  <!-- جدول تفصیلی -->
+  <div class="panel">
+    <div class="panel-head">📊 جدول تفصیلی پیش‌بینی</div>
+    <div class="panel-body" id="predTable"></div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div>سرور: <span class="up">متصل</span></div>
+  <div>تاخیر: <span class="gold" id="latency">--</span> ms</div>
+  <div>آخرین بروزرسانی: <span class="cyan" id="lastUpdate">--</span></div>
+  <div class="copy">FIONEX v7.0</div>
+</footer>
+
+<script src="/static/app.js?v=7"></script>
+</body>
+</html>

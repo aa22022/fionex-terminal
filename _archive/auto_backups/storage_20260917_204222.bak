@@ -1,0 +1,144 @@
+module Storage
+
+using SQLite, DBInterface, Dates
+
+export init_db, save_actual_snapshot!, save_prediction_run!, get_historical_predictions
+
+const DB_PATH = joinpath(@__DIR__, "..", "data", "forecast.db")
+
+function init_db()
+    mkpath(dirname(DB_PATH))
+    db = SQLite.DB(DB_PATH)
+    
+    # جدول ثبت قیمت‌های واقعی روزانه
+    SQLite.execute(db, """
+        CREATE TABLE IF NOT EXISTS snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT UNIQUE,
+            gold_oz REAL,
+            usd_irr REAL,
+            iran_gold REAL
+        )
+    """)
+    
+    # جدول ثبت ماندگار پیش‌بینی‌های صادر شده برای ارزیابی عملکرد (نقاط روی چارت)
+    SQLite.execute(db, """
+        CREATE TABLE IF NOT EXISTS predictions_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prediction_date TEXT,
+            target_date TEXT,
+            asset TEXT,
+            predicted_value REAL,
+            actual_value REAL,
+            UNIQUE(prediction_date, target_date, asset) ON CONFLICT REPLACE
+        )
+    """)
+end
+
+function save_actual_snapshot!(data::Dict, analysis::Any)
+    db = SQLite.DB(DB_PATH)
+    today_str = string(today())
+    try
+        gold = Float64(data["gold_oz"]["prices"][end])
+        usd = Float64(data["usd_irr"]["prices"][end])
+        iran = Float64(data["iran_gold"]["prices"][end])
+        
+        # ذخیره یا بروزرسانی قیمت واقعی امروز
+        SQLite.execute(db, """
+            INSERT INTO snapshots (created_at, gold_oz, usd_irr, iran_gold)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(created_at) DO UPDATE SET
+                gold_oz=excluded.gold_oz,
+                usd_irr=excluded.usd_irr,
+                iran_gold=excluded.iran_gold
+        """, (today_str, gold, usd, iran))
+        
+        # به روز کردن قیمت واقعی در تاریخچه پیش‌بینی‌های گذشته جهت مقایسه دقت
+        SQLite.execute(db, """
+            UPDATE predictions_history 
+            SET actual_value = ? 
+            WHERE target_date = ? AND asset = 'gold_oz'
+        """, (gold, today_str))
+        
+        SQLite.execute(db, """
+            UPDATE predictions_history 
+            SET actual_value = ? 
+            WHERE target_date = ? AND asset = 'usd_irr'
+        """, (usd, today_str))
+
+        SQLite.execute(db, """
+            UPDATE predictions_history 
+            SET actual_value = ? 
+            WHERE target_date = ? AND asset = 'iran_gold'
+        """, (iran, today_str))
+    catch
+    end
+end
+
+function save_prediction_run!(p::Any)
+    db = SQLite.DB(DB_PATH)
+    today_str = string(today())
+    try
+        # ذخیره پیش‌بینی ۷ روز آینده برای هر سه دارایی اصلی
+        assets = ["gold_oz", "usd_irr", "iran_gold"]
+        points = [p.gold_oz_daily, p.usd_irr_daily, p.iran_gold_daily]
+        
+        for (asset_idx, asset) in enumerate(assets)
+            daily_vals = points[asset_idx]
+            for i in 1:length(daily_vals)
+                t_date = string(today() + Day(i))
+                val = Float64(daily_vals[i])
+                
+                # ثبت ماندگار نقطه پیش‌بینی شده
+                SQLite.execute(db, """
+                    INSERT INTO predictions_history (prediction_date, target_date, asset, predicted_value)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(prediction_date, target_date, asset) DO UPDATE SET
+                        predicted_value=excluded.predicted_value
+                """, (today_str, t_date, asset, val))
+            end
+        end
+    catch
+    end
+end
+
+# خواندن نقاط پیش‌بینی شده گذشته برای رسم روی نمودار فرانت‌اند
+function get_historical_predictions(asset::String, limit_days::Int=60)::Vector{Dict}
+    res = Dict[]
+    !isfile(DB_PATH) && return res
+    try
+        db = SQLite.DB(DB_PATH)
+        query = """
+            SELECT prediction_date, target_date, predicted_value, actual_value 
+            FROM predictions_history 
+            WHERE asset = ? AND target_date >= ?
+            ORDER BY target_date ASC
+        """
+        start_date = string(today() - Day(limit_days))
+        df = DBInterface.execute(db, query, (asset, start_date))
+        for row in df
+            push!(res, Dict(
+                "prediction_date" => string(row.prediction_date),
+                "target_date"     => string(row.target_date),
+                "predicted"       => Float64(row.predicted_value),
+                "actual"          => row.actual_value === nothing ? nothing : Float64(row.actual_value)
+            ))
+        end
+    catch
+    end
+    return res
+end
+
+function get_accuracy_summary(days::Int=30)
+    return Dict("count" => 0)
+end
+
+function get_multi_horizon_accuracy(days::Int=60)
+    return Dict()
+end
+
+function get_prediction_trails(days::Int=90; horizon_day::Int=1, per_day::Bool=true)
+    return Dict()
+end
+
+end

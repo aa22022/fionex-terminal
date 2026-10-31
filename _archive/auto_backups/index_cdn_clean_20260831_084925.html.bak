@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Terminal | سامانه پیش‌بینی و تحلیل چندبازاره</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:,">
+  <script src="/static/chart.min.js"></script>
+  
+  <script>
+    if (typeof LightweightCharts === 'undefined') {
+      console.warn("Local lightweight-charts.js not found, loading from CDN...");
+      document.write('<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"><\/script>');
+    }
+  </script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- TOP NAVIGATION BAR                                          -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<nav class="topnav">
+  <div class="topnav-brand">
+    <span class="brand-glow">Trading Terminal</span>
+  </div>
+  
+  <div class="topnav-menu">
+    <button class="topnav-link active" data-page="overview">نمای کلی</button>
+    <button class="topnav-link" data-page="gold">طلا و ارز ایران</button>
+    <button class="topnav-link" data-page="fx">
+      اسکنر فارکس و کریپتو
+      <span class="badge" id="navBadgeFx" style="display:none">0</span>
+    </button>
+    <button class="topnav-link" data-page="relations">روابط بازارها</button>
+    <button class="topnav-link" data-page="backtest">بک‌تست و اعتبارسنجی</button>
+    <button class="topnav-link" data-page="reports">مرکز آنالیز و گزارش‌ها</button>
+  </div>
+  
+  <div class="topnav-actions">
+    <span class="topnav-time" id="navTime">--:--:--</span>
+    <button class="topnav-btn" onclick="doRefresh()">🔄 بروزرسانی زنده</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MAIN CONTAINER                                              -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<main class="main-container">
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- Page 1: OVERVIEW                                        -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <section class="page active" id="page-overview">
+    <div class="page-header">
+      <div>
+        <div class="page-title">
+          <span class="page-title-icon">▤</span>
+          <h1>نمای کلی بازار (Market Overview)</h1>
+        </div>
+        <div class="page-subtitle">خلاصه لحظه‌ای وضعیت طلا، ارز، کریپتو و شاخص‌های کلان جهانی</div>
+      </div>
+    </div>
+
+    <div id="alertBanner"></div>
+    <div id="alertBannerMed"></div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">قیمت‌های لحظه‌ای طلا، ارز و شاخص‌های کلان</div>
+      </div>
+      <div class="section-body no-pad">
+        <div class="kpi-grid" id="ovKpiGrid"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">🔥 نقشه حرارتی بازار و بازدهی دارایی‌ها (Market Performance Heatmap)</div>
+        <div class="filter-group">
+          <button class="btn btn-sm active" id="hmBtn1d" onclick="renderHeatmap('1d')">۱ روزه</button>
+          <button class="btn btn-sm" id="hmBtn5d" onclick="renderHeatmap('5d')">۵ روزه</button>
+          <button class="btn btn-sm" id="hmBtn20d" onclick="renderHeatmap('20d')">۲۰ روزه</button>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="heatmap-grid" id="marketHeatmap"></div>
+      </div>
+    </div>
+
+    <div class="col-2-1">
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">پیش‌بینی و روند طلا (انس جهانی)</div>
+        </div>
+        <div class="section-body">
+          <div class="chart-panel sm" style="border:none;padding:0;margin:0">
+            <canvas id="ovChGoldMini"></canvas>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">وضعیت رژیم بازار طلا</div>
+        </div>
+        <div class="section-body" id="ovRegimeInfo">
+          <div class="loading">در حال بارگذاری وضعیت رژیم بازار...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-2">
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">بهترین فرصت‌های ترید امروز (Top Setups)</div>
+        </div>
+        <div class="section-body" id="ovTopSetups">
+          <div class="loading">در حال اسکن عمیق بازار...</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">آخرین اخبار و سنتیمنت بازار جهانی</div>
+        </div>
+        <div class="section-body" id="ovNewsSummary">
+          <div class="loading">در حال دریافت و تحلیل هوشمند اخبار...</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- Page 2: GOLD & IRR                                      -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <section class="page" id="page-gold">
+    <div class="page-header">
+      <div>
+        <div class="page-title">
+          <span class="page-title-icon">◈</span>
+          <h1>تحلیل تخصصی طلا و ارز ایران</h1>
+        </div>
+        <div class="page-subtitle">پیش‌بینی ۷ روزه انس جهانی، دلار آزاد، طلای ۱۸ عیار و سکه</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">پیش‌بینی هدف ۷ روز آینده دارایی‌ها</div>
+      </div>
+      <div class="section-body no-pad">
+        <div class="grid grid-4" style="gap:1px;background:var(--border)" id="goldPredGrid"></div>
+      </div>
+    </div>
+
+    <!-- Candlestick Studio in Gold Page -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;width:100%;flex-wrap:wrap">
+          <span>🕯️ استودیوی چارت کندل‌استیک و پرایس‌اکشن (TradingView Live Studio)</span>
+          <div class="btn-group" id="goldStudioTfs" style="margin-right:auto;margin-left:12px">
+            <button class="btn btn-sm" onclick="setGoldStudioTf('15m')">15m</button>
+            <button class="btn btn-sm" onclick="setGoldStudioTf('1h')">1H</button>
+            <button class="btn btn-sm" onclick="setGoldStudioTf('4h')">4H</button>
+            <button class="btn btn-sm active" onclick="setGoldStudioTf('1d')">D1</button>
+            <button class="btn btn-sm" onclick="setGoldStudioTf('1w')">W1</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <button class="btn btn-sm active" id="btnCandleGold" onclick="switchStudioAsset('gold')">🥇 انس طلا</button>
+          <button class="btn btn-sm" id="btnCandleUsd" onclick="switchStudioAsset('usd')">💵 دلار آزاد</button>
+          <button class="btn btn-sm" id="btnCandleIran" onclick="switchStudioAsset('iran')">🪙 طلای ۱۸</button>
+          <button class="btn btn-sm" id="btnCandleBtc" onclick="switchStudioAsset('btc')">₿ بیت‌کوین</button>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="modal-price-bar" id="studioPriceBar" style="margin-bottom:8px"></div>
+        <div class="candlestick-canvas-wrapper" style="height:400px">
+          <div id="studioCandleCanvas" style="width:100%;height:100%"></div>
+        </div>
+        <div class="level-legend-bar">
+          <div class="legend-item"><span class="legend-line-sample" style="background:var(--up)"></span><span>کندل صعودی (Bullish) / حد سود</span></div>
+          <div class="legend-item"><span class="legend-line-sample" style="background:var(--down)"></span><span>کندل نزولی (Bearish) / حد ضرر</span></div>
+          <div class="legend-item"><span class="legend-line-sample" style="background:var(--info);border-top:1px dashed var(--info)"></span><span>محدوده ورود بهینه (Entry Zone)</span></div>
+          <div class="legend-item"><span class="legend-line-sample" style="background:var(--accent)"></span><span>سطح پیوت / میانگین MA20</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">انس طلا - نمودار پیش‌بینی ۷ روزه مدل‌های ترکیبی</div>
+      </div>
+      <div class="section-body">
+        <div class="chart-panel" style="border:none;padding:0;margin:0">
+          <canvas id="chGold"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">دلار آزاد - تاریخچه و پیش‌بینی ۷ روزه</div>
+      </div>
+      <div class="section-body">
+        <div class="chart-panel" style="border:none;padding:0;margin:0">
+          <canvas id="chUSD"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">طلای ۱۸ عیار - تاریخچه و پیش‌بینی ۷ روزه</div>
+      </div>
+      <div class="section-body">
+        <div class="chart-panel" style="border:none;padding:0;margin:0">
+          <canvas id="chIran"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-2">
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">سیگنال‌های تحلیلی و پرایس‌اکشن</div>
+        </div>
+        <div class="section-body" id="goldSignals">
+          <div class="loading">در حال بارگذاری سیگنال‌های پرایس‌اکشن...</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">وزن مدل‌ها (Auto-Tuned Weights)</div>
+        </div>
+        <div class="section-body">
+          <div class="chart-panel sm" style="border:none;padding:0;margin:0">
+            <canvas id="chMethods"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- Page 3: FX & CRYPTO SCANNER                             -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <section class="page" id="page-fx">
+    <div class="page-header">
+      <div>
+        <div class="page-title">
+          <span class="page-title-icon">◇</span>
+          <h1>اسکنر فارکس، کریپتو و دستیار هوشمند ترید</h1>
+        </div>
+        <div class="page-subtitle">رتبه‌بندی قدرت ارزها، سطوح کلیدی، الگوهای کندلی و مدیریت ریسک کِلی</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">🧠 یادگیری تطبیقی و بهینه‌سازی هوشمند (Adaptive ML Intelligence)</div>
+      </div>
+      <div class="section-body">
+        <div id="adaptiveInsightsWidget"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">📊 کارنامه و عملکرد واقعی ستاپ‌ها (Trade Journal & Live Performance)</div>
+      </div>
+      <div class="section-body">
+        <div id="journalStatsWidget"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">🛡️ مدیریت ریسک پورتفولیو و مانیتورینگ همبستگی (Portfolio Risk & Exposure Guard)</div>
+      </div>
+      <div class="section-body">
+        <div id="portfolioRiskWidget"></div>
+      </div>
+    </div>
+
+    <!-- FX & Crypto Candlestick Studio -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;width:100%;flex-wrap:wrap">
+          <span>🕯️ چارت زنده کندل‌استیک پرایس‌اکشن نمادهای فارکس و کریپتو</span>
+          <div class="btn-group" id="fxStudioTfs" style="margin-right:auto;margin-left:12px">
+            <button class="btn btn-sm" onclick="setFxStudioTf('15m')">15m</button>
+            <button class="btn btn-sm" onclick="setFxStudioTf('1h')">1H</button>
+            <button class="btn btn-sm" onclick="setFxStudioTf('4h')">4H</button>
+            <button class="btn btn-sm active" onclick="setFxStudioTf('1d')">D1</button>
+            <button class="btn btn-sm" onclick="setFxStudioTf('1w')">W1</button>
+          </div>
+        </div>
+        <div class="filter-group" id="fxCandleSymbolSelector" style="overflow-x:auto;max-width:60vw;white-space:nowrap">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="modal-price-bar" id="fxStudioPriceBar" style="margin-bottom:8px"></div>
+        <div class="candlestick-canvas-wrapper" style="height:380px">
+          <div id="fxStudioCandleCanvas" style="width:100%;height:100%"></div>
+        </div>
+        <div class="level-legend-bar">
+          <div class="legend-item"><span class="legend-line-sample" style="background:var(--up)"></span><span>حد سود ۱ و ۲ (TP)</span></div>
+          <div class="legend-item"><span class="legend-line-sample" style="background:var(--down)"></span><span>حد ضرر (SL)</span></div>
+          <div class="legend-item"><span class="legend-line-sample" style="background:var(--info);border-top:1px dashed var(--info)"></span><span>باکس ورود</span></div>
+          <div class="legend-item"><span class="legend-line-sample" style="background:var(--accent)"></span><span>پیوت و مقاومت‌ها</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">شاخص قدرت تک‌ارزها و رمزارزها (Currency Strength Meter v2)</div>
+      </div>
+      <div class="section-body">
+        <div class="grid grid-auto" id="fxStrengths">
+          <div class="loading">در حال محاسبه و رتبه‌بندی قدرت ارزها...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">موقعیت‌های معاملاتی (Trade Setups)</div>
+        <div class="filter-group">
+          <button class="btn active" id="wlFilterAll" onclick="setWatchlistFilter('all')">🌐 همه بازار</button>
+          <button class="btn" id="wlFilterStarred" onclick="setWatchlistFilter('starred')">⭐ واچ‌لیست من (<span id="wlCount">0</span>)</button>
+        </div>
+      </div>
+      <div class="section-body">
+        <h4 style="margin:4px 0 8px 0;font-size:11px;color:var(--accent)">🪙 موقعیت‌های معاملاتی بازار کریپتو (Crypto Trade Setups)</h4>
+        <div class="grid grid-auto-lg" id="cryptoSetups" style="margin-bottom:18px">
+          <div class="loading">در حال اسکن هوشمند بازارهای کریپتو...</div>
+        </div>
+
+        <h4 style="margin:12px 0 8px 0;font-size:11px;color:var(--accent)">💱 موقعیت‌های معاملاتی بازار فارکس (Forex Trade Setups)</h4>
+        <div class="grid grid-auto-lg" id="fxSetups">
+          <div class="loading">در حال اسکن پیشرفته مارکت فارکس...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">📝 گزارش روزانه مکتوب تحلیلگر سیستم</div>
+      </div>
+      <div class="section-body">
+        <pre id="fxReport" style="font-family:'Vazirmatn',monospace;font-size:11px;line-height:1.75;color:var(--text-2);white-space:pre-wrap;direction:rtl;text-align:right;background:var(--panel-2);padding:12px;border-radius:var(--radius);border:1px solid var(--border)"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- Page 4: RELATIONSHIPS                                   -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <section class="page" id="page-relations">
+    <div class="page-header">
+      <div>
+        <div class="page-title">
+          <span class="page-title-icon">◐</span>
+          <h1>نقشه روابط بین بازارها (Relationship Engine)</h1>
+        </div>
+        <div class="page-subtitle">همبستگی، Lead/Lag، تحلیل رفتار در رژیم‌های مختلف و هم‌انباشتگی</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">شاخص‌های کلان اقتصادی و مالی جهانی</div>
+      </div>
+      <div class="section-body no-pad">
+        <div class="kpi-grid" id="macroKpi" style="grid-template-columns:repeat(4,1fr)"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">روابط طلا با سایر بازارها (Lead/Lag Analysis)</div>
+      </div>
+      <div class="section-body">
+        <div id="relMap">
+          <div class="loading">در حال مدل‌سازی روابط و تاخیر فاز بازارها...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">همبستگی ارزها با طلا (تحلیل ریاضی و بتای پورتفولیو)</div>
+      </div>
+      <div class="section-body no-pad">
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>نماد</th><th>نام</th><th>پیرسون</th><th>اسپیرمن</th>
+                <th>بتا</th><th>R²</th><th>گرنجر</th><th>هم‌انباشتگی</th>
+                <th>تأثیر</th><th>جهت</th>
+              </tr>
+            </thead>
+            <tbody id="corrTbl"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- Page 5: BACKTEST                                        -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <section class="page" id="page-backtest">
+    <div class="page-header">
+      <div>
+        <div class="page-title">
+          <span class="page-title-icon">▦</span>
+          <h1>بک‌تست و اعتبارسنجی مدل پیش‌بینی</h1>
+        </div>
+        <div class="page-subtitle">ارزیابی تاریخی، دقت چندافقی و Walk-Forward Validation</div>
+      </div>
+      <div class="page-actions">
+        <div class="btn-group" id="btRangeBtns">
+          <button class="btn" data-days="20" onclick="loadBacktest(20)">۱ ماهه</button>
+          <button class="btn" data-days="60" onclick="loadBacktest(60)">۳ ماهه</button>
+          <button class="btn" data-days="120" onclick="loadBacktest(120)">۶ ماهه</button>
+          <button class="btn active" data-days="240" onclick="loadBacktest(240)">۱ ساله</button>
+          <button class="btn" data-days="480" onclick="loadBacktest(480)">۲ ساله</button>
+          <button class="btn" data-days="960" onclick="loadBacktest(960)">۴ ساله</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">خلاصه بک‌تست تاریخی انتخاب شده</div>
+      </div>
+      <div class="section-body no-pad">
+        <div id="btStats"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">دقت چندافقی پیش‌بینی (Multi-Horizon Accuracy)</div>
+      </div>
+      <div class="section-body">
+        <div id="horizonStats"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">آزمون صحت اعتبار راهرو (Walk-Forward Validation)</div>
+      </div>
+      <div class="section-body">
+        <div id="wfStats"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">انس طلا - مقایسه مقدار واقعی در برابر پیش‌بینی تاریخی</div>
+      </div>
+      <div class="section-body">
+        <div class="chart-panel" style="border:none;padding:0;margin:0">
+          <canvas id="chBtGold"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">دلار آزاد - مقایسه مقدار واقعی در برابر پیش‌بینی تاریخی</div>
+      </div>
+      <div class="section-body">
+        <div class="chart-panel" style="border:none;padding:0;margin:0">
+          <canvas id="chBtUSD"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">طلای ۱۸ عیار - مقایسه مقدار واقعی در برابر پیش‌بینی تاریخی</div>
+      </div>
+      <div class="section-body">
+        <div class="chart-panel" style="border:none;padding:0;margin:0">
+          <canvas id="chBtIran"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- Page 6: REPORTS                                         -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <section class="page" id="page-reports">
+    <div class="page-header">
+      <div>
+        <div class="page-title">
+          <span class="page-title-icon">◨</span>
+          <h1>مرکز آنالیز عملکرد و گزارش‌های پورتفولیو (Performance Center)</h1>
+        </div>
+        <div class="page-subtitle">منحنی رشد سرمایه، افت سرمایه و خروجی‌های تحلیلی استاندارد</div>
+      </div>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">گزارش کامل PDF</div>
+        </div>
+        <div class="section-body">
+          <p style="color:var(--text-2);font-size:11px;margin-bottom:10px">
+            گزارش HTML قابل چاپ شامل تمام تحلیل‌ها، پیش‌بینی‌ها، بک‌تست و ستاپ‌های ترید.
+          </p>
+          <button class="btn btn-primary" onclick="alert('برای تولید گزارش، اسکریپت make_compact_report.jl را در ترمینال اجرا کنید.')">📄 تولید گزارش تحلیلی</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">خروجی اکسل (CSV)</div>
+        </div>
+        <div class="section-body">
+          <p style="color:var(--text-2);font-size:11px;margin-bottom:10px">
+            دانلود داده‌های خام به منظور محاسبات مجزا در نرم‌افزار Excel یا سایر پلتفرم‌ها.
+          </p>
+          <button class="btn btn-primary" onclick="alert('برای تولید CSV، اسکریپت make_excel_report.jl را در ترمینال اجرا کنید.')">📊 دریافت فایل خروجی CSV</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">مستندات فنی الگوریتم‌ها</div>
+        </div>
+        <div class="section-body">
+          <p style="color:var(--text-2);font-size:11px;margin-bottom:10px">
+            مستند کامل ریاضی معماری، فرمول‌ها و منطق درونی هسته تخمین‌گر سامانه.
+          </p>
+          <button class="btn btn-primary" onclick="window.open('/TECHNICAL_DOCUMENTATION.md','_blank')">📖 مطالعه داکیومنت فنی</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section mt-8">
+      <div class="section-header">
+        <div class="section-title">📈 منحنی رشد و افت سرمایه پورتفولیو (Performance Analytics)</div>
+      </div>
+      <div class="section-body">
+        <div class="col-2">
+          <div class="chart-panel">
+            <div class="chart-title">منحنی رشد سرمایه مرکب (Compound Equity Curve - شروع با $1,000)</div>
+            <canvas id="chEquityCurve"></canvas>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-title">میزان افت سرمایه پیاپی (Portfolio Drawdown Curve)</div>
+            <canvas id="chDrawdownCurve"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-2">
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">📊 سودآوری بر اساس روزهای هفته (P&L by Day of the Week)</div>
+        </div>
+        <div class="section-body">
+          <div class="chart-panel sm" style="border:none;padding:0;margin:0;max-width:100%">
+            <canvas id="chDayOfWeekPnl"></canvas>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">📉 بیشترین افت سرمایه (Max Drawdown)</div>
+        </div>
+        <div class="section-body" id="maxDrawdownWidget" style="font-size:12px;line-height:1.8">
+          <div class="loading">در حال آنالیز و محاسبه ریکاور دراوران...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section mt-8">
+      <div class="section-header">
+        <div class="section-title">خلاصه وضعیت سرور مرکزی دیتابیس</div>
+      </div>
+      <div class="section-body">
+        <div id="systemSummary" style="font-size:11px;color:var(--text-2);line-height:1.8"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PHASE 4: INTERACTIVE CANDLESTICK MODAL                      -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="chartModalBackdrop" class="modal-backdrop" style="display:none" onclick="if(event.target===this) closeChartModal()">
+  <div class="modal-box" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <div class="modal-title">
+        <span id="modalAssetIcon" style="font-size:16px">🕯️</span>
+        <span id="modalSymbolTitle">EURUSD</span>
+        <span id="modalQualityBadge" class="badge badge-grade-a">کلاس A</span>
+      </div>
+      <button class="modal-close-btn" onclick="closeChartModal()" title="بستن">&times;</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="modal-price-bar" id="modalPriceBar"></div>
+
+      <div class="candlestick-canvas-wrapper">
+        <canvas id="candlestickCanvas" class="candlestick-canvas"></canvas>
+      </div>
+
+      <div class="level-legend-bar">
+        <div class="legend-item"><span class="legend-line-sample" style="background:var(--up)"></span><span>حد سود ۱ و ۲ (Take Profit)</span></div>
+        <div class="legend-item"><span class="legend-line-sample" style="background:var(--down)"></span><span>حد ضرر قطعی (Stop Loss)</span></div>
+        <div class="legend-item"><span class="legend-line-sample" style="background:var(--info);border-top:1px dashed var(--info)"></span><span>محدوده ورود بهینه (Entry Zone)</span></div>
+        <div class="legend-item"><span class="legend-line-sample" style="background:var(--accent)"></span><span>سطح پیوت (Pivot Point)</span></div>
+        <div class="legend-item"><span class="legend-line-sample" style="background:var(--muted);border-top:1px dashed var(--muted)"></span><span>حمایت و مقاومت‌های S1/R1</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- STATUS BAR (Bottom Ticker)                                  -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<footer class="statusbar">
+  <div class="status-item">
+    <span class="status-dot" id="statusDot"></span>
+    <span>هسته معاملاتی فعال</span>
+  </div>
+  <div class="status-item">
+    <span>آخرین همگام‌سازی:</span>
+    <span id="lastUp" style="color:var(--text)">--</span>
+  </div>
+  <div class="status-item">
+    <span id="sbRegime">حالت بازار: در حال شناسایی...</span>
+  </div>
+  <div class="status-item">
+    <span id="sbSentiment">سنتیمنت خبری: --</span>
+  </div>
+  <div class="status-spacer"></div>
+  <div class="status-item">
+    <span>بروزرسانی خودکار دیتابیس: هر ۵ دقیقه</span>
+  </div>
+  <div class="status-item">
+    <span>v6.0 Pro Enterprise</span>
+  </div>
+</footer>
+
+<script src="/static/app.js"></script>
+
+
+
+<!-- ========================================================= -->
+<!-- FINAL PAGE-NAVIGATION CONTROLLER (Compatible with page-* pattern) -->
+<!-- ========================================================= -->
+<script>
+(function() {
+    'use strict';
+    
+    // نگاشت متن دکمه‌ها به شناسه صفحات (با پیشوند page-)
+    const TEXT_TO_PAGE = {
+        "نمای کلی": "page-overview",
+        "طلا و ارز": "page-gold",
+        "طلا و ارز ایران": "page-gold",
+        "اسکنر": "page-fx",
+        "اسکنر فارکس": "page-fx",
+        "اسکنر فارکس و کریپتو": "page-fx",
+        "روابط": "page-relations",
+        "روابط بازارها": "page-relations",
+        "بک‌تست": "page-backtest",
+        "بک تست": "page-backtest",
+        "بک‌تست و اعتبارسنجی": "page-backtest",
+        "گزارش": "page-reports",
+        "آنالیز": "page-reports",
+        "مرکز آنالیز": "page-reports",
+        "مرکز آنالیز و گزارش‌ها": "page-reports"
+    };
+    
+    function switchToPage(pageId) {
+        if (!pageId) return;
+        
+        // اگر پیشوند page- نداشت، اضافه کن
+        if (!pageId.startsWith('page-')) {
+            pageId = 'page-' + pageId;
+        }
+        
+        console.log("🔄 Switching to:", pageId);
+        
+        // ۱. پیدا کردن تمام صفحات (page-*)
+        const allPages = document.querySelectorAll('[id^="page-"]');
+        allPages.forEach(page => {
+            page.classList.remove('active');
+            page.style.display = 'none';
+        });
+        
+        // ۲. نمایش صفحه هدف
+        const targetPage = document.getElementById(pageId);
+        if (targetPage) {
+            targetPage.classList.add('active');
+            targetPage.style.display = '';
+            console.log("✅ Page displayed:", pageId);
+        } else {
+            console.warn("⚠️ Page not found:", pageId);
+            return;
+        }
+        
+        // ۳. آپدیت وضعیت active در منو
+        const navItems = document.querySelectorAll('.nav-link, .nav-item, .sidebar a, .sidebar button, nav a, nav button');
+        navItems.forEach(nav => {
+            nav.classList.remove('active');
+            if (nav.parentElement && nav.parentElement.tagName === 'LI') {
+                nav.parentElement.classList.remove('active');
+            }
+        });
+        
+        // ۴. صدا زدن تابع رندر محتوای صفحه (این کلید حل مشکل است!)
+        setTimeout(function() {
+            try {
+                if (typeof renderCurrentPage === 'function') {
+                    console.log("🎨 Calling renderCurrentPage()...");
+                    renderCurrentPage(pageId);
+                }
+                
+                // فراخوانی توابع رندر مخصوص هر صفحه
+                const pageRenderMap = {
+                    'page-overview': 'renderOverview',
+                    'page-gold': 'renderGold',
+                    'page-fx': 'renderFX',
+                    'page-relations': 'renderRelations',
+                    'page-backtest': 'renderBacktestDefault',
+                    'page-reports': 'renderReports'
+                };
+                
+                const funcName = pageRenderMap[pageId];
+                if (funcName && typeof window[funcName] === 'function') {
+                    console.log("🎨 Calling:", funcName);
+                    window[funcName]();
+                }
+                
+                // آپدیت چارت‌ها
+                window.dispatchEvent(new Event('resize'));
+            } catch(err) {
+                console.warn("⚠️ Render error (non-critical):", err);
+            }
+        }, 50);
+    }
+    
+    function initNavigation() {
+        console.log("🚀 Final Navigation Controller Initializing...");
+        
+        // پیدا کردن تمام دکمه‌های ناوبری در سایدبار و منو
+        const selectors = [
+            '.nav-link', '.nav-item', '.nav-btn',
+            '.sidebar a', '.sidebar button',
+            'nav a', 'nav button',
+            '[data-page]', '[data-tab]', '[data-target]',
+            '.menu-item', '.sidebar-item'
+        ];
+        const navElements = document.querySelectorAll(selectors.join(', '));
+        
+        console.log("📌 Found", navElements.length, "navigation elements");
+        
+        navElements.forEach((el, idx) => {
+            // جلوگیری از ثبت مضاعف
+            if (el.dataset.navInitialized === 'true') return;
+            el.dataset.navInitialized = 'true';
+            
+            el.addEventListener('click', function(e) {
+                let target = this.getAttribute('data-page') ||
+                             this.getAttribute('data-tab') ||
+                             this.getAttribute('data-target');
+                
+                // اگر href داشت
+                if (!target) {
+                    const href = this.getAttribute('href');
+                    if (href && href !== '#' && !href.startsWith('http')) {
+                        target = href.replace('#', '');
+                    }
+                }
+                
+                // اگر هنوز پیدا نشد، از متن دکمه استفاده کن
+                if (!target) {
+                    const text = (this.innerText || this.textContent || '').trim();
+                    for (const key in TEXT_TO_PAGE) {
+                        if (text.includes(key)) {
+                            target = TEXT_TO_PAGE[key];
+                            break;
+                        }
+                    }
+                }
+                
+                if (target) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // آپدیت وضعیت active دکمه کلیک شده
+                    document.querySelectorAll('.nav-link.active, .nav-item.active').forEach(a => a.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    switchToPage(target);
+                }
+            });
+        });
+        
+        console.log("✅ Navigation Controller Ready!");
+    }
+    
+    // اجرای اولیه با تاخیر جهت اطمینان از لود کامل app.js
+    if (document.readyState === 'complete') {
+        setTimeout(initNavigation, 500);
+    } else {
+        window.addEventListener('load', function() {
+            setTimeout(initNavigation, 500);
+        });
+    }
+    
+    // در دسترس قرار دادن جهانی جهت دیباگ
+    window.switchToPage = switchToPage;
+})();
+</script>
+</body>
+</html>

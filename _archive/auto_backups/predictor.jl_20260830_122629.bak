@@ -1,0 +1,926 @@
+﻿module Predictor
+
+using Statistics, LinearAlgebra, Dates, Random
+
+include("ensemble_ml.jl")
+using .EnsembleML
+include("enhanced_predictor.jl")
+include("direction_upgrade.jl")
+
+export predict_next_week, PredictionResult
+
+function safe_mean(v)
+    vals = [x for x in v if isfinite(x)]
+    return isempty(vals) ? 0.0 : mean(vals)
+end
+
+function safe_cor(x::Vector{Float64}, y::Vector{Float64})
+    n = min(length(x), length(y))
+    if n < 3
+        return 0.0
+    end
+    xx = x[end-n+1:end]
+    yy = y[end-n+1:end]
+    sx = std(xx)
+    sy = std(yy)
+    if !isfinite(sx) || !isfinite(sy) || sx < 1e-12 || sy < 1e-12
+        return 0.0
+    end
+    c = cor(xx, yy)
+    return isfinite(c) ? c : 0.0
+end
+
+struct PredictionResult
+    gold_oz_point::Float64
+    gold_oz_low::Float64
+    gold_oz_high::Float64
+    gold_oz_daily::Vector{Float64}
+
+    iran_gold_point::Float64
+    iran_gold_low::Float64
+    iran_gold_high::Float64
+    iran_gold_daily::Vector{Float64}
+
+    coin_point::Float64
+    coin_low::Float64
+    coin_high::Float64
+
+    usd_irr_point::Float64
+    usd_irr_low::Float64
+    usd_irr_high::Float64
+    usd_irr_daily::Vector{Float64}
+
+    confidence::Float64
+    trend::String
+    signals::Vector{String}
+    method_weights::Dict{String,Float64}
+    target_dates::Vector{String}
+end
+
+# =============================================================
+# ابزارهای ریاضی کمکی
+# =============================================================
+
+function log_returns(prices::Vector{Float64})
+    n = length(prices)
+    if n < 2; return Float64[]; end
+    [log(prices[i+1]/prices[i]) for i in 1:n-1 if prices[i]>0 && prices[i+1]>0]
+end
+
+function ema_vec(prices::Vector{Float64}, period::Int)
+    alpha = 2.0 / (period + 1)
+    out = Vector{Float64}(undef, length(prices))
+    out[1] = prices[1]
+    for i in 2:length(prices)
+        out[i] = alpha * prices[i] + (1.0 - alpha) * out[i-1]
+    end
+    return out
+end
+
+function calc_rsi(prices::Vector{Float64}, period::Int=14)
+    if length(prices) < period + 1; return 50.0; end
+    ch = diff(prices[end-period:end])
+    ag = mean(max.(ch, 0.0))
+    al = mean(max.(-ch, 0.0))
+    al < 1e-15 && return 100.0
+    return 100.0 - 100.0 / (1.0 + ag / al)
+end
+
+function calc_macd(prices::Vector{Float64})
+    if length(prices) < 26; return 0.0, 0.0, 0.0; end
+    e12 = ema_vec(prices, 12)
+    e26 = ema_vec(prices, 26)
+    ml = last(e12) - last(e26)
+    ms = e12[15:end] .- e26[15:end]
+    sl = length(ms) >= 9 ? last(ema_vec(ms, 9)) : ml
+    return ml, sl, ml - sl
+end
+
+function bollinger_bands(prices::Vector{Float64}, period::Int=20)
+    if length(prices) < period
+        m = mean(prices); s = std(prices)
+        return m, m+2s, m-2s
+    end
+    r = prices[end-period+1:end]
+    m = mean(r); s = std(r)
+    return m, m+2s, m-2s
+end
+
+function calc_atr(prices::Vector{Float64}, period::Int=14)
+    if length(prices) < period+1; return std(diff(prices)); end
+    ranges = [abs(prices[i]-prices[i-1]) for i in 2:length(prices)]
+    return mean(ranges[end-period+1:end])
+end
+
+# =============================================================
+#  GARCH(1,1) پیش‌بینی نوسانات متغیر با زمان
+# =============================================================
+
+function garch_forecast_vol(returns::Vector{Float64}, days::Int=7)
+    n = length(returns)
+    if n < 10; return fill(std(returns), days); end
+    omega = 0.00001; alpha_g = 0.1; beta_g = 0.85
+    sigma2 = var(returns)
+    for r in returns
+        sigma2 = omega + alpha_g * r^2 + beta_g * sigma2
+    end
+    vols = Float64[]
+    for _ in 1:days
+        sigma2 = omega + (alpha_g + beta_g) * sigma2
+        push!(vols, sqrt(max(1e-10, sigma2)))
+    end
+    return vols
+end
+
+# =============================================================
+# تشخیص فاز و رژیم بازار طلا
+# =============================================================
+
+@enum MarketRegime TRENDING_UP TRENDING_DOWN RANGING VOLATILE
+
+function detect_regime(prices::Vector{Float64}, dxy::Float64=100.0, vix::Float64=20.0, us10y::Float64=4.0)
+    n = length(prices)
+    if n < 30
+        return RANGING, "رژیم نامشخص (داده ناکافی)", 0.5
+    end
+
+    rets = log_returns(prices)
+    recent_ret = rets[max(1,end-19):end]
+
+    ma20 = mean(prices[end-19:end])
+    ma50 = length(prices) >= 50 ? mean(prices[end-49:end]) : mean(prices)
+    cur = last(prices)
+
+    vol20 = std(recent_ret) * sqrt(252) * 100
+    mom14 = n >= 14 ? (cur - prices[end-13]) / prices[end-13] * 100 : 0.0
+
+    up_moves = [max(prices[i]-prices[i-1], 0.0) for i in max(2,n-13):n]
+    dn_moves = [max(prices[i-1]-prices[i], 0.0) for i in max(2,n-13):n]
+    avg_up = isempty(up_moves) ? 0.0 : mean(up_moves)
+    avg_dn = isempty(dn_moves) ? 0.0 : mean(dn_moves)
+    denom = avg_up + avg_dn
+    adx_estimate = denom > 0 ? abs(avg_up - avg_dn) / denom * 100 : 0.0
+
+    regime_score = 0.0
+    regime_score += mom14 * 0.3
+    regime_score += (ma20 > ma50 ? 1.0 : -1.0) * 20 * 0.2
+    regime_score += (dxy < 100 ? 1.0 : dxy > 104 ? -1.0 : 0.0) * 15 * 0.2
+    regime_score += (vix > 25 ? 0.5 : vix < 15 ? -0.2 : 0.0) * 15 * 0.1
+    regime_score += (us10y < 3.5 ? 1.0 : us10y > 5.0 ? -1.0 : 0.0) * 15 * 0.2
+
+    regime = if vol20 > 25
+        VOLATILE
+    elseif adx_estimate > 30 && regime_score > 10
+        TRENDING_UP
+    elseif adx_estimate > 30 && regime_score < -10
+        TRENDING_DOWN
+    else
+        RANGING
+    end
+
+    regime_str = if regime == TRENDING_UP
+        "رژیم صعودی قوی (Trending Up)"
+    elseif regime == TRENDING_DOWN
+        "رژیم نزولی شدید (Trending Down)"
+    elseif regime == VOLATILE
+        "رژیم پرنوسان و هیجانی (Volatile)"
+    else
+        "رژیم رنج و بدون روند (Ranging)"
+    end
+
+    conf = min(0.85, 0.4 + adx_estimate / 100 + abs(regime_score) / 100)
+    return regime, regime_str, conf
+end
+
+# =============================================================
+# اعمال ضرایب تعدیل همبستگی‌های اقتصاد کلان
+# =============================================================
+
+function macro_adjustment(gold_prices::Vector{Float64}, dxy_prices::Vector{Float64},
+                          us10y_prices::Vector{Float64}, vix_prices::Vector{Float64})
+    n = length(gold_prices)
+    adj = 0.0
+    signals = String[]
+
+    # تعدیل بر اساس شاخص دلار (DXY)
+    if length(dxy_prices) >= 10
+        nd = min(n, length(dxy_prices))
+        gp = log_returns(gold_prices[end-nd+1:end])
+        dp = log_returns(dxy_prices[end-nd+1:end])
+        if length(gp) == length(dp) && length(gp) > 5
+            c = safe_cor(gp, dp)
+            dxy_trend = safe_mean(dp[max(1,end-6):end])
+            dxy_adj = -c * dxy_trend * 0.7
+            adj += dxy_adj
+
+            dxy_cur = last(dxy_prices)
+            if dxy_cur > 104
+                push!(signals, "DXY=$(round(dxy_cur,digits=1)) - سیگنال کاهشی قوی از شاخص دلار")
+                adj -= 0.001
+            elseif dxy_cur < 100
+                push!(signals, "DXY=$(round(dxy_cur,digits=1)) - سیگنال صعودی قوی از شاخص دلار")
+                adj += 0.001
+            else
+                push!(signals, "DXY=$(round(dxy_cur,digits=1)) - اثر شاخص دلار خنثی")
+            end
+        end
+    end
+
+    # تعدیل بر اساس بازدهی اوراق ۱۰ ساله آمریکا (US10Y)
+    if length(us10y_prices) >= 10
+        nd = min(n, length(us10y_prices))
+        gp = log_returns(gold_prices[end-nd+1:end])
+        rp = log_returns(us10y_prices[end-nd+1:end])
+        if length(gp) == length(rp) && length(gp) > 5
+            rate_trend = safe_mean(rp[max(1,end-6):end])
+            rate_adj = -rate_trend * 0.5
+            adj += rate_adj
+
+            us10y_cur = last(us10y_prices)
+            if us10y_cur > 5.0
+                push!(signals, "US10Y=$(round(us10y_cur,digits=2)) - فشار کاهشی شدید اوراق قرضه")
+                adj -= 0.0015
+            elseif us10y_cur > 4.5
+                push!(signals, "US10Y=$(round(us10y_cur,digits=2)) - اثر انقباضی ملایم اوراق قرضه")
+                adj -= 0.0005
+            elseif us10y_cur < 3.5
+                push!(signals, "US10Y=$(round(us10y_cur,digits=2)) - اثر حمایتی اوراق قرضه بر طلا")
+                adj += 0.001
+            else
+                push!(signals, "US10Y=$(round(us10y_cur,digits=2)) - اثر اوراق قرضه عادی")
+            end
+        end
+    end
+
+    # تعدیل بر اساس شاخص ترس (VIX)
+    if length(vix_prices) >= 10
+        nd = min(n, length(vix_prices))
+        gp = log_returns(gold_prices[end-nd+1:end])
+        vp = log_returns(vix_prices[end-nd+1:end])
+        if length(gp) == length(vp) && length(gp) > 5
+            c = safe_cor(gp, vp)
+            vix_trend = safe_mean(vp[max(1,end-6):end])
+            vix_adj = c * vix_trend * 0.3
+            adj += vix_adj
+
+            vix_cur = last(vix_prices)
+            if vix_cur > 30
+                push!(signals, "VIX=$(round(vix_cur,digits=1)) - ترس شدید در بازار جهانی (حمایتی قوی)")
+                adj += 0.002
+            elseif vix_cur > 20
+                push!(signals, "VIX=$(round(vix_cur,digits=1)) - ریسک صعودی ملایم")
+                adj += 0.001
+            elseif vix_cur < 15
+                push!(signals, "VIX=$(round(vix_cur,digits=1)) - آرامش بازار (اثر کاهشی ملایم)")
+                adj -= 0.0005
+            else
+                push!(signals, "VIX=$(round(vix_cur,digits=1)) - نوسان طبیعی شاخص ترس")
+            end
+        end
+    end
+
+    return clamp(adj, -0.02, 0.02), signals
+end
+
+# =============================================================
+# پیش‌بینی خودبازگشتی تفاضلی ARIMA(5,1,0)
+# =============================================================
+
+function arima_predict(prices::Vector{Float64}, days::Int=7)
+    p_order = 5; n = length(prices)
+    if n < p_order + 15; return fill(last(prices), days), 0.2, "ARIMA: داده ناکافی"; end
+    d1 = diff(prices)
+    Y = d1[p_order+1:end]
+    X = zeros(length(Y), p_order)
+    for i in 1:p_order
+        X[:, i] = d1[p_order+1-i:end-i]
+    end
+    X = hcat(ones(length(Y)), X)
+    try
+        lam = 0.01
+        Im = Matrix{Float64}(LinearAlgebra.I, size(X,2), size(X,2)); Im[1,1] = 0.0
+        co = (X'*X + lam*Im) \ (X'*Y)
+        yp = X*co; ssr = sum((Y.-yp).^2); sst = sum((Y.-mean(Y)).^2)
+        r2 = sst > 1e-15 ? clamp(1.0-ssr/sst, 0.0, 1.0) : 0.0
+        preds = Float64[]; recent = copy(d1[end-p_order+1:end]); cur = last(prices)
+        for day in 1:days
+            xv = vcat([1.0], reverse(recent[end-p_order+1:end]))
+            pd = dot(xv, co); cur += pd; push!(preds, cur); push!(recent, pd)
+        end
+        return preds, clamp(r2*0.8+0.1, 0.1, 0.85), "ARIMA(5,1,0) R2=$(round(r2,digits=3))"
+    catch
+        return fill(last(prices), days), 0.15, "ARIMA Fallback"
+    end
+end
+
+# =============================================================
+# هموارسازی نمایی مضاعف بهینه‌سازی شده (Holt-Winters Trend)
+# =============================================================
+
+function holt_predict(prices::Vector{Float64}, days::Int=7)
+    n = length(prices)
+    if n < 14; return fill(last(prices), days), 0.25, "Holt: داده ناکافی"; end
+    ba = 0.3; bb = 0.1; bm = Inf; tn = max(10, n-7)
+    for a in 0.1:0.1:0.6, b in 0.01:0.05:0.3
+        lv = prices[1]; tr = mean(diff(prices[1:min(7,n)]))
+        for i in 2:tn
+            nl = a*prices[i]+(1-a)*(lv+tr)
+            nt = b*(nl-lv)+(1-b)*tr
+            lv=nl; tr=nt
+        end
+        ms = 0.0; cnt = 0
+        for h in 1:min(7, n-tn)
+            ac = prices[tn+h]
+            if ac > 0
+                ms += abs(lv+h*tr-ac)/ac
+                cnt += 1
+            end
+        end
+        mp = cnt > 0 ? ms/cnt : Inf
+        if mp < bm; bm=mp; ba=a; bb=b; end
+    end
+    lv = prices[1]; tr = mean(diff(prices[1:min(7,n)]))
+    for i in 2:n
+        nl=ba*prices[i]+(1-ba)*(lv+tr)
+        nt=bb*(nl-lv)+(1-bb)*tr
+        lv=nl; tr=nt
+    end
+    return [lv+h*tr for h in 1:days], clamp(1.0-bm, 0.15, 0.85), "Holt(a=$ba,b=$bb) MAPE=$(round(bm*100,digits=1))%"
+end
+
+# =============================================================
+# رگرسیون ریج مبتنی بر سبد ارزهای جهانی
+# =============================================================
+
+function ridge_predict(gold_prices::Vector{Float64}, currency_data::Vector, days::Int=7)
+    ng = length(gold_prices)
+    if ng < 30; return fill(last(gold_prices), days), 0.15, "Ridge: داده ناکافی"; end
+    valid = [c for c in currency_data if length(c.prices) >= 10]
+    if isempty(valid); return fill(last(gold_prices), days), 0.15, "Ridge: فاقد سبد ارزی معتبر"; end
+    ml = min(ng, minimum(length(c.prices) for c in valid)); ml = max(ml, 20)
+    y = gold_prices[end-ml+1:end]
+    fps = Vector{Vector{Float64}}(); fns = String[]
+    for c in valid
+        if length(c.prices) >= ml
+            push!(fps, c.prices[end-ml+1:end]); push!(fns, c.symbol)
+        end
+    end
+    if isempty(fps); return fill(last(gold_prices), days), 0.15, "Ridge: خطا در همترازی"; end
+    X = hcat([f for f in fps]...)
+    xm = vec(mean(X,dims=1)); xs = vec(std(X,dims=1))
+    for j in 1:length(xs)
+        if xs[j] < 1e-15; xs[j]=1.0; end
+    end
+    Xn = (X.-xm')./xs'; ym = mean(y); ys = std(y)
+    if ys < 1e-15; ys=1.0; end
+    yn = (y.-ym)./ys; Xf = hcat(ones(ml), Xn)
+    try
+        lam = 1.0; Im = Matrix{Float64}(LinearAlgebra.I, size(Xf,2), size(Xf,2)); Im[1,1]=0.0
+        co = (Xf'*Xf+lam*Im)\(Xf'*yn)
+        yp = Xf*co; ssr = sum((yn.-yp).^2); sst = sum((yn.-mean(yn)).^2)
+        r2 = sst > 1e-15 ? clamp(1.0-ssr/sst, 0.0, 1.0) : 0.0
+        preds = Float64[]
+        for day in 1:days
+            fx = zeros(1, length(fps))
+            for (j,fp) in enumerate(fps)
+                tl = min(7, length(fp)-1); rt = mean(diff(fp[end-tl:end]))
+                fx[1,j] = last(fp) + day*rt
+            end
+            fxn = (fx.-xm')./xs'; fxf = hcat([1.0], fxn)
+            push!(preds, dot(vec(fxf), co)*ys+ym)
+        end
+        return preds, clamp(r2*0.7+0.1, 0.1, 0.8), "Ridge Regression R2=$(round(r2,digits=2))"
+    catch
+        return fill(last(gold_prices), days), 0.15, "Ridge Fallback"
+    end
+end
+
+# =============================================================
+# شبیه‌سازی مونت کارلو + نوسان‌پذیری پیش‌بینی شده GARCH
+# =============================================================
+
+function mc_garch_predict(prices::Vector{Float64}, days::Int=7; nsim::Int=3000)
+    n = length(prices)
+    if n < 20
+        v=last(prices)
+        return fill(v,days), 0.3, v*0.95, v*1.05, "MC: داده ناکافی"
+    end
+    rets = log_returns(prices)
+    mu = mean(rets)
+    recent = rets[max(1,end-19):end]
+    adj_mu = 0.6*mu + 0.4*mean(recent)
+    gvols = garch_forecast_vol(rets, days)
+    all_paths = zeros(nsim, days); all_final = Vector{Float64}(undef, nsim)
+    for s in 1:nsim
+        cur = last(prices)
+        for d in 1:days
+            sigma = gvols[d]
+            cur *= exp((adj_mu-0.5*sigma^2) + sigma*randn())
+            all_paths[s,d] = cur
+        end
+        all_final[s] = cur
+    end
+    pred = vec(mean(all_paths,dims=1))
+    lo = quantile(all_final, 0.10); hi = quantile(all_final, 0.90)
+    return pred, 0.5, lo, hi, "MC+GARCH($(nsim)) vol_d7=$(round(gvols[end]*100,digits=2))%"
+end
+
+# =============================================================
+# موتور اندیکاتورهای تکنیکال
+# =============================================================
+
+function technical_predict(prices::Vector{Float64}, days::Int=7)
+    signals = String[]
+    score = 0.0
+    cur = last(prices)
+    n = length(prices)
+
+    if n > 14
+        rsi = calc_rsi(prices, 14)
+        if rsi > 70
+            score -= 15
+            push!(signals, "RSI=$(round(rsi,digits=1)) - اشباع خرید شدید")
+        elseif rsi < 30
+            score += 15
+            push!(signals, "RSI=$(round(rsi,digits=1)) - اشباع فروش شدید")
+        elseif rsi > 55
+            score += 5
+            push!(signals, "RSI=$(round(rsi,digits=1)) - مومنتوم صعودی ملایم")
+        elseif rsi < 45
+            score -= 5
+            push!(signals, "RSI=$(round(rsi,digits=1)) - مومنتوم نزولی ملایم")
+        else
+            push!(signals, "RSI=$(round(rsi,digits=1)) - محدوده رنج خنثی")
+        end
+    end
+
+    if n > 26
+        _, _, hist = calc_macd(prices)
+        if hist > 0
+            score += 12
+            push!(signals, "MACD - تقاطع صعودی هیستوگرام")
+        else
+            score -= 12
+            push!(signals, "MACD - تقاطع نزولی هیستوگرام")
+        end
+    end
+
+    if n >= 50
+        ma10 = mean(prices[end-9:end])
+        ma20 = mean(prices[end-19:end])
+        ma50 = mean(prices[end-49:end])
+
+        if ma10 > ma20 > ma50
+            score += 20
+            push!(signals, "MA10>MA20>MA50 - روند صعودی هم‌گرا (Bullish)")
+        elseif ma10 > ma20
+            score += 10
+            push!(signals, "MA10>MA20 - تقاطع طلایی کوتاه‌مدت")
+        elseif ma10 < ma20 < ma50
+            score -= 20
+            push!(signals, "MA10<MA20<MA50 - روند نزولی هم‌گرا (Bearish)")
+        elseif ma10 < ma20
+            score -= 10
+            push!(signals, "MA10<MA20 - ضعف کوتاه‌مدت روند")
+        end
+    end
+
+    if n >= 20
+        _, up, lo = bollinger_bands(prices, 20)
+        if cur > up
+            score -= 10
+            push!(signals, "بولینگر - لمس باند بالا (پتانسیل اصلاح موقت)")
+        elseif cur < lo
+            score += 10
+            push!(signals, "بولینگر - لمس باند پایین (پتانسیل صعود)")
+        else
+            push!(signals, "بولینگر - نوسان در محدوده میانی")
+        end
+    end
+
+    if n >= 14
+        mom = (cur - prices[end-13]) / prices[end-13] * 100
+        if abs(mom) > 2
+            adj = clamp(mom * 3, -15, 15)
+            score += adj
+            push!(signals, "مومنتوم ۱۴ روزه: $(round(mom,digits=1))%")
+        end
+
+        h14 = maximum(prices[end-13:end])
+        l14 = minimum(prices[end-13:end])
+        stoch = h14 > l14 ? (cur - l14) / (h14 - l14) * 100 : 50.0
+
+        if stoch > 80
+            score -= 8
+            push!(signals, "استوکاستیک=$(round(stoch,digits=1)) - اشباع خرید")
+        elseif stoch < 20
+            score += 8
+            push!(signals, "استوکاستیک=$(round(stoch,digits=1)) - اشباع فروش")
+        end
+    end
+
+    trend_factor = clamp(score / 100, -0.08, 0.08)
+    preds = [cur * (1 + trend_factor * d / days) for d in 1:days]
+    conf = clamp(0.35 + abs(score) / 100, 0.35, 0.75)
+
+    push!(signals, "امتیاز تجمیعی تکنیکال: $(round(score,digits=1))")
+    return preds, conf, signals, score
+end
+
+# =============================================================
+#  پیش‌بینی پویای اثر بتای ارزها بر طلا
+# =============================================================
+
+function currency_impact_predict(gold_prices::Vector{Float64}, currency_data::Vector, days::Int=7)
+    ng = length(gold_prices)
+    if ng < 20; return fill(last(gold_prices), days), 0.2, "CurrencyImpact: داده ناکافی"; end
+    isum = 0.0; icnt = 0
+    for c in currency_data
+        cp = c.prices; if length(cp) < 10; continue; end
+        cm = min(ng, length(cp))
+        gr = log_returns(gold_prices[end-cm+1:end]); cr = log_returns(cp[end-cm+1:end])
+        if length(gr) != length(cr) || length(gr) < 5; continue; end
+        cv = cov(cr, gr); vr = var(cr); if vr < 1e-15; continue; end
+        beta = cv/vr; rt = mean(cr[max(1,end-6):end])
+        isum += beta*rt; icnt += 1
+    end
+    if icnt == 0; return fill(last(gold_prices), days), 0.2, "CurrencyImpact: فاقد بتای فعال"; end
+    ai = isum/icnt; preds = Float64[]; p = last(gold_prices)
+    for d in 1:days
+        p *= exp(ai*exp(-0.1*d))
+        push!(preds, p)
+    end
+    conf = clamp(0.3+min(icnt,10)*0.04, 0.2, 0.7)
+    # اصلاح باگ بحرانی Unpacking با محدود کردن خروجی‌ها به دقیقا ۳ مقدار بازگشتی
+    return preds, conf, "بتای چندارزی اثرگذاری ارز بر طلا"
+end
+
+# =============================================================
+# مدل خودبازگشتی برداری پیشرفته VAR(3) بین انس و دلار
+# =============================================================
+
+function var_predict(y1::Vector{Float64}, y2::Vector{Float64}, days::Int=7; lags::Int=3)
+    n = min(length(y1), length(y2))
+    if n < lags+15
+        t1 = length(y1)>=7 ? mean(diff(y1[end-6:end])) : 0.0
+        t2 = length(y2)>=7 ? mean(diff(y2[end-6:end])) : 0.0
+        return [last(y1)+d*t1 for d in 1:days], [last(y2)+d*t2 for d in 1:days], 0.2, "VAR: داده ناکافی"
+    end
+    s1=y1[end-n+1:end]; s2=y2[end-n+1:end]
+    d1=diff(s1); d2=diff(s2); nd=length(d1)
+    if nd < lags+5
+        t1=mean(d1[end-min(6,nd-1):end]); t2=mean(d2[end-min(6,nd-1):end])
+        return [last(y1)+d*t1 for d in 1:days], [last(y2)+d*t2 for d in 1:days], 0.25, "VAR Fallback"
+    end
+    T=nd-lags; Y1=d1[lags+1:end]; Y2=d2[lags+1:end]
+    X=zeros(T, 2*lags)
+    for i in 1:lags
+        X[:,i]=d1[lags+1-i:end-i]; X[:,lags+i]=d2[lags+1-i:end-i]
+    end
+    X=hcat(ones(T), X)
+    try
+        lam=0.1; Im=Matrix{Float64}(LinearAlgebra.I, size(X,2), size(X,2)); Im[1,1]=0.0
+        c1=(X'*X+lam*Im)\(X'*Y1); c2=(X'*X+lam*Im)\(X'*Y2)
+        p1r=X*c1; p2r=X*c2
+        r2_1=begin ss=sum((Y1.-p1r).^2);st=sum((Y1.-mean(Y1)).^2); st>1e-15 ? clamp(1.0-ss/st,0.0,1.0) : 0.0 end
+        r2_2=begin ss=sum((Y2.-p2r).^2);st=sum((Y2.-mean(Y2)).^2); st>1e-15 ? clamp(1.0-ss/st,0.0,1.0) : 0.0 end
+        rd1=copy(d1[end-lags+1:end]); rd2=copy(d2[end-lags+1:end])
+        cur1=last(y1); cur2=last(y2)
+        ps1=Float64[]; ps2=Float64[]
+        for day in 1:days
+            xv=zeros(2*lags)
+            for i in 1:lags; xv[i]=rd1[end-i+1]; xv[lags+i]=rd2[end-i+1]; end
+            xvf=vcat([1.0], xv)
+            pd1=dot(xvf,c1); pd2=dot(xvf,c2)
+            cur1+=pd1; cur2+=pd2; push!(ps1,cur1); push!(ps2,cur2)
+            push!(rd1,pd1); push!(rd2,pd2)
+        end
+        conf=clamp((r2_1+r2_2)/2*0.7+0.15, 0.15, 0.8)
+        return ps1, ps2, conf, "VAR($(lags)) R2=$(round((r2_1+r2_2)/2,digits=3))"
+    catch e
+        t1=mean(d1[end-min(6,nd-1):end]); t2=mean(d2[end-min(6,nd-1):end])
+        return [last(y1)+d*t1 for d in 1:days], [last(y2)+d*t2 for d in 1:days], 0.2, "VAR Error"
+    end
+end
+
+# =============================================================
+# بک تست اتوماتیک درون‌برنامه‌ای برای تعیین وزن مدل‌ها
+# =============================================================
+
+function backtest_model(prices::Vector{Float64}, predict_fn::Function, test_days::Int=20)
+    n = length(prices)
+    actual_test = min(test_days, n-30)
+    if actual_test < 10; return 1.0; end
+    errors = Float64[]
+    for offset in actual_test:-1:1
+        train = prices[1:end-offset]; actual = prices[end-offset+1]
+        try
+            pred, _, _ = predict_fn(train, 1)
+            if !isempty(pred) && actual > 0
+                err = abs(pred[1]-actual)/actual
+                if isfinite(err); push!(errors, err); end
+            end
+        catch; end
+    end
+    return isempty(errors) ? 1.0 : mean(errors)
+end
+
+# =============================================================
+# پیش‌بینی تخصصی دلار تهران با تلفیق VAR و مونت‌کارلو GARCH
+# =============================================================
+
+function predict_usd_irr(usd_prices::Vector{Float64}, gold_prices::Vector{Float64}, days::Int=7)
+    var_usd, _, var_conf, var_info = var_predict(usd_prices, gold_prices, days; lags=3)
+    rets = log_returns(usd_prices)
+    gvols = garch_forecast_vol(rets, days)
+    mu = length(rets) >= 7 ? mean(rets[end-6:end]) : 0.0
+    nsim = 5000
+    mc_paths = zeros(nsim, days)
+    for s in 1:nsim
+        cur = last(usd_prices)
+        for d in 1:days
+            cur *= exp((mu-0.5*gvols[d]^2)+gvols[d]*randn())
+            mc_paths[s,d] = cur
+        end
+    end
+    mc_pred = vec(mean(mc_paths,dims=1))
+    mc_lo = [quantile(mc_paths[:,d], 0.10) for d in 1:days]
+    mc_hi = [quantile(mc_paths[:,d], 0.90) for d in 1:days]
+    combined = 0.6.*var_usd .+ 0.4.*mc_pred
+    combined_lo = 0.6.*var_usd .+ 0.4.*mc_lo
+    combined_hi = 0.6.*var_usd .+ 0.4.*mc_hi
+    return combined, combined_lo, combined_hi, var_conf
+end
+
+# =============================================================
+# محاسبه قیمت طلای ۱۸ عیار از روی انس و دلار با اعمال حباب واقعی
+# =============================================================
+
+function predict_iran_gold(oz_pred::Vector{Float64}, usd_pred::Vector{Float64},
+                           iran_gold::Vector{Float64}, gold_prices::Vector{Float64},
+                           usd_irr::Vector{Float64}, days::Int=7)
+    n = min(length(gold_prices), length(usd_irr), length(iran_gold))
+    avg_mf = 1.0
+    if n >= 10
+        gp = gold_prices[end-n+1:end]; up = usd_irr[end-n+1:end]; ip = iran_gold[end-n+1:end]
+        factors = [ip[i]/(gp[i]/31.1035*0.75*up[i]) for i in max(1,n-29):n if gp[i]/31.1035*0.75*up[i] > 0]
+        if !isempty(factors); avg_mf = mean(factors); end
+    end
+    predictions = [oz_pred[d]/31.1035*0.75*usd_pred[d]*avg_mf for d in 1:days]
+    return predictions, avg_mf
+end
+
+# =============================================================
+# تولید ایمن روزهای تقویم بازار برای فاکتورهای پیش‌بینی
+# =============================================================
+
+function build_target_dates_from_data(data::Dict, days::Int)
+    dates_arr = Date[]
+    try push!(dates_arr, Date(data["gold_oz"]["dates"][end])) catch; end
+    try push!(dates_arr, Date(data["usd_irr"]["dates"][end])) catch; end
+    try push!(dates_arr, Date(data["iran_gold"]["dates"][end])) catch; end
+
+    start_date = isempty(dates_arr) ? today() : maximum(dates_arr)
+    return [Dates.format(start_date + Day(i), "yyyy-mm-dd") for i in 1:days]
+end
+
+# =============================================================
+# تابع اصلی و تجمیعی پیش‌بینی کل سامانه
+# =============================================================
+
+function predict_next_week(data::Dict, analysis)
+    gold_prices = data["gold_oz"]["prices"]
+    iran_gold = data["iran_gold"]["prices"]
+    usd_irr = data["usd_irr"]["prices"]
+    currencies = data["currencies"]
+
+    macrodata = haskey(data, "macro") ? data["macro"] : Dict()
+    dxy_prices = try macrodata["dxy"]["prices"] catch; Float64[]; end
+    us10y_prices = try macrodata["us10y"]["prices"] catch; Float64[]; end
+    vix_prices = try macrodata["vix"]["prices"] catch; Float64[]; end
+    dxy_cur = isempty(dxy_prices) ? 103.5 : last(dxy_prices)
+    us10y_cur = isempty(us10y_prices) ? 4.5 : last(us10y_prices)
+    vix_cur = isempty(vix_prices) ? 20.0 : last(vix_prices)
+
+    events = haskey(data, "events") ? data["events"] : Dict[]
+    event_risk = length(events) > 0 ? min(length(events) * 0.002, 0.01) : 0.0
+
+    # ارزیابی هوشمند شاخص سنتیمنت اخبار
+    sentiment_score = 0.0
+    sentiment_level = "LOW"
+    try
+        s = data["sentiment"]
+        if s !== nothing && get(s, "available", false)
+            sentiment_score = Float64(get(s, "gold_score", 0.0))
+            sentiment_level = String(get(s, "alert_level", "LOW"))
+        end
+    catch
+    end
+    sent_adj = sentiment_adjustment(sentiment_score, sentiment_level)
+
+    days = 7
+
+    # تشخیص فوق پیشرفته رژیم بازار طلا و جهت نوسانات
+    regime_str, regime_info, regime_conf = enhanced_regime_detect(gold_prices, dxy_cur, vix_cur, us10y_cur)
+    dir_prob, dir_label, dir_strength, dir_signals = direction_probability_gold(gold_prices, dxy_cur, vix_cur, us10y_cur, sentiment_score)
+
+    # جهت‌گیری احتمالی دلار
+    usd_sentiment = 0.0
+    try
+        s = data["sentiment"]
+        if s !== nothing; usd_sentiment = Float64(get(s, "usd_score", 0.0)); end
+    catch; end
+    usd_dir_prob, usd_dir_label, usd_dir_strength, usd_dir_signals = direction_probability_usd(usd_irr, gold_prices, dxy_cur, vix_cur, usd_sentiment)
+
+    # رگرسیون تطبیقی متغیرهای کلان جهانی
+    macro_adj_old, macro_signals_old = macro_adjustment(gold_prices, dxy_prices, us10y_prices, vix_prices)
+    macro_adj_new, macro_signals_new = macro_regression_signal(gold_prices, dxy_cur, us10y_cur, vix_cur, dxy_prices, us10y_prices, vix_prices)
+    macro_adj = (macro_adj_old + macro_adj_new) / 2
+    macro_signals = vcat(macro_signals_old, macro_signals_new)
+    if !isfinite(macro_adj)
+        macro_adj = 0.0
+    end
+
+    # لایه‌های ایزوله پیش‌بینی به همراه سیستم Fail-Safe
+    ar_pred, ar_conf, ar_info = try arima_predict(gold_prices, days) catch; fill(last(gold_prices), days), 0.15, "ARIMA Failed" end
+    hw_pred, hw_conf, hw_info = try holt_predict(gold_prices, days) catch; fill(last(gold_prices), days), 0.15, "Holt Failed" end
+    mv_pred, mv_conf, mv_info = try ridge_predict(gold_prices, currencies, days) catch; fill(last(gold_prices), days), 0.10, "Ridge Failed" end
+    mc_pred, mc_conf, mc_lo, mc_hi, mc_info = try mc_garch_predict(gold_prices, days) catch; fill(last(gold_prices), days), 0.20, last(gold_prices)*0.95, last(gold_prices)*1.05, "MC Failed" end
+    ta_pred, ta_conf, ta_signals, ta_score = try advanced_technical(gold_prices, days) catch; fill(last(gold_prices), days), 0.30, ["TA Error"], 0.0 end
+    ci_pred, ci_conf, ci_info = try currency_impact_predict(gold_prices, currencies, days) catch; fill(last(gold_prices), days), 0.10, "Beta Mismatch" end
+
+    # پیش‌بینی مبتنی بر هوش مصنوعی (Random Forest Classifier & Regressor)
+    aux_series = Dict{String, Vector{Float64}}()
+    aux_series["usd"] = usd_irr
+    if !isempty(dxy_prices);   aux_series["dxy"] = dxy_prices;   end
+    if !isempty(us10y_prices); aux_series["us10y"] = us10y_prices; end
+    if !isempty(vix_prices);   aux_series["vix"] = vix_prices;   end
+    for c in currencies
+        if length(c.prices) >= 30
+            aux_series[c.symbol] = c.prices
+        end
+    end
+
+    ml_pred, ml_conf, ml_info = try
+        clf_model, _, clf_info = train_direction_classifier(
+            gold_prices, aux_series;
+            horizon=1, n_trees=120, max_depth=6, min_samples=6
+        )
+        reg_model, _, reg_info = train_return_regressor(
+            gold_prices, aux_series;
+            horizon=1, n_trees=120, max_depth=6, min_samples=6
+        )
+        ml_predict(
+            clf_model, reg_model,
+            gold_prices, aux_series,
+            days; horizon=1
+        )
+    catch
+        fill(last(gold_prices), days), 0.10, "RandomForest ML Offline"
+    end
+
+    # کالیبراسیون و تعیین پویای وزن‌ها بر اساس متد خودتنظیم
+    tune_fns = [
+        (p,d) -> arima_predict(p,d),
+        (p,d) -> holt_predict(p,d),
+        (p,d) -> ridge_predict(p, currencies, d),
+        (p,d) -> begin pr,_,_,_,_ = mc_garch_predict(p,d;nsim=200); return pr,0.0,""; end,
+        (p,d) -> begin pr,_,_,_ = advanced_technical(p,d); return pr,0.0,""; end,
+        (p,d) -> currency_impact_predict(p, currencies, d)
+    ]
+    tune_names = ["ARIMA","Holt","Ridge","MC+GARCH","TA","Currency"]
+    auto_w, auto_mapes = auto_tune_weights(gold_prices, tune_fns, tune_names; window=60, val_days=20)
+
+    mape_ar = get(auto_mapes, "ARIMA", 1.0) / 100
+    mape_hw = get(auto_mapes, "Holt", 1.0) / 100
+    mape_mc = get(auto_mapes, "MC+GARCH", 1.0) / 100
+
+    # بوست وزنی پویای مدل‌ها در رژیم‌های مختلف بازار
+    regime_boost = Dict(
+        "TRENDING_UP" => [1.1, 1.0, 1.2, 0.9, 1.3, 1.0, 1.20],
+        "TRENDING_DOWN" => [1.1, 0.9, 1.0, 1.0, 1.3, 0.9, 1.10],
+        "MILD_UP" => [1.0, 1.0, 1.1, 1.0, 1.1, 1.0, 1.10],
+        "MILD_DOWN" => [1.0, 0.9, 1.0, 1.1, 1.1, 0.9, 1.05],
+        "RANGING" => [1.0, 1.3, 1.0, 1.2, 1.0, 1.0, 1.05],
+        "VOLATILE" => [0.7, 0.7, 0.8, 1.8, 0.9, 0.8, 1.15]
+    )
+    boosts = get(regime_boost, regime_str, ones(7))
+
+    base_accs = [
+        1/(mape_ar+0.001),
+        1/(mape_hw+0.001),
+        mv_conf*10,
+        1/(mape_mc+0.001),
+        ta_conf*8,
+        ci_conf*6,
+        ml_conf*9
+    ]
+    agreement_boosts = model_agreement_boost([ar_pred, hw_pred, mv_pred, mc_pred, ta_pred, ci_pred, ml_pred], last(gold_prices), dir_prob)
+    adj_accs = base_accs .* boosts .* agreement_boosts
+    tot = sum(adj_accs)
+    w = tot > 0 ? adj_accs ./ tot : fill(1.0/7.0, 7)
+
+    method_weights = Dict(
+        "ARIMA(5,1,0)"=>round(w[1],digits=3),
+        "Holt-Winters"=>round(w[2],digits=3),
+        "Ridge Regression"=>round(w[3],digits=3),
+        "MonteCarlo+GARCH"=>round(w[4],digits=3),
+        "TechnicalAnalysis"=>round(w[5],digits=3),
+        "CurrencyImpact"=>round(w[6],digits=3),
+        "RandomForest ML"=>round(w[7],digits=3)
+    )
+
+    all_p = zeros(7, days)
+    all_p[1,:]=ar_pred; all_p[2,:]=hw_pred; all_p[3,:]=mv_pred
+    all_p[4,:]=mc_pred; all_p[5,:]=ta_pred; all_p[6,:]=ci_pred; all_p[7,:]=ml_pred
+
+    # زون اصلاحات برگشت به میانگین بر اساس Z-Score
+    z_score, z_reversion = zscore_signal(gold_prices, 20)
+    
+    gold_daily = zeros(days)
+    for d in 1:days
+        base = sum(all_p[m,d]*w[m] for m in 1:7)
+        sent_factor = sent_adj * exp(-0.3*d)
+        dir_bias = (dir_prob - 0.5) * 0.008
+        gold_daily[d] = base * (1.0 + macro_adj * (d/days)) * (1.0 + z_reversion * exp(-0.2*d)) * (1.0 + dir_bias * (d/days)) * (1.0 + sent_factor)
+    end
+
+    af = [all_p[m,end] for m in 1:7 if isfinite(all_p[m,end])]
+    isfinite(mc_lo) && push!(af, mc_lo)
+    isfinite(mc_hi) && push!(af, mc_hi)
+    isempty(af) && (af = [last(gold_prices)])
+    for i in eachindex(gold_daily)
+        if !isfinite(gold_daily[i])
+            gold_daily[i] = i == 1 ? last(gold_prices) : gold_daily[i-1]
+        end
+    end
+
+    gold_point = last(gold_daily)
+    gold_low = quantile(af, 0.10); gold_high = quantile(af, 0.90)
+    if gold_low > gold_point; gold_low=gold_point*0.98; end
+    if gold_high < gold_point; gold_high=gold_point*1.02; end
+    gold_low, gold_high = widen_band(gold_point, gold_low, gold_high, event_risk)
+
+    # پیش‌بینی چندمتغیره دلار
+    usd_pred_daily, usd_lo, usd_hi, usd_conf = predict_usd_irr(usd_irr, gold_prices, days)
+    usd_point=last(usd_pred_daily); usd_low=last(usd_lo); usd_high=last(usd_hi)
+
+    # پیش‌بینی طلای داخلی
+    iran_pred, avg_mf = predict_iran_gold(gold_daily, usd_pred_daily, iran_gold, gold_prices, usd_irr, days)
+    iran_point=last(iran_pred)
+    iran_lo_v=[gold_low/31.1035*0.75*usd_lo[d]*avg_mf for d in 1:days]
+    iran_hi_v=[gold_high/31.1035*0.75*usd_hi[d]*avg_mf for d in 1:days]
+    iran_low=last(iran_lo_v); iran_high=last(iran_hi_v)
+
+    # محاسبه پیش‌بینی قیمت سکه تمام بهار امامی
+    cf=8.133*(21.6/18.0)
+    coin_point=iran_point*cf*1.05; coin_low=iran_low*cf*1.02; coin_high=iran_high*cf*1.08
+
+    # تعیین لیبل جهت و برچسب نوسان
+    chg=(gold_point-last(gold_prices))/last(gold_prices)*100
+    trend = chg>3 ? "صعود قوی" : chg>1 ? "صعود" : chg>0.3 ? "صعود ملایم" :
+            chg>-0.3 ? "خنثی" : chg>-1 ? "نزول ملایم" : chg>-3 ? "نزول" : "نزول قوی"
+
+    all_signals = String[]
+
+    # آماده‌سازی و پاکسازی متون سیگنال‌ها
+    if abs(sentiment_score) > 5
+        dir = sentiment_score > 0 ? "صعودی" : "نزولی"
+        push!(all_signals, "سنتیمنت اخبار طلا: $(round(sentiment_score,digits=1)) → $dir ($(sentiment_level))")
+    end
+
+    push!(all_signals, "رژیم روند: " * regime_info)
+    append!(all_signals, dir_signals)
+    append!(all_signals, usd_dir_signals)
+    push!(all_signals, "برگشت به میانگین: Z-Score=$(round(z_score,digits=2)) | Mean-Rev=$(round(z_reversion*100,digits=3))%")
+
+    append!(all_signals, macro_signals)
+    append!(all_signals, ta_signals)
+    push!(all_signals, "مدل هوش مصنوعی جنگل تصادفی: " * ml_info)
+
+    if !isempty(events)
+        push!(all_signals, "📅 رویدادهای کلیدی پیش‌رو:")
+        for ev in events
+            push!(all_signals, "  $(ev["date"]): $(ev["title"]) ($(ev["impact"]))")
+        end
+    end
+
+    # خلاصه‌سازی بازار در سیگنال نهایی
+    push!(all_signals, "دورنمای انس جهانی: $(round(chg,digits=2))% $trend")
+    usd_chg=(usd_point-last(usd_irr))/last(usd_irr)*100
+    push!(all_signals, "دورنمای دلار تهران: $(round(usd_chg,digits=2))%")
+
+    final_model_preds = [all_p[m,end] for m in 1:6 if isfinite(all_p[m,end])]
+    overall_conf = round(ensemble_confidence(final_model_preds, [ar_conf,hw_conf,mv_conf,mc_conf,ta_conf,ci_conf], dir_prob, regime_conf, event_risk) * 100, digits=1)
+    tdates = build_target_dates_from_data(data, days)
+
+    return PredictionResult(
+        round(gold_point,digits=2), round(gold_low,digits=2), round(gold_high,digits=2), round.(gold_daily,digits=2),
+        round(iran_point,digits=0), round(iran_low,digits=0), round(iran_high,digits=0), round.(iran_pred,digits=0),
+        round(coin_point,digits=0), round(coin_low,digits=0), round(coin_high,digits=0),
+        round(usd_point,digits=0), round(usd_low,digits=0), round(usd_high,digits=0), round.(usd_pred_daily,digits=0),
+        overall_conf, trend, all_signals, method_weights, tdates
+    )
+end
+
+end

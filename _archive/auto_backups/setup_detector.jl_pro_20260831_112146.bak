@@ -1,0 +1,154 @@
+module SetupDetector
+
+using Statistics, Dates
+
+export detect_setup, SetupResult
+
+struct SetupResult
+    symbol::String
+    bias::String        # BUY, SELL, NO_TRADE
+    setup_type::String  # Pullback, Breakout, RangeBound
+    entry_low::Float64
+    entry_high::Float64
+    target1::Float64
+    target2::Float64
+    stop_loss::Float64
+    risk_reward::Float64
+    trade_quality::String # A+, A, B
+    trend_score::Float64
+    momentum_score::Float64
+    volatility_score::Float64
+    reasons_for::Vector{String}
+    reasons_against::Vector{String}
+end
+
+# ------------------------------------------------------------------
+# سیستم محاسبه میانگین متحرک پویا (Dynamic EMA)
+# اگر طول داده‌های تاریخی کمتر از دوره باشد، دوره را به اندازه داده‌ها کوچک می‌کند
+# ------------------------------------------------------------------
+function calculate_ema(prices::Vector{Float64}, period::Int)::Vector{Float64}
+    n = length(prices)
+    p = min(period, n) # پویاسازی خودکار دوره میانگین
+    ema = copy(prices)
+    p <= 1 && return ema
+    
+    k = 2.0 / (p + 1.0)
+    ema[p] = mean(prices[1:p])
+    for i in (p + 1):n
+        ema[i] = prices[i] * k + ema[i-1] * (1.0 - k)
+    end
+    return ema
+end
+
+function calculate_rsi(prices::Vector{Float64}, period::Int=14)::Float64
+    n = length(prices)
+    p = min(period, n - 1)
+    p <= 2 && return 50.0
+    
+    gains = 0.0
+    losses = 0.0
+    for i in (n - p + 1):n
+        diff = prices[i] - prices[i-1]
+        if diff > 0
+            gains += diff
+        else
+            losses -= diff
+        end
+    end
+    
+    avg_gain = gains / p
+    avg_loss = losses / p
+    avg_loss == 0.0 && return 100.0
+    
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1.0 + rs))
+end
+
+# ------------------------------------------------------------------
+# موتور هوشمند تحلیل ستاپ‌ها
+# ------------------------------------------------------------------
+function detect_setup(symbol::String, prices::Vector{Float64})::SetupResult
+    n = length(prices)
+    
+    if n < 5
+        return SetupResult(symbol, "NO_TRADE", "داده ناکافی", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "C", 0.0, 0.0, 0.0, String[], String[])
+    end
+
+    last_price = prices[end]
+    
+    # محاسبه پویا و بدون خطای میانگین‌های متحرک کوتاه، میان و بلندمدت
+    ema9 = calculate_ema(prices, 9)
+    ema21 = calculate_ema(prices, 21)
+    ema50 = calculate_ema(prices, 50)
+    
+    rsi = calculate_rsi(prices, 14)
+    std_dev = std(prices[max(1, n-20):end])
+    atr = max(std_dev, last_price * 0.005) # گارد محافظ در برابر نوسان صفر
+
+    bias = "NO_TRADE"
+    setup_type = "تحلیل رنج"
+    trade_quality = "B"
+    
+    entry_low = last_price * 0.998
+    entry_high = last_price * 1.002
+    target1 = 0.0
+    target2 = 0.0
+    stop_loss = 0.0
+    
+    reasons_for = String[]
+    reasons_against = String[]
+
+    # ۱. سیگنال خرید داینامیک
+    # اگر قیمت بالای میانگین متحرک باشد، یا میانگین کوتاه‌مدت بالای میان‌مدت قرار گیرد
+    if last_price > ema21[end] || ema9[end] > ema21[end]
+        bias = "BUY"
+        setup_type = "پولبک روند صعودی"
+        trade_quality = rsi < 45 ? "A+" : "A"
+        
+        stop_loss = last_price - (atr * 1.5)
+        target1 = last_price + (atr * 1.8)
+        target2 = last_price + (atr * 3.0)
+        
+        push!(reasons_for, "قیمت در فاز صعودی پویا")
+        rsi < 50 && push!(reasons_for, "اشباع فروش نسبی در نوسان‌نما")
+        
+    # ۲. سیگنال فروش داینامیک
+    # اگر قیمت پایین میانگین متحرک باشد، یا میانگین کوتاه‌مدت پایین میان‌مدت قرار گیرد
+    elseif last_price < ema21[end] || ema9[end] < ema21[end]
+        bias = "SELL"
+        setup_type = "ریجکشن روند نزولی"
+        trade_quality = rsi > 55 ? "A+" : "A"
+        
+        stop_loss = last_price + (atr * 1.5)
+        target1 = last_price - (atr * 1.8)
+        target2 = last_price - (atr * 3.0)
+        
+        push!(reasons_for, "قیمت در فاز نزولی پویا")
+        rsi > 50 && push!(reasons_for, "اشباع خرید نسبی در نوسان‌نما")
+    end
+
+    # محاسبه ریاضی دقیق نسبت ریسک به ریوار بر اساس فواصل واقعی
+    risk = abs(last_price - stop_loss)
+    reward = abs(target1 - last_price)
+    rr_ratio = risk > 0.0 ? round(reward / risk, digits=2) : 1.5
+
+    return SetupResult(
+        symbol,
+        bias,
+        setup_type,
+        entry_low,
+        entry_high,
+        target1,
+        target2,
+        stop_loss,
+        rr_ratio,
+        trade_quality,
+        80.0,
+        rsi,
+        atr,
+        reasons_for,
+        reasons_against
+    )
+end
+
+end

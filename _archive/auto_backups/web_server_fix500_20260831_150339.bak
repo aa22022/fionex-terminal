@@ -1,0 +1,913 @@
+module WebServer
+
+using HTTP, JSON3, Dates, Sockets
+
+export start_server
+
+include("data_fetcher.jl")
+include("macro_data.jl")
+include("storage.jl")
+include("math_engine.jl")
+include("predictor.jl")
+include("backtest_engine.jl")
+include("news_sentiment.jl")
+include("relationship_engine.jl")
+include("market_registry.jl")
+include("strength_engine.jl")
+include("level_engine.jl")
+include("multi_timeframe.jl")
+include("candle_patterns.jl")
+include("setup_detector.jl")
+include("risk_manager.jl")
+include("trade_journal.jl")
+include("pair_scanner.jl")
+include("pre_trade_checklist.jl")
+include("adaptive_ml.jl")
+include("portfolio_risk.jl")
+
+using .DataFetcher
+using .MacroData
+using .Storage
+using .MathEngine
+using .Predictor
+using .BacktestEngine
+using .NewsSentiment
+using .RelationshipEngine
+using .MarketRegistry
+using .StrengthEngine
+using .LevelEngine
+using .MultiTimeframe
+using .CandlePatterns
+using .SetupDetector
+using .RiskManager
+using .TradeJournal
+using .PairScanner
+using .PreTradeChecklist
+using .AdaptiveML
+using .PortfolioRisk
+
+mutable struct AppState
+    last_update::DateTime
+    data::Union{Dict,Nothing}
+    analysis::Union{RatioAnalysis,Nothing}
+    prediction::Union{PredictionResult,Nothing}
+    backtest::Union{BacktestResult,Nothing}
+    sentiment::Union{NewsSentimentResult,Nothing}
+    relationship_map::Union{Any,Nothing}
+    fx_scan::Union{Any,Nothing}
+    portfolio_risk::Union{Any,Nothing}
+    last_backtest::DateTime
+    last_sentiment::DateTime
+end
+
+const STATE = AppState(
+    DateTime(2000,1,1),
+    nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing,
+    DateTime(2000,1,1), DateTime(2000,1,1)
+)
+
+const STATE_LOCK = ReentrantLock()
+const IS_UPDATING = Ref(false)
+
+const STATIC_DIR = abspath(normpath(joinpath(@__DIR__, "..", "static")))
+const TEMPLATES_DIR = abspath(normpath(joinpath(@__DIR__, "..", "templates")))
+
+function get_state_snapshot()
+    lock(STATE_LOCK)
+    try
+        return (
+            analysis = STATE.analysis,
+            prediction = STATE.prediction,
+            data = STATE.data,
+            backtest = STATE.backtest,
+            sentiment = STATE.sentiment,
+            relationship_map = STATE.relationship_map,
+            fx_scan = STATE.fx_scan,
+            portfolio_risk = STATE.portfolio_risk,
+            last_update = STATE.last_update,
+            last_sentiment = STATE.last_sentiment,
+            last_backtest = STATE.last_backtest
+        )
+    finally
+        unlock(STATE_LOCK)
+    end
+end
+
+function set_state_all!(data, analysis, prediction, backtest, sentiment, rel_map, fx_scan, port_risk, last_sent, last_bt)
+    lock(STATE_LOCK)
+    try
+        STATE.data = data
+        STATE.analysis = analysis
+        STATE.prediction = prediction
+        STATE.backtest = backtest
+        STATE.sentiment = sentiment
+        STATE.relationship_map = rel_map
+        STATE.fx_scan = fx_scan
+        STATE.portfolio_risk = port_risk
+        STATE.last_sentiment = last_sent
+        STATE.last_backtest = last_bt
+        STATE.last_update = now()
+    finally
+        unlock(STATE_LOCK)
+    end
+end
+
+function clean_json_value(x)
+    if x isa AbstractFloat
+        return isfinite(x) ? x : nothing
+    elseif x isa AbstractString
+        return String(x)
+    elseif x isa Symbol
+        return String(x)
+    elseif x isa Dates.TimeType
+        return string(x)
+    elseif x isa Dict
+        return Dict(string(k) => clean_json_value(v) for (k, v) in x)
+    elseif x isa AbstractVector
+        return [clean_json_value(v) for v in x]
+    elseif x isa Number || x isa Bool || x === nothing
+        return x
+    else
+        return string(x)
+    end
+end
+
+function parse_query_params(target::AbstractString)
+    parts = split(target, '?'; limit=2)
+    result = Dict{String,String}()
+    length(parts) < 2 && return result
+    for kv in split(parts[2], '&')
+        kv == "" && continue
+        pieces = split(kv, '='; limit=2)
+        k = try HTTP.URIs.unescapeuri(String(pieces[1])) catch; String(pieces[1]) end
+        v = length(pieces) > 1 ? (try HTTP.URIs.unescapeuri(String(pieces[2])) catch; String(pieces[2]) end) : ""
+        result[k] = v
+    end
+    return result
+end
+
+function safe_date_str(d)
+    if d isa Dates.TimeType
+        return Dates.format(d, "yyyy-mm-dd")
+    elseif d isa AbstractString
+        return length(d) >= 10 ? String(d)[1:10] : String(d)
+    else
+        return string(d)
+    end
+end
+
+function serialize_sentiment(s::Union{NewsSentimentResult,Nothing})
+    s === nothing && return Dict("available" => false)
+    return Dict(
+        "available"     => true,
+        "overall_score" => s.overall_score,
+        "gold_score"    => s.gold_score,
+        "usd_score"     => s.usd_score,
+        "iran_score"    => s.iran_score,
+        "alert_level"   => s.alert_level,
+        "summary"       => s.summary,
+        "last_updated"  => Dates.format(s.last_updated, "yyyy-mm-dd HH:MM:SS"),
+        "news_count"    => length(s.news_items),
+        "top_news"      => [
+            Dict(
+                "title"    => item.title,
+                "source"   => item.source,
+                "score"    => item.score,
+                "keywords" => item.keywords[1:min(4, end)]
+            ) for item in s.news_items[1:min(12, end)]
+        ]
+    )
+end
+
+function serialize_relationships(rm)
+    rm === nothing && return Dict("available" => false)
+    relations = []
+    for r in rm.relations[1:min(15, length(rm.relations))]
+        rc = Dict{String,Any}()
+        for (k,v) in r.regime_corr; rc[string(k)] = v; end
+        push!(relations, Dict(
+            "asset_b"       => r.asset_b,
+            "pearson_20d"   => r.pearson_20d,
+            "pearson_60d"   => r.pearson_60d,
+            "lead_lag_days" => r.lead_lag_days,
+            "lead_lag_corr" => r.lead_lag_corr,
+            "beta_30d"      => r.beta_30d,
+            "partial_corr"  => r.partial_corr,
+            "direction"     => r.direction,
+            "strength"      => r.strength,
+            "regime_corr"   => rc,
+            "dep_score"     => get(rm.dependency_scores, r.asset_b, 0.0)
+        ))
+    end
+    sorted_deps = sort(collect(rm.dependency_scores), by=x->-x[2])
+    top5 = [k for (k,v) in sorted_deps[1:min(5,length(sorted_deps))]]
+    return Dict(
+        "available"       => true,
+        "computed_at"     => string(rm.computed_at),
+        "relations"       => relations,
+        "leading_assets"  => rm.leading_assets,
+        "lagging_assets"  => rm.lagging_assets,
+        "top_influencers" => top5
+    )
+end
+
+function serialize_portfolio_risk(pr)
+    pr === nothing && return Dict("available" => false)
+    exposures = [Dict(
+        "currency" => e.currency,
+        "net_lots" => e.net_lots,
+        "net_direction" => e.net_direction,
+        "trade_count" => e.trade_count,
+        "risk_usd" => e.risk_usd_allocated,
+        "exposure_level" => e.exposure_level
+    ) for e in pr.exposures]
+
+    alerts = [Dict(
+        "pair_a" => a.pair_a,
+        "pair_b" => a.pair_b,
+        "correlation" => a.correlation_20d,
+        "warning_fa" => a.warning_fa,
+        "action_fa" => a.action_fa
+    ) for a in pr.correlation_alerts]
+
+    return Dict(
+        "available" => true,
+        "account_balance" => pr.account_balance,
+        "total_risk_usd" => pr.total_risk_usd,
+        "total_risk_pct" => pr.total_risk_pct,
+        "max_allowed_risk_pct" => pr.max_allowed_risk_pct,
+        "is_risk_capped" => pr.is_risk_capped,
+        "scaling_factor" => pr.scaling_factor,
+        "portfolio_health" => pr.portfolio_health,
+        "summary_fa" => pr.summary_fa,
+        "exposures" => exposures,
+        "correlation_alerts" => alerts
+    )
+end
+
+function serialize_fx_scan(scan_data)
+    scan_data === nothing && return Dict("available" => false)
+    strengths = [Dict(
+        "currency" => s.currency,
+        "score" => s.score,
+        "momentum_5d" => s.momentum_5d,
+        "momentum_20d" => s.momentum_20d,
+        "trend_bias" => s.trend_bias,
+        "rank" => s.rank
+    ) for s in scan_data["strengths"]]
+
+    snap = get_state_snapshot()
+    current_data = snap.data
+    current_port_risk = snap.portfolio_risk
+
+    setups = []
+    for s in scan_data["setups"]
+        lv = s.levels
+        levels_dict = lv === nothing ? nothing : Dict(
+            "current" => lv.current,
+            "support1" => lv.support1, "support2" => lv.support2, "support3" => lv.support3,
+            "resistance1" => lv.resistance1, "resistance2" => lv.resistance2, "resistance3" => lv.resistance3,
+            "pivot" => lv.pivot,
+            "week_high" => lv.week_high, "week_low" => lv.week_low,
+            "atr_pct" => lv.atr_pct,
+            "dist_to_support" => lv.dist_to_support,
+            "dist_to_resistance" => lv.dist_to_resistance,
+            "position_in_range" => lv.position_in_range,
+            "stop_zone_long" => lv.stop_zone_long,
+            "stop_zone_short" => lv.stop_zone_short,
+            "confluence_zones" => lv.confluence_zones
+        )
+
+        risk_dict = s.risk_info === nothing ? nothing : Dict(
+            "kelly_fraction" => s.risk_info.kelly_fraction,
+            "final_risk_pct" => s.risk_info.final_risk_pct,
+            "position_units" => s.risk_info.position_size_units,
+            "position_lots" => s.risk_info.position_size_lots,
+            "required_margin" => s.risk_info.required_margin,
+            "risk_usd" => s.risk_info.risk_usd,
+            "reward_usd" => s.risk_info.reward_usd
+        )
+
+        timing_dict = s.timing === nothing ? nothing : Dict(
+            "timing_score" => s.timing.timing_score,
+            "trigger_status" => s.timing.trigger_status,
+            "trigger_status_fa" => s.timing.trigger_status_fa,
+            "pattern_name" => s.timing.candle_signal.pattern_name,
+            "pattern_fa" => s.timing.candle_signal.pattern_fa,
+            "pattern_desc" => s.timing.candle_signal.pattern_desc,
+            "reasons" => s.timing.reasons
+        )
+
+        rates_dict = get(scan_data, "rates_dict", Dict{String, Vector{Float64}}())
+        history_prices = get(rates_dict, s.symbol, Float64[])
+        advanced_dict = s.advanced === nothing ? nothing : Dict(
+            "adx_value" => s.advanced.adx_value,
+            "adx_trend" => s.advanced.adx_trend,
+            "ichimoku_state" => s.advanced.ichimoku_state,
+            "macd_divergence" => s.advanced.macd_divergence,
+            "atr_value" => s.advanced.atr_value,
+            "chandelier_exit" => s.advanced.chandelier_exit,
+            "bb_squeeze" => s.advanced.bb_squeeze,
+            "keltner_combo" => s.advanced.keltner_combo,
+            "obv_slope" => s.advanced.obv_slope,
+            "vwap_dev" => s.advanced.vwap_dev,
+            "mfi_value" => s.advanced.mfi_value,
+            "sharpe_ratio" => s.advanced.sharpe_ratio,
+            "sortino_ratio" => s.advanced.sortino_ratio,
+            "hurst_exponent" => s.advanced.hurst_exponent,
+            "market_mode" => s.advanced.market_mode
+        )
+
+        push!(setups, Dict(
+            "symbol" => s.symbol,
+            "base" => s.base,
+            "quote" => s.quote_ccy,
+            "history" => history_prices,
+            "category" => s.symbol in ["BTCUSDT", "ETHUSDT", "SOLUSDT"] ? "crypto" : "forex",
+            "bias" => s.bias,
+            "setup_type" => s.setup_type,
+            "total_score" => s.total_score,
+            "strength_score" => s.strength_score,
+            "trend_score" => s.trend_score,
+            "momentum_score" => s.momentum_score,
+            "volatility_score" => s.volatility_score,
+            "sr_score" => s.sr_score,
+            "levels" => levels_dict,
+            "entry_low" => s.entry_zone_low,
+            "entry_high" => s.entry_zone_high,
+            "target1" => s.target1,
+            "target2" => s.target2,
+            "stop_loss" => s.stop_loss,
+            "risk_reward" => s.risk_reward,
+            "reasons_for" => s.reasons_for,
+            "reasons_against" => s.reasons_against,
+            "trade_quality" => s.trade_quality,
+            "timeframe_align" => s.timeframe_align,
+            "advanced" => advanced_dict, # تزریق نقشه کامل کوانت پیشرفته
+            "setup_name_fa" => s.advanced === nothing ? "" : s.advanced.ichimoku_state,
+            "confluence_score" => s.total_score,
+            "has_divergence" => s.advanced === nothing ? false : (s.advanced.macd_divergence != "همگرایی شتاب با روند"),
+            "divergence_fa" => s.advanced === nothing ? "" : s.advanced.macd_divergence,
+            "mtf_confluence" => s.mtf_confluence,
+            "mtf_dominant_bias" => s.mtf_dominant_bias,
+            "risk_info" => risk_dict,
+            "timing" => timing_dict,
+            "checklist" => checklist_dict
+        ))
+    end
+
+    return Dict(
+        "available" => true,
+        "computed_at" => scan_data["computed_at"],
+        "strengths" => strengths,
+        "setups" => setups,
+        "report" => scan_data["report"]
+    )
+end
+
+function build_market_alert(data::Union{Dict,Nothing})
+    data === nothing && return Dict("level" => "UNKNOWN", "message" => "--", "gold_move" => 0.0, "usd_move" => 0.0)
+    try
+        gp = data["gold_oz"]["prices"]
+        up = data["usd_irr"]["prices"]
+        gmove = length(gp) >= 2 ? abs(gp[end] - gp[end-1]) / gp[end-1] * 100.0 : 0.0
+        umove = length(up) >= 2 ? abs(up[end] - up[end-1]) / up[end-1] * 100.0 : 0.0
+        maxmove = max(gmove, umove)
+
+        if maxmove > 2.0
+            return Dict("level" => "HIGH", "message" => "بازار پرنوسان - پیش‌بینی با احتیاط", "gold_move" => round(gmove, digits=2), "usd_move" => round(umove, digits=2))
+        elseif maxmove > 1.0
+            return Dict("level" => "MEDIUM", "message" => "نوسان متوسط در بازار", "gold_move" => round(gmove, digits=2), "usd_move" => round(umove, digits=2))
+        else
+            return Dict("level" => "LOW", "message" => "نوسان بازار در بازه عادی و آرام", "gold_move" => round(gmove, digits=2), "usd_move" => round(umove, digits=2))
+        end
+    catch
+        return Dict("level" => "UNKNOWN", "message" => "--", "gold_move" => 0.0, "usd_move" => 0.0)
+    end
+end
+
+function update_data!()
+    println("\n========== UPDATE START (LOCAL ASSEMBLY) ==========")
+    t_start = time()
+
+    local_data = nothing
+    local_analysis = nothing
+    local_prediction = nothing
+    local_backtest = nothing
+    local_sentiment = nothing
+    local_relationship_map = nothing
+    local_fx_scan = nothing
+    local_portfolio_risk = nothing
+
+    snap = get_state_snapshot()
+    last_sentiment_cached = snap.last_sentiment
+    last_backtest_cached = snap.last_backtest
+
+    try
+        println("  [1/10] fetch data...")
+        local_data = DataFetcher.fetch_all_data(180)
+
+        println("  [2/10] macro data...")
+        macrodata = MacroData.fetch_macro_data(180)
+        local_data["macro"] = macrodata
+
+        println("  [3/10] calendar events...")
+        events = MacroData.fetch_upcoming_events(14)
+        local_data["events"] = events
+
+        println("  [4/10] news sentiment analysis...")
+        if last_sentiment_cached == DateTime(2000,1,1) || (now() - last_sentiment_cached) > Minute(30)
+            try
+                local_sentiment = fetch_news_sentiment(24)
+                last_sentiment_cached = now()
+            catch e
+                local_sentiment = nothing
+            end
+        else
+            local_sentiment = snap.sentiment
+        end
+        local_data["sentiment"] = local_sentiment
+
+        println("  [5/10] cross-market relationships...")
+        try
+            others = Dict{String,Vector{Float64}}()
+            others["usd"] = local_data["usd_irr"]["prices"]
+            for c in local_data["currencies"]
+                length(c.prices) >= 20 && (others[c.symbol] = c.prices)
+            end
+            macrod = get(local_data, "macro", Dict())
+            if haskey(macrod, "dxy") && haskey(macrod["dxy"], "prices")
+                others["DXY"] = macrod["dxy"]["prices"]
+            end
+            if haskey(macrod, "vix") && haskey(macrod["vix"], "prices")
+                others["VIX"] = macrod["vix"]["prices"]
+            end
+            control = get(others, "usd", nothing)
+            local_relationship_map = compute_relationships("gold", local_data["gold_oz"]["prices"], others; control_series = control)
+        catch e
+            local_relationship_map = nothing
+        end
+
+                println("  [6/10] FX Strength & Multi-Pair Scanning...")
+        try
+            rates_dict = Dict{String, Vector{Float64}}()
+            usd_rates = Dict{String, Vector{Float64}}()
+            for c in local_data["currencies"]; usd_rates[c.symbol] = c.prices; end
+            usd_rates["USD"] = fill(1.0, length(local_data["gold_oz"]["prices"]))
+            usd_rates["USDT"] = fill(1.0, length(local_data["gold_oz"]["prices"]))
+            if haskey(local_data, "btc"); usd_rates["BTC"] = local_data["btc"]["prices"]; end
+            if haskey(local_data, "eth"); usd_rates["ETH"] = local_data["eth"]["prices"]; end
+            if haskey(local_data, "sol"); usd_rates["SOL"] = local_data["sol"]["prices"]; end
+
+            for pair in MarketRegistry.ALL_FX_PAIRS
+                if pair.category == "crypto"
+                    key_lc = lowercase(pair.base)
+                    haskey(local_data, key_lc) && (rates_dict[pair.symbol] = local_data[key_lc]["prices"])
+                elseif haskey(usd_rates, pair.base) && haskey(usd_rates, pair.quote_)
+                    b_prices = usd_rates[pair.base]; q_prices = usd_rates[pair.quote_]
+                    n_len = min(length(b_prices), length(q_prices))
+                    if n_len > 0
+                        rates_dict[pair.symbol] = [q_prices[end-n_len+i] / b_prices[end-n_len+i] for i in 1:n_len]
+                    end
+                end
+            end
+
+            setups = PairScanner.scan_all_pairs(MarketRegistry.ALL_FX_PAIRS, rates_dict, nothing)
+
+            strengths = try
+                ccys = filter(c -> c != "IRR" && haskey(usd_rates, c), collect(keys(MarketRegistry.CURRENCY_NAMES)))
+                StrengthEngine.compute_all_strengths(rates_dict, MarketRegistry.BASE_PAIRS_MAP, ccys)
+            catch
+                []
+            end
+
+            report_text = try
+                StrengthEngine.generate_daily_report(setups, strengths)
+            catch
+                ""
+            end
+
+            try
+                TradeJournal.record_setups!(setups)
+            catch
+            end
+
+            local_fx_scan = Dict(
+                "computed_at" => string(Dates.now())[1:19],
+                "rates_dict"  => rates_dict,
+                "strengths"   => strengths,
+                "setups"      => setups,
+                "report"      => report_text
+            )
+            println("       ✓ اسکن با موفقیت انجام شد: $(length(setups)) ستاپ آماده شد.")
+        catch e
+            @warn "هشدار در اسکن فارکس" exception=e
+            local_fx_scan = Dict("available" => true, "setups" => [], "strengths" => [], "report" => "")
+        end
+
+        println("  [7/10] multi-engine quantitative forecasting...")
+        local_analysis = calculate_all_ratios(local_data)
+        local_prediction = predict_next_week(local_data, local_analysis)
+
+        println("  [8/10] historical predictive backtest check...")
+        if last_backtest_cached == DateTime(2000,1,1) || (now() - last_backtest_cached) > Hour(6)
+            try
+                local_backtest = run_historical_backtest(
+                    local_data["gold_oz"]["prices"], local_data["gold_oz"]["dates"],
+                    local_data["usd_irr"]["prices"], local_data["usd_irr"]["dates"],
+                    local_data["iran_gold"]["prices"], local_data["iran_gold"]["dates"];
+                    test_days=60, min_train=30
+                )
+                last_backtest_cached = now()
+            catch e
+                local_backtest = nothing
+            end
+        else
+            local_backtest = snap.backtest
+        end
+
+        println("  [9/10] persisting records inside SQLite database...")
+        try
+            save_actual_snapshot!(local_data, local_analysis)
+            save_prediction_run!(local_prediction)
+        catch e
+        end
+
+        set_state_all!(
+            local_data, local_analysis, local_prediction, local_backtest,
+            local_sentiment, local_relationship_map, local_fx_scan,
+            local_portfolio_risk, last_sentiment_cached, last_backtest_cached
+        )
+
+        println("========== LOCAL ASSEMBLY COMPLETED IN ($(round(time() - t_start, digits=1))s) ==========\n")
+    catch e
+        @error "CRITICAL CORE DATA COMPILATION FAILURE" exception=(e, catch_backtrace())
+    end
+end
+
+function ensure_data()
+    snap = get_state_snapshot()
+    if snap.data === nothing
+        println("📥 اولین راه‌اندازی: بارگذاری داده‌های اولیه به صورت همگام...")
+        update_data!()
+    end
+end
+
+function handle_index(req)
+    try
+        target_path = normpath(joinpath(TEMPLATES_DIR, "index.html"))
+        if !isfile(target_path)
+            return HTTP.Response(404, ["Content-Type" => "text/plain; charset=utf-8"], "قالب index.html یافت نشد.")
+        end
+        return HTTP.Response(
+            200,
+            [
+                "Content-Type" => "text/html; charset=utf-8",
+                "Cache-Control" => "no-store, no-cache, must-revalidate, max-age=0"
+            ],
+            read(target_path)
+        )
+    catch e
+        return HTTP.Response(500, ["Content-Type" => "text/plain; charset=utf-8"], "Internal Server Error")
+    end
+end
+
+function handle_static_file(raw_path::AbstractString)
+    try
+        path_str = String(split(raw_path, '?')[1])
+        rel_file = replace(path_str, r"^/static/" => "")
+        rel_file = replace(rel_file, r"^static/" => "")
+        rel_file = replace(rel_file, "\\" => "/")
+        
+        target_path = normpath(joinpath(STATIC_DIR, rel_file))
+
+        if !startswith(lowercase(target_path), lowercase(STATIC_DIR))
+            return HTTP.Response(403, ["Content-Type" => "text/plain; charset=utf-8"], "Forbidden")
+        end
+
+        if !isfile(target_path)
+            return HTTP.Response(404, ["Content-Type" => "text/plain; charset=utf-8"], "فایل استاتیک یافت نشد: $rel_file")
+        end
+
+        ext = lowercase(splitext(target_path)[2])
+        ctype = get(Dict(
+            ".css"   => "text/css; charset=utf-8",
+            ".js"    => "application/javascript; charset=utf-8",
+            ".json"  => "application/json; charset=utf-8",
+            ".png"   => "image/png",
+            ".jpg"   => "image/jpeg",
+            ".jpeg"  => "image/jpeg",
+            ".svg"   => "image/svg+xml",
+            ".ico"   => "image/x-icon",
+            ".woff"  => "font/woff",
+            ".woff2" => "font/woff2"
+        ), ext, "application/octet-stream")
+
+        file_bytes = read(target_path)
+        return HTTP.Response(
+            200,
+            [
+                "Content-Type" => ctype,
+                "Cache-Control" => "public, max-age=86400",
+                "Access-Control-Allow-Origin" => "*"
+            ],
+            file_bytes
+        )
+    catch e
+        return HTTP.Response(500, ["Content-Type" => "text/plain; charset=utf-8"], "Internal Server Error: $(string(e))")
+    end
+end
+
+function build_api_response()
+    local_state = get_state_snapshot()
+    a  = local_state.analysis
+    p  = local_state.prediction
+    d  = local_state.data
+    bt = local_state.backtest
+
+    if a === nothing || p === nothing || d === nothing
+        return Dict(
+            "status" => "loading",
+            "message" => "سامانه در حال بارگذاری داده‌های اولیه است. لطفاً چند لحظه دیگر صفحه را مجدداً بارگذاری کنید..."
+        )
+    end
+
+    hp = d["gold_oz"]["prices"]
+    hd0 = d["gold_oz"]["dates"]
+    hn = min(180, length(hp))
+    hs = hp[end-hn+1:end]
+    hd = [safe_date_str(x) for x in hd0[end-hn+1:end]]
+
+    up = d["usd_irr"]["prices"]
+    ud0 = d["usd_irr"]["dates"]
+    un = min(180, length(up))
+    us = up[end-un+1:end]
+    ud = [safe_date_str(x) for x in ud0[end-un+1:end]]
+
+    ip = d["iran_gold"]["prices"]
+    id0 = d["iran_gold"]["dates"]
+    iin = min(180, length(ip))
+    is_ = ip[end-iin+1:end]
+    id = [safe_date_str(x) for x in id0[end-iin+1:end]]
+
+    macrodata = haskey(d, "macro") ? d["macro"] : Dict()
+    events = haskey(d, "events") ? d["events"] : Dict()
+
+    accuracy = try Storage.get_accuracy_summary(30) catch; Dict("count" => 0) end
+    accuracy_horizons = try Storage.get_multi_horizon_accuracy(60) catch; Dict() end
+    prediction_trails = try Storage.get_prediction_trails(90; horizon_day=1, per_day=true) catch; Dict() end
+    walk_forward = try Predictor.walk_forward_multi(d["gold_oz"]["prices"], d["usd_irr"]["prices"], d["iran_gold"]["prices"]; window=60, step=5) catch; Dict() end
+
+    bt_gold = bt !== nothing ? [Dict("date" => r.date, "actual" => r.actual, "predicted" => r.predicted, "error" => r.error_pct) for r in bt.gold_results] : []
+    bt_usd = bt !== nothing ? [Dict("date" => r.date, "actual" => r.actual, "predicted" => r.predicted, "error" => r.error_pct) for r in bt.usd_results] : []
+    bt_iran = bt !== nothing ? [Dict("date" => r.date, "actual" => r.actual, "predicted" => r.predicted, "error" => r.error_pct) for r in bt.iran_results] : []
+
+    return Dict(
+        "status"      => "success",
+        "last_update" => Dates.format(local_state.last_update, "yyyy-mm-dd HH:MM:SS"),
+        "current_prices" => Dict(
+            "gold_oz_usd"        => round(a.gold_oz_stats["current"], digits=2),
+            "gold_oz_ma20"       => round(a.gold_oz_stats["ma_20"], digits=2),
+            "gold_oz_ma50"       => round(a.gold_oz_stats["ma_50"], digits=2),
+            "gold_oz_rsi"        => a.gold_oz_stats["rsi_14"],
+            "gold_oz_volatility" => a.gold_oz_stats["volatility"],
+            "iran_gold_gram18"   => round(a.iran_gold_stats["current"], digits=0),
+            "coin_emami"         => round(a.iran_gold_stats["current"] * 8.133 * (21.6 / 18.0) * 1.05, digits=0),
+            "usd_irr"            => round(a.iran_gold_stats["usd_irr"], digits=0),
+            "dxy_estimate"       => a.dxy_estimate,
+            "fear_greed"         => a.fear_greed,
+            "dxy_real"           => try round(macrodata["dxy"]["current"], digits=2) catch; 104.2 end,
+            "us10y"              => try round(macrodata["us10y"]["current"], digits=2) catch; 4.45 end,
+            "vix"                => try round(macrodata["vix"]["current"], digits=2) catch; 15.8 end,
+            "providers"          => Dict(
+                "gold" => get(d["gold_oz"], "provider", "TGJU"),
+                "usd"  => get(d["usd_irr"], "provider", "TGJU"),
+                "iran" => get(d["iran_gold"], "provider", "TGJU"),
+                "macro"=> "Stooq"
+            )
+        ),
+        "correlations" => [Dict(
+            "symbol"        => c.currency,
+            "name_fa"       => c.name_fa,
+            "pearson"       => c.pearson,
+            "spearman"      => c.spearman,
+            "beta"          => c.beta,
+            "r_squared"     => c.r_squared,
+            "granger_f"     => c.granger_f,
+            "cointegration" => c.cointegration,
+            "impact_score"  => c.impact_score,
+            "direction"     => c.direction
+        ) for c in a.correlations],
+        "prediction" => Dict(
+            "gold_oz" => Dict("point" => p.gold_oz_point, "low" => p.gold_oz_low, "high" => p.gold_oz_high, "daily" => p.gold_oz_daily),
+            "iran_gold" => Dict("point" => p.iran_gold_point, "low" => p.iran_gold_low, "high" => p.iran_gold_high, "daily" => p.iran_gold_daily),
+            "coin" => Dict("point" => p.coin_point, "low" => p.coin_low, "high" => p.coin_high),
+            "usd_irr" => Dict("point" => p.usd_irr_point, "low" => p.usd_irr_low, "high" => p.usd_irr_high, "daily" => p.usd_irr_daily),
+            "confidence"     => p.confidence,
+            "trend"          => p.trend,
+            "signals"        => p.signals,
+            "method_weights" => p.method_weights,
+            "target_dates"   => p.target_dates
+        ),
+        "gold_history"      => Dict("prices" => round.(hs, digits=2), "dates" => hd),
+        "usd_history"       => Dict("prices" => round.(us, digits=0), "dates" => ud),
+        "iran_gold_history" => Dict("prices" => round.(is_, digits=0), "dates" => id),
+        "btc_history"       => haskey(d, "btc") ? Dict("prices" => round.(d["btc"]["prices"][end-min(180, length(d["btc"]["prices"]))+1:end], digits=1), "dates" => [safe_date_str(dt) for dt in d["btc"]["dates"][end-min(180, length(d["btc"]["prices"]))+1:end]]) : Dict(),
+        "eth_history"       => haskey(d, "eth") ? Dict("prices" => round.(d["eth"]["prices"][end-min(180, length(d["eth"]["prices"]))+1:end], digits=1), "dates" => [safe_date_str(dt) for dt in d["eth"]["dates"][end-min(180, length(d["eth"]["prices"]))+1:end]]) : Dict(),
+        "sol_history"       => haskey(d, "sol") ? Dict("prices" => round.(d["sol"]["prices"][end-min(180, length(d["sol"]["prices"]))+1:end], digits=2), "dates" => [safe_date_str(dt) for dt in d["sol"]["dates"][end-min(180, length(d["sol"]["prices"]))+1:end]]) : Dict(),
+        "backtest" => Dict(
+            "gold"                      => bt_gold,
+            "usd"                       => bt_usd,
+            "iran"                      => bt_iran,
+            "gold_mape"                 => bt !== nothing ? round(bt.gold_mape, digits=2) : nothing,
+            "usd_mape"                  => bt !== nothing ? round(bt.usd_mape, digits=2) : nothing,
+            "iran_mape"                 => bt !== nothing ? round(bt.iran_mape, digits=2) : nothing,
+            "direction_accuracy"        => bt !== nothing ? round(bt.gold_direction_accuracy, digits=1) : nothing,
+            "gold_direction_accuracy"   => bt !== nothing ? round(bt.gold_direction_accuracy, digits=1) : nothing,
+            "usd_direction_accuracy"    => bt !== nothing ? round(bt.usd_direction_accuracy, digits=1) : nothing,
+            "iran_direction_accuracy"   => bt !== nothing ? round(bt.iran_direction_accuracy, digits=1) : nothing,
+            "total_days"                => bt !== nothing ? bt.total_days : 0,
+            "days_used"                 => bt !== nothing ? bt.total_days : 0,
+            "info"                      => bt !== nothing ? bt.info : ""
+        ),
+        "macro" => Dict(
+            "dxy"   => try Dict("current" => round(macrodata["dxy"]["current"], digits=2), "provider" => macrodata["dxy"]["provider"]) catch; Dict() end,
+            "us10y" => try Dict("current" => round(macrodata["us10y"]["current"], digits=2), "provider" => macrodata["us10y"]["provider"]) catch; Dict() end,
+            "vix"   => try Dict("current" => round(macrodata["vix"]["current"], digits=2), "provider" => macrodata["vix"]["provider"]) catch; Dict() end
+        ),
+        "sentiment"                  => serialize_sentiment(local_state.sentiment),
+        "relationships"              => serialize_relationships(local_state.relationship_map),
+        "fx_scan"                    => serialize_fx_scan(local_state.fx_scan),
+        "trade_journal"              => TradeJournal.get_journal_stats(),
+        "adaptive_insights"          => Dict("available" => false),
+        "portfolio_risk"             => serialize_portfolio_risk(local_state.portfolio_risk),
+        "events"                     => events,
+        "accuracy"                   => accuracy,
+        "walk_forward"               => walk_forward,
+        "accuracy_horizons"          => accuracy_horizons,
+        "prediction_trails"          => prediction_trails,
+        "historical_prediction_dots" => Dict(
+            "gold_oz"   => Storage.get_historical_predictions("gold_oz", 60),
+            "usd_irr"   => Storage.get_historical_predictions("usd_irr", 60),
+            "iran_gold" => Storage.get_historical_predictions("iran_gold", 60)
+        ),
+        "market_alert"               => build_market_alert(d)
+    )
+end
+
+function handle_api(req)
+    try
+        ensure_data()
+        resp = build_api_response()
+        cleaned_resp = clean_json_value(resp)
+        json_bytes = JSON3.write(cleaned_resp)
+        return HTTP.Response(
+            200,
+            [
+                "Content-Type" => "application/json; charset=utf-8",
+                "Access-Control-Allow-Origin" => "*",
+                "Cache-Control" => "no-store, no-cache, must-revalidate, max-age=0"
+            ],
+            json_bytes
+        )
+    catch e
+        @error "API response build error" exception=(e, catch_backtrace())
+        return HTTP.Response(500, ["Content-Type" => "application/json; charset=utf-8"], JSON3.write(Dict("status" => "error", "message" => string(e))))
+    end
+end
+
+function handle_backtest(req)
+    try
+        params = parse_query_params(req.target)
+        days_req = haskey(params, "days") ? tryparse(Int, params["days"]) : 60
+        days = days_req === nothing ? 60 : clamp(days_req, 10, 1000)
+
+        ensure_data()
+        snap = get_state_snapshot()
+        d = snap.data
+
+        if d === nothing
+            return HTTP.Response(200,
+                ["Content-Type" => "application/json; charset=utf-8"],
+                JSON3.write(Dict("status" => "loading", "message" => "داده‌ها هنوز آماده نیستند."))
+            )
+        end
+
+        gp, gd = d["gold_oz"]["prices"], d["gold_oz"]["dates"]
+        up, ud = d["usd_irr"]["prices"], d["usd_irr"]["dates"]
+        ip, id_ = d["iran_gold"]["prices"], d["iran_gold"]["dates"]
+
+        max_possible = min(length(gp), length(up), length(ip)) - 35
+        if max_possible < 10
+            return HTTP.Response(200,
+                ["Content-Type" => "application/json; charset=utf-8"],
+                JSON3.write(Dict("status" => "insufficient_data", "message" => "داده تاریخی کافی برای بک‌تست در این بازه موجود نیست."))
+            )
+        end
+        test_days = clamp(days, 10, max_possible)
+
+        bt = run_historical_backtest(gp, gd, up, ud, ip, id_; test_days=test_days, min_train=30)
+
+        resp = Dict(
+            "status"                    => "success",
+            "days_requested"            => days,
+            "days_used"                 => test_days,
+            "test_days"                 => test_days,
+            "total_days"                => test_days,
+            "gold" => [Dict("date"=>r.date,"actual"=>r.actual,"predicted"=>r.predicted,"error"=>r.error_pct) for r in bt.gold_results],
+            "usd"  => [Dict("date"=>r.date,"actual"=>r.actual,"predicted"=>r.predicted,"error"=>r.error_pct) for r in bt.usd_results],
+            "iran" => [Dict("date"=>r.date,"actual"=>r.actual,"predicted"=>r.predicted,"error"=>r.error_pct) for r in bt.iran_results],
+            "gold_mape"                 => round(bt.gold_mape, digits=2),
+            "usd_mape"                  => round(bt.usd_mape, digits=2),
+            "iran_mape"                 => round(bt.iran_mape, digits=2),
+            "direction_accuracy"        => round(bt.gold_direction_accuracy, digits=1),
+            "gold_direction_accuracy"   => round(bt.gold_direction_accuracy, digits=1),
+            "usd_direction_accuracy"    => round(bt.usd_direction_accuracy, digits=1),
+            "iran_direction_accuracy"   => round(bt.iran_direction_accuracy, digits=1),
+            "info"                      => bt.info
+        )
+
+        return HTTP.Response(200,
+            ["Content-Type" => "application/json; charset=utf-8",
+             "Access-Control-Allow-Origin" => "*",
+             "Cache-Control" => "no-store, no-cache, must-revalidate, max-age=0"],
+            JSON3.write(clean_json_value(resp))
+        )
+    catch e
+        @error "Backtest endpoint error" exception=(e, catch_backtrace())
+        return HTTP.Response(500, ["Content-Type" => "application/json; charset=utf-8"],
+            JSON3.write(Dict("status" => "error", "message" => string(e))))
+    end
+end
+
+function handle_refresh(req)
+    try
+        update_data!()
+        return HTTP.Response(200, ["Content-Type" => "application/json; charset=utf-8"], JSON3.write(Dict("status" => "success", "message" => "داده‌ها به‌روزرسانی شدند.")))
+    catch e
+        return HTTP.Response(500, ["Content-Type" => "application/json; charset=utf-8"], JSON3.write(Dict("status" => "error", "message" => string(e))))
+    end
+end
+
+function router(req::HTTP.Request)
+    path = String(split(HTTP.URI(req.target).path, '?')[1])
+
+    if path == "/favicon.ico"
+        return HTTP.Response(204, ["Content-Type" => "image/x-icon"])
+    end
+
+    if path == "/health"
+        snap = get_state_snapshot()
+        is_stale = (snap.data === nothing || (now() - snap.last_update) > Hour(1))
+        return HTTP.Response(200, ["Content-Type" => "application/json; charset=utf-8"], JSON3.write(Dict(
+            "status" => is_stale ? "degraded" : "healthy",
+            "uptime" => string(now()),
+            "last_update" => string(snap.last_update)
+        )))
+    end
+
+    if path == "/" || path == "/index.html"
+        return handle_index(req)
+    elseif startswith(path, "/static/")
+        return handle_static_file(path)
+    elseif path == "/api/data"
+        return handle_api(req)
+    elseif path == "/api/backtest"
+        return handle_backtest(req)
+    elseif path == "/api/refresh"
+        return handle_refresh(req)
+    else
+        return HTTP.Response(404, ["Content-Type" => "text/plain; charset=utf-8"], "صفحه مورد نظر یافت نشد.")
+    end
+end
+
+function start_server(port::Int=8080)
+    Storage.init_db()
+    println("\n=======================================================")
+    println("  Fionex Terminal v5.0 (Running on http://localhost:$port)")
+    println("=======================================================\n")
+    
+    try
+        update_data!()
+    catch e
+        @error "خطای بارگذاری اولیه" exception=(e, catch_backtrace())
+    end
+
+    @async begin
+        println("🤖 سرویس پردازش پس‌زمینه زنده فعال شد.")
+        while true
+            sleep(300)
+            try
+                println("\n🔄 [پس‌زمینه] در حال دریافت خودکار آخرین اطلاعات بازار...")
+                update_data!()
+                println("✅ [پس‌زمینه] تحلیل‌ها و پیش‌بینی‌ها آپدیت شدند.")
+            catch e
+                @error "[پس‌زمینه] خطای دریافت خودکار" exception=(e, catch_backtrace())
+            end
+        end
+    end
+
+    HTTP.serve(router, "0.0.0.0", port)
+end
+
+end

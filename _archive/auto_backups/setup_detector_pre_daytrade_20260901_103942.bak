@@ -1,0 +1,176 @@
+module SetupDetector
+
+using Statistics, Dates
+using ..MTFData
+using ..AdvancedQuant
+
+export detect_setup, SetupResult, MTFConfluenceReport
+
+# ساختار نگهداری وضعیت تاییدیه سه تایم‌فریم
+struct MTFConfluenceReport
+    h1_bias::String
+    h1_score::Float64
+    h4_bias::String
+    h4_score::Float64
+    d1_bias::String
+    d1_score::Float64
+    confluence_aligned::Bool
+end
+
+struct SetupResult
+    symbol::String
+    bias::String            # BUY, SELL, NO_TRADE
+    setup_type::String
+    entry_low::Float64
+    entry_high::Float64
+    target1::Float64
+    target2::Float64
+    stop_loss::Float64
+    risk_reward::Float64
+    trade_quality::String   # A+, A, B, C, D
+    confidence::Float64     # 0-100 درصد اطمینان
+    trend_score::Float64
+    momentum_score::Float64
+    volatility_score::Float64
+    reasons_for::Vector{String}
+    reasons_against::Vector{String}
+    timeframe::String
+    quant::AdvancedQuant.AdvancedAnalysis # ارجاع به آنالیز پیشرفته فاز ۲
+    mtf::MTFConfluenceReport              # تاییدیه زمانی چندگانه
+end
+
+# ------------------------------------------------------------------
+# تحلیل سریع تک تایم‌فریمی جهت وزن‌دهی به همگرایی نهایی
+# ------------------------------------------------------------------
+function analyze_single_timeframe(closes::Vector{Float64})::Tuple{String, Float64}
+    n = length(closes)
+    n < 10 && return ("NEUTRAL", 50.0)
+    
+    # میانگین‌های سریع
+    ma5 = mean(closes[end-4:end])
+    ma15 = mean(closes[end-14:end])
+    
+    # نوسان‌ساز ساده قیمت
+    change = (closes[end] - closes[max(1, end-10)]) / closes[max(1, end-10)] * 100.0
+    
+    bias = "NEUTRAL"
+    score = 50.0
+    
+    if closes[end] > ma5 && ma5 > ma15
+        bias = "BUY"
+        score = 50.0 + clamp(change * 5.0, 5.0, 45.0)
+    elseif closes[end] < ma5 && ma5 < ma15
+        bias = "SELL"
+        score = 50.0 - clamp(abs(change) * 5.0, 5.0, 45.0)
+    end
+    
+    return (bias, round(score, digits=1))
+end
+
+# ------------------------------------------------------------------
+# تابع اصلی: همگرایی چند تایم‌فریمی (Multi-Timeframe Confluence)
+# ------------------------------------------------------------------
+function detect_setup(symbol::String, mtf_candles::Dict{String, MTFCandles})::SetupResult
+    # سناریوی پیش‌فرض در صورت عدم وجود کلیدهای زمانی
+    if !haskey(mtf_candles, "H1") || !haskey(mtf_candles, "H4") || !haskey(mtf_candles, "D1")
+        empty_adv = AdvancedQuant.analyze_advanced_setup(MTFCandles(symbol, "D1", Float64[], Float64[], Float64[], Float64[], Float64[], DateTime[], "--", false))
+        empty_mtf = MTFConfluenceReport("NEUTRAL", 50.0, "NEUTRAL", 50.0, "NEUTRAL", 50.0, false)
+        return SetupResult(symbol, "NO_TRADE", "داده زمانی ناقص", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "D", 0.0, 0.0, 0.0, 0.0, String[], String[], "1D", empty_adv, empty_mtf)
+    end
+
+    c_h1 = mtf_candles["H1"]
+    c_h4 = mtf_candles["H4"]
+    c_d1 = mtf_candles["D1"]
+
+    # ۱. تحلیل جداگانه هر ۳ تایم‌فریم
+    h1_bias, h1_score = analyze_single_timeframe(c_h1.closes)
+    h4_bias, h4_score = analyze_single_timeframe(c_h4.closes)
+    d1_bias, d1_score = analyze_single_timeframe(c_d1.closes)
+
+    # ۲. اجرای ۸ فرمول پیشرفته کوانت روی تایم‌فریم مرجع سویینگ (H4)
+    adv_analysis = AdvancedQuant.analyze_advanced_setup(c_h4)
+
+    # ۳. فرمول محاسبه امتیاز همگرایی وزن‌دار (H1=20%, H4=40%, D1=40%)
+    weighted_score = (h1_score * 0.20) + (h4_score * 0.40) + (d1_score * 0.40)
+    
+    # تعیین جهت نهایی بر اساس برآیند وزنی
+    bias = "NO_TRADE"
+    setup_type = "تحلیل رنج تعادلی"
+    confidence = weighted_score
+    
+    if weighted_score >= 52.0
+        bias = "BUY"
+        setup_type = "سویینگ صعودی چند تایم‌فریمی"
+    elseif weighted_score <= 48.0
+        bias = "SELL"
+        setup_type = "سویینگ نزولی چند تایم‌فریمی"
+        confidence = 100.0 - weighted_score # همسان‌سازی درصد اطمینان برای جهت فروش
+    end
+
+    # بررسی تطابق و همسویی روندها
+    confluence_aligned = (h1_bias == h4_bias == d1_bias) && h1_bias != "NEUTRAL"
+
+    mtf_report = MTFConfluenceReport(h1_bias, h1_score, h4_bias, h4_score, d1_bias, d1_score, confluence_aligned)
+
+    # ۴. تعیین حد سود و ضرر پویا بر پایه ATR تایم‌فریم H4
+    last_price = c_h4.closes[end]
+    atr = length(c_h4.closes) > 10 ? std(c_h4.closes[end-9:end]) : last_price * 0.005
+    atr = max(atr, last_price * 0.002)
+
+    if bias == "BUY"
+        stop_loss = last_price - (atr * 2.0)
+        target1 = last_price + (atr * 2.5)
+        target2 = last_price + (atr * 4.5)
+    elseif bias == "SELL"
+        stop_loss = last_price + (atr * 2.0)
+        target1 = last_price - (atr * 2.5)
+        target2 = last_price - (atr * 4.5)
+    else
+        stop_loss = 0.0
+        target1 = 0.0
+        target2 = 0.0
+    end
+
+    # تعیین کیفیت ترید بر اساس پایداری روند و نسبت شارپ
+    trade_quality = "C"
+    if confidence >= 80.0 && adv_analysis.sharpe_ratio > 1.2
+        trade_quality = confluence_aligned ? "A+" : "A"
+    elseif confidence >= 65.0
+        trade_quality = "B"
+    elseif confidence >= 50.0
+        trade_quality = "C"
+    else
+        trade_quality = "D"
+    end
+
+    entry_low = last_price * 0.999
+    entry_high = last_price * 1.001
+    
+    risk = abs(last_price - stop_loss)
+    reward = abs(target1 - last_price)
+    rr_ratio = risk > 0.0 ? round(reward / risk, digits=2) : 0.0
+
+    reasons_for = copy(adv_analysis.key_insights)
+    reasons_against = String[]
+
+    if confluence_aligned
+        push!(reasons_for, "🔥 همگرایی ۱۰۰٪ در هر ۳ تایم‌فریم (H1, H4, D1)")
+    else
+        push!(reasons_against, "⚠️ عدم همسویی موقت در تایم‌فریم کوتاه‌مدت")
+    end
+
+    return SetupResult(
+        symbol, bias, setup_type,
+        entry_low, entry_high,
+        target1, target2, stop_loss, rr_ratio,
+        trade_quality, round(confidence, digits=1),
+        round(weighted_score, digits=1),
+        h4_score, atr,
+        reasons_for, reasons_against,
+        "چند تایم‌فریمی (H1/H4/D1)",
+        adv_analysis,
+        mtf_report
+    )
+end
+
+end

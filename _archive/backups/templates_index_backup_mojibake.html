@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ã˜Â³Ã˜Â§Ã™â€¦Ã˜Â§Ã™â€ Ã™â€¡ Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å  Ã˜Â·Ã™â€žÃ˜Â§</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<div class="container">
+
+<header class="header">
+<div class="header-right">
+<h1>Ã˜Â³Ã˜Â§Ã™â€¦Ã˜Â§Ã™â€ Ã™â€¡ Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å  Ã™â€šÃ™Å Ã™â€¦Ã˜Âª Ã˜Â·Ã™â€žÃ˜Â§ Ã™Ë† Ã˜Â§Ã˜Â±Ã˜Â²</h1>
+<p>6 Ã™â€¦Ã˜Â¯Ã™â€ž Ã˜ÂªÃ˜Â±Ã™Æ’Ã™Å Ã˜Â¨Ã™Å  + News Sentiment + DXY/US10Y/VIX + Ã˜Â¨Ã™Æ’Ã¢â‚¬Å’Ã˜ÂªÃ˜Â³Ã˜Âª Ã˜ÂªÃ˜Â§Ã˜Â±Ã™Å Ã˜Â®Ã™Å </p>
+</div>
+<div class="header-left">
+<span id="lastUp">--</span>
+<button onclick="doRefresh()" class="btn-refresh">Ã˜Â¨Ã™â€¡Ã¢â‚¬Å’Ã˜Â±Ã™Ë†Ã˜Â²Ã˜Â±Ã˜Â³Ã˜Â§Ã™â€ Ã™Å </button>
+</div>
+</header>
+
+<div class="status-bar">
+<span class="status-dot" id="statusDot"></span>
+<span>Ã˜Â³Ã™Å Ã˜Â³Ã˜ÂªÃ™â€¦ Ã™ÂÃ˜Â¹Ã˜Â§Ã™â€ž</span><span>|</span>
+<span id="sbRegime">--</span><span>|</span>
+<span id="sbSentiment">Ã˜Â§Ã˜Â®Ã˜Â¨Ã˜Â§Ã˜Â±: --</span><span>|</span>
+<span>Ã˜Â¨Ã™â€¡Ã¢â‚¬Å’Ã˜Â±Ã™Ë†Ã˜Â²Ã˜Â±Ã˜Â³Ã˜Â§Ã™â€ Ã™Å : 30 Ã˜Â¯Ã™â€šÃ™Å Ã™â€šÃ™â€¡</span>
+</div>
+
+<section>
+<div class="section-title">Ã™Ë†Ã˜Â¶Ã˜Â¹Ã™Å Ã˜Âª Ã™â€žÃ˜Â­Ã˜Â¸Ã™â€¡Ã¢â‚¬Å’Ã˜Â§Ã™Å  Ã˜Â¨Ã˜Â§Ã˜Â²Ã˜Â§Ã˜Â±</div>
+<div class="price-grid">
+<div class="price-cell"><div class="price-label">Ã˜Â§Ã™â€ Ã˜Â³ Ã˜Â¬Ã™â€¡Ã˜Â§Ã™â€ Ã™Å </div><div class="price-value" id="cpGold">--</div><div class="price-unit">Ã˜Â¯Ã™â€žÃ˜Â§Ã˜Â±/Ã˜Â§Ã™Ë†Ã™â€ Ã˜Â³</div><div class="price-sub"><span>MA20:<b id="cpMA20">--</b></span><span>MA50:<b id="cpMA50">--</b></span></div></div>
+<div class="price-cell"><div class="price-label">Ã˜Â·Ã™â€žÃ˜Â§Ã™Å  18 Ã˜Â¹Ã™Å Ã˜Â§Ã˜Â±</div><div class="price-value" id="cpIran">--</div><div class="price-unit">Ã˜ÂªÃ™Ë†Ã™â€¦Ã˜Â§Ã™â€ /ÃšÂ¯Ã˜Â±Ã™â€¦</div></div>
+<div class="price-cell"><div class="price-label">Ã˜Â¯Ã™â€žÃ˜Â§Ã˜Â± Ã˜Â¢Ã˜Â²Ã˜Â§Ã˜Â¯</div><div class="price-value" id="cpUSD">--</div><div class="price-unit">Ã˜ÂªÃ™Ë†Ã™â€¦Ã˜Â§Ã™â€ </div></div>
+<div class="ind-cell"><div class="price-label">Ã˜Â´Ã˜Â§Ã˜Â®Ã˜ÂµÃ¢â‚¬Å’Ã™â€¡Ã˜Â§</div>
+<div class="ind-row"><span class="ind-label">RSI</span><span class="ind-val" id="cpRSI">--</span></div>
+<div class="ind-row"><span class="ind-label">DXY</span><span class="ind-val" id="cpDXY">--</span></div>
+<div class="ind-row"><span class="ind-label">US10Y</span><span class="ind-val" id="cpUS10Y">--</span></div>
+<div class="ind-row"><span class="ind-label">VIX</span><span class="ind-val" id="cpVIX">--</span></div>
+</div>
+</div>
+</section>
+
+<section>
+<div class="section-title">Ã˜ÂªÃ˜Â­Ã™â€žÃ™Å Ã™â€ž Ã˜Â§Ã˜Â®Ã˜Â¨Ã˜Â§Ã˜Â± Ã˜Â²Ã™â€ Ã˜Â¯Ã™â€¡ Ã˜Â¬Ã™â€¡Ã˜Â§Ã™â€ Ã™Å </div>
+<div id="sentimentSection">
+<div class="sig-item">Ã˜Â¯Ã˜Â± Ã˜Â­Ã˜Â§Ã™â€ž Ã˜Â¯Ã˜Â±Ã™Å Ã˜Â§Ã™ÂÃ˜Âª Ã˜Â§Ã˜Â®Ã˜Â¨Ã˜Â§Ã˜Â±...</div>
+</div>
+</section>
+
+<section>
+<div class="section-title">Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å  7 Ã˜Â±Ã™Ë†Ã˜Â² Ã˜Â¢Ã™Å Ã™â€ Ã˜Â¯Ã™â€¡</div>
+<div class="pred-grid">
+<div class="pred-cell"><div class="pred-title">Ã˜Â§Ã™â€ Ã˜Â³ (Ã˜Â¯Ã™â€žÃ˜Â§Ã˜Â±)</div><div class="pred-value" id="prGold">--</div><div class="pred-trend" id="prTrend">--</div><div class="pred-range"><span class="pred-lo" id="prGoldLo">--</span><div class="pred-sep"></div><span class="pred-hi" id="prGoldHi">--</span></div><div class="conf-line">Ã˜Â§Ã˜Â·Ã™â€¦Ã™Å Ã™â€ Ã˜Â§Ã™â€ : <b id="prConf">--</b></div></div>
+<div class="pred-cell"><div class="pred-title">Ã˜Â·Ã™â€žÃ˜Â§ 18 (Ã˜ÂªÃ™Ë†Ã™â€¦Ã˜Â§Ã™â€ )</div><div class="pred-value" id="prIran">--</div><div class="pred-range"><span class="pred-lo" id="prIranLo">--</span><div class="pred-sep"></div><span class="pred-hi" id="prIranHi">--</span></div></div>
+<div class="pred-cell"><div class="pred-title">Ã˜Â³Ã™Æ’Ã™â€¡ (Ã˜ÂªÃ™Ë†Ã™â€¦Ã˜Â§Ã™â€ )</div><div class="pred-value" id="prCoin">--</div><div class="pred-range"><span class="pred-lo" id="prCoinLo">--</span><div class="pred-sep"></div><span class="pred-hi" id="prCoinHi">--</span></div></div>
+<div class="pred-cell"><div class="pred-title">Ã˜Â¯Ã™â€žÃ˜Â§Ã˜Â± (Ã˜ÂªÃ™Ë†Ã™â€¦Ã˜Â§Ã™â€ )</div><div class="pred-value" id="prUSD">--</div><div class="pred-range"><span class="pred-lo" id="prUSDLo">--</span><div class="pred-sep"></div><span class="pred-hi" id="prUSDHi">--</span></div></div>
+</div>
+<div class="chart-panel"><div class="chart-title">Ã˜Â§Ã™â€ Ã˜Â³ Ã˜Â·Ã™â€žÃ˜Â§ - Ã˜ÂªÃ˜Â§Ã˜Â±Ã™Å Ã˜Â®Ãšâ€ Ã™â€¡ Ã™Ë† Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å  7 Ã˜Â±Ã™Ë†Ã˜Â²Ã™â€¡</div><canvas id="chGold"></canvas></div>
+<div class="chart-panel"><div class="chart-title">Ã˜Â¯Ã™â€žÃ˜Â§Ã˜Â± Ã˜Â¢Ã˜Â²Ã˜Â§Ã˜Â¯ - Ã˜ÂªÃ˜Â§Ã˜Â±Ã™Å Ã˜Â®Ãšâ€ Ã™â€¡ Ã™Ë† Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å  7 Ã˜Â±Ã™Ë†Ã˜Â²Ã™â€¡</div><canvas id="chUSD"></canvas></div>
+<div class="chart-panel"><div class="chart-title">Ã˜Â·Ã™â€žÃ˜Â§Ã™Å  18 Ã˜Â¹Ã™Å Ã˜Â§Ã˜Â± - Ã˜ÂªÃ˜Â§Ã˜Â±Ã™Å Ã˜Â®Ãšâ€ Ã™â€¡ Ã™Ë† Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å  7 Ã˜Â±Ã™Ë†Ã˜Â²Ã™â€¡</div><canvas id="chIran"></canvas></div>
+</section>
+
+<section>
+<div class="section-title">Ã˜Â¨Ã™Æ’Ã¢â‚¬Å’Ã˜ÂªÃ˜Â³Ã˜Âª Ã˜ÂªÃ˜Â§Ã˜Â±Ã™Å Ã˜Â®Ã™Å  - Ã™â€¦Ã™â€šÃ˜Â§Ã™Å Ã˜Â³Ã™â€¡ Ã™Ë†Ã˜Â§Ã™â€šÃ˜Â¹Ã™Å  Ã™Ë† Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å </div>
+<div id="btStats"></div>
+<div class="chart-panel"><div class="chart-title">Ã˜Â§Ã™â€ Ã˜Â³ - Ã™Ë†Ã˜Â§Ã™â€šÃ˜Â¹Ã™Å  Ã˜Â¯Ã˜Â± Ã™â€¦Ã™â€šÃ˜Â§Ã˜Â¨Ã™â€ž Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å </div><canvas id="chBtGold"></canvas></div>
+<div class="chart-panel"><div class="chart-title">Ã˜Â¯Ã™â€žÃ˜Â§Ã˜Â± - Ã™Ë†Ã˜Â§Ã™â€šÃ˜Â¹Ã™Å  Ã˜Â¯Ã˜Â± Ã™â€¦Ã™â€šÃ˜Â§Ã˜Â¨Ã™â€ž Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å </div><canvas id="chBtUSD"></canvas></div>
+<div class="chart-panel"><div class="chart-title">Ã˜Â·Ã™â€žÃ˜Â§ 18 - Ã™Ë†Ã˜Â§Ã™â€šÃ˜Â¹Ã™Å  Ã˜Â¯Ã˜Â± Ã™â€¦Ã™â€šÃ˜Â§Ã˜Â¨Ã™â€ž Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å </div><canvas id="chBtIran"></canvas></div>
+</section>
+
+<section>
+<div class="section-title">Ã˜Â³Ã™Å ÃšÂ¯Ã™â€ Ã˜Â§Ã™â€žÃ¢â‚¬Å’Ã™â€¡Ã˜Â§Ã™Å  Ã˜ÂªÃ˜Â­Ã™â€žÃ™Å Ã™â€žÃ™Å </div>
+<div class="sig-panel" id="sigList"></div>
+</section>
+
+<section>
+<div class="section-title">Ã™Ë†Ã˜Â²Ã™â€  Ã™â€¦Ã˜Â¯Ã™â€žÃ¢â‚¬Å’Ã™â€¡Ã˜Â§</div>
+<div class="chart-panel sm"><canvas id="chMethods"></canvas></div>
+</section>
+
+<section>
+<div class="section-title">Ã™â€¡Ã™â€¦Ã˜Â¨Ã˜Â³Ã˜ÂªÃšÂ¯Ã™Å  Ã˜Â§Ã˜Â±Ã˜Â²Ã™â€¡Ã˜Â§ Ã˜Â¨Ã˜Â§ Ã˜Â·Ã™â€žÃ˜Â§</div>
+<div class="tbl-wrap">
+<table><thead><tr><th>Ã˜Â±Ã˜Â¯Ã™Å Ã™Â</th><th>Ã™â€ Ã™â€¦Ã˜Â§Ã˜Â¯</th><th>Ã™â€ Ã˜Â§Ã™â€¦</th><th>Ã™Â¾Ã™Å Ã˜Â±Ã˜Â³Ã™Ë†Ã™â€ </th><th>Ã˜Â§Ã˜Â³Ã™Â¾Ã™Å Ã˜Â±Ã™â€¦Ã™â€ </th><th>Ã˜Â¨Ã˜ÂªÃ˜Â§</th><th>R2</th><th>ÃšÂ¯Ã˜Â±Ã™â€ Ã˜Â¬Ã˜Â±</th><th>Ã™â€¡Ã™â€¦Ã˜Â¬Ã™â€¦Ã˜Â¹Ã™Å </th><th>Ã˜ÂªÃ˜Â§Ã˜Â«Ã™Å Ã˜Â±</th><th>Ã˜Â¬Ã™â€¡Ã˜Âª</th></tr></thead>
+<tbody id="corrTbl"></tbody></table>
+</div>
+</section>
+
+<footer>
+<p class="warn">Ã™â€¡Ã˜Â´Ã˜Â¯Ã˜Â§Ã˜Â±: Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å Ã¢â‚¬Å’Ã™â€¡Ã˜Â§ Ã˜ÂµÃ˜Â±Ã™ÂÃ˜Â§ Ã˜ÂªÃ˜Â­Ã™â€žÃ™Å Ã™â€žÃ™Å  Ã˜Â¨Ã™Ë†Ã˜Â¯Ã™â€¡ Ã™Ë† Ã˜ÂªÃ˜Â¶Ã™â€¦Ã™Å Ã™â€  Ã˜Â³Ã™Ë†Ã˜Â¯ Ã™â€ Ã™â€¦Ã™Å Ã¢â‚¬Å’Ã˜Â¯Ã™â€¡Ã˜Â¯.</p>
+<p>Ã™â€ Ã˜Â³Ã˜Â®Ã™â€¡ 5 | TGJU + FRED + Frankfurter + News Sentiment</p>
+</footer>
+</div>
+
+<script>
+Chart.defaults.color='#6b7280';Chart.defaults.borderColor='#2a2d35';
+Chart.defaults.font.family='Vazirmatn';Chart.defaults.font.size=11;
+let cG=null,cU=null,cI=null,cM=null,cBG=null,cBU=null,cBI=null;
+function fmt(n){if(!n&&n!==0)return'--';return Math.round(n).toLocaleString('fa-IR')}
+function fmtE(n,d=2){if(!n&&n!==0)return'--';return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})}
+
+async function loadData(){
+try{const r=await fetch('/api/data');const d=await r.json();if(d.status!=='success')return;renderUI(d);}
+catch(e){console.error(e);document.getElementById('statusDot').className='status-dot err';}
+}
+
+function renderUI(d){
+document.getElementById('statusDot').className='status-dot';
+document.getElementById('lastUp').textContent=d.last_update;
+const c=d.current_prices;
+document.getElementById('cpGold').textContent=fmtE(c.gold_oz_usd);
+document.getElementById('cpMA20').textContent=fmtE(c.gold_oz_ma20);
+document.getElementById('cpMA50').textContent=fmtE(c.gold_oz_ma50);
+document.getElementById('cpIran').textContent=fmt(c.iran_gold_gram18);
+document.getElementById('cpUSD').textContent=fmt(c.usd_irr);
+document.getElementById('cpRSI').textContent=c.gold_oz_rsi;
+document.getElementById('cpDXY').textContent=c.dxy_real||'--';
+document.getElementById('cpUS10Y').textContent=c.us10y?c.us10y+'%':'--';
+document.getElementById('cpVIX').textContent=c.vix||'--';
+
+const p=d.prediction;
+document.getElementById('prGold').textContent=fmtE(p.gold_oz.point);
+document.getElementById('prGoldLo').textContent=fmtE(p.gold_oz.low);
+document.getElementById('prGoldHi').textContent=fmtE(p.gold_oz.high);
+const day1chg = ((p.gold_oz.daily[0] - d.current_prices.gold_oz_usd) / d.current_prices.gold_oz_usd * 100);
+document.getElementById('prTrend').textContent = p.trend + ' | Ø±ÙˆØ² Ø§ÙˆÙ„: ' + day1chg.toFixed(2) + '%';
+document.getElementById('prConf').textContent=p.confidence+'%';
+document.getElementById('prIran').textContent=fmt(p.iran_gold.point);
+document.getElementById('prIranLo').textContent=fmt(p.iran_gold.low);
+document.getElementById('prIranHi').textContent=fmt(p.iran_gold.high);
+document.getElementById('prCoin').textContent=fmt(p.coin.point);
+document.getElementById('prCoinLo').textContent=fmt(p.coin.low);
+document.getElementById('prCoinHi').textContent=fmt(p.coin.high);
+document.getElementById('prUSD').textContent=fmt(p.usd_irr.point);
+document.getElementById('prUSDLo').textContent=fmt(p.usd_irr.low);
+document.getElementById('prUSDHi').textContent=fmt(p.usd_irr.high);
+
+const rs=p.signals.find(s=>s.includes('Ã˜Â­Ã˜Â§Ã™â€žÃ˜Âª'));
+if(rs)document.getElementById('sbRegime').textContent=rs.substring(0,50);
+
+document.getElementById('sigList').innerHTML=p.signals.filter(s=>s.length>0).map(s=>'<div class="sig-item">'+s+'</div>').join('');
+document.getElementById('corrTbl').innerHTML=d.correlations.map((c,i)=>'<tr><td>'+(i+1)+'</td><td><b>'+c.symbol+'</b></td><td>'+c.name_fa+'</td><td class="'+(c.pearson>0?'pos':'neg')+'">'+c.pearson+'</td><td class="'+(c.spearman>0?'pos':'neg')+'">'+c.spearman+'</td><td>'+c.beta+'</td><td>'+(c.r_squared*100).toFixed(1)+'%</td><td class="'+(c.granger_f>3?'sig':'')+'">'+c.granger_f+'</td><td>'+c.cointegration+'</td><td><div class="impact-bar"><div class="impact-fill" style="width:'+Math.round(c.impact_score*100)+'%"></div><span>'+(c.impact_score*100).toFixed(1)+'%</span></div></td><td>'+c.direction+'</td></tr>').join('');
+
+renderSentiment(d.sentiment);
+drawForecast('chGold',d.gold_history,p.gold_oz,p.target_dates,'#2563eb','#22c55e');
+drawForecast('chUSD',d.usd_history,p.usd_irr,p.target_dates,'#6366f1','#f59e0b');
+drawForecast('chIran',d.iran_gold_history,p.iran_gold,p.target_dates,'#dc2626','#f97316');
+drawMethods(p.method_weights);
+const bt=d.backtest;
+if(bt&&bt.total_days>0){
+document.getElementById('btStats').innerHTML='<div class="bt-stats-grid"><div class="bt-stat"><span class="bt-label">Ã˜Â¯Ã™Ë†Ã˜Â±Ã™â€¡</span><span class="bt-val">'+bt.total_days+' Ã˜Â±Ã™Ë†Ã˜Â²</span></div><div class="bt-stat"><span class="bt-label">Ã˜Â®Ã˜Â·Ã˜Â§Ã™Å  Ã˜Â§Ã™â€ Ã˜Â³</span><span class="bt-val">'+bt.gold_mape+'%</span></div><div class="bt-stat"><span class="bt-label">Ã˜Â®Ã˜Â·Ã˜Â§Ã™Å  Ã˜Â¯Ã™â€žÃ˜Â§Ã˜Â±</span><span class="bt-val">'+bt.usd_mape+'%</span></div><div class="bt-stat"><span class="bt-label">Ã˜Â®Ã˜Â·Ã˜Â§Ã™Å  Ã˜Â·Ã™â€žÃ˜Â§18</span><span class="bt-val">'+bt.iran_mape+'%</span></div><div class="bt-stat"><span class="bt-label">Ã˜Â¬Ã™â€¡Ã˜Âª Ã˜Â§Ã™â€ Ã˜Â³</span><span class="bt-val">'+(bt.direction_accuracy||'--')+'%</span></div><div class="bt-stat"><span class="bt-label">Ã˜Â¬Ã™â€¡Ã˜Âª Ã˜Â¯Ã™â€žÃ˜Â§Ã˜Â±</span><span class="bt-val">'+(bt.usd_direction_accuracy||'--')+'%</span></div></div>';
+if(bt.gold&&bt.gold.length>0)drawBacktest('chBtGold',bt.gold,'#2563eb','#22c55e');
+if(bt.usd&&bt.usd.length>0)drawBacktest('chBtUSD',bt.usd,'#6366f1','#f59e0b');
+if(bt.iran&&bt.iran.length>0)drawBacktest('chBtIran',bt.iran,'#dc2626','#f97316');
+}
+}
+
+function renderSentiment(s){
+const el=document.getElementById('sentimentSection');
+if(!s||!s.available){el.innerHTML='<div class="sig-item">Ã˜Â§Ã˜Â®Ã˜Â¨Ã˜Â§Ã˜Â± Ã˜Â¯Ã˜Â± Ã˜Â¯Ã˜Â³Ã˜ÂªÃ˜Â±Ã˜Â³ Ã™â€ Ã™Å Ã˜Â³Ã˜Âª</div>';return;}
+const sc=s.overall_score>20?'#22c55e':s.overall_score<-20?'#ef4444':'#9ca3af';
+const gc=s.gold_score>0?'#22c55e':s.gold_score<0?'#ef4444':'#9ca3af';
+const uc=s.usd_score>0?'#22c55e':s.usd_score<0?'#ef4444':'#9ca3af';
+const alc=s.alert_level==='HIGH'?'#ef4444':s.alert_level==='MEDIUM'?'#f59e0b':'#6b7280';
+document.getElementById('sbSentiment').textContent='Ã˜Â³Ã™â€ Ã˜ÂªÃ™Å Ã™â€¦Ã™â€ Ã˜Âª: '+s.overall_score+' ('+s.alert_level+')';
+let html='<div class="sentiment-scores"><div class="sent-score"><span class="sent-lbl">Ã˜Â³Ã™â€ Ã˜ÂªÃ™Å Ã™â€¦Ã™â€ Ã˜Âª Ã™Æ’Ã™â€žÃ™Å </span><span class="sent-val" style="color:'+sc+'">'+s.overall_score+'</span></div><div class="sent-score"><span class="sent-lbl">Ã˜Â·Ã™â€žÃ˜Â§</span><span class="sent-val" style="color:'+gc+'">'+s.gold_score+'</span></div><div class="sent-score"><span class="sent-lbl">Ã˜Â¯Ã™â€žÃ˜Â§Ã˜Â±</span><span class="sent-val" style="color:'+uc+'">'+s.usd_score+'</span></div><div class="sent-score"><span class="sent-lbl">Ã™â€¡Ã˜Â´Ã˜Â¯Ã˜Â§Ã˜Â±</span><span class="sent-val" style="color:'+alc+'">'+s.alert_level+'</span></div><div class="sent-score"><span class="sent-lbl">Ã˜ÂªÃ˜Â¹Ã˜Â¯Ã˜Â§Ã˜Â¯ Ã˜Â®Ã˜Â¨Ã˜Â±</span><span class="sent-val">'+s.news_count+'</span></div></div>';
+html+='<div style="margin-top:8px">';
+for(const item of(s.top_news||[])){
+const sc2=item.score>0?'#22c55e':item.score<0?'#ef4444':'#9ca3af';
+const sc2txt=item.score>0?'pos':'neg';
+html+='<div class="news-row"><span class="news-src">['+item.source+']</span><span class="news-ttl">'+item.title+'</span>';
+if(item.score!==0)html+='<span class="news-sc" style="color:'+sc2+'">'+(item.score>0?'+':'')+item.score+'</span>';
+if(item.keywords&&item.keywords.length>0)html+='<span class="news-kw">'+item.keywords.filter(k=>!k.startsWith('USD')).slice(0,3).join(' Ã‚Â· ')+'</span>';
+html+='</div>';
+}
+html+='</div>';
+el.innerHTML=html;
+}
+
+function drawForecast(id,hist,pred,pDates,c1,c2){
+const ctx=document.getElementById(id).getContext('2d');
+if(id==='chGold'&&cG){cG.destroy();cG=null;}if(id==='chUSD'&&cU){cU.destroy();cU=null;}if(id==='chIran'&&cI){cI.destroy();cI=null;}
+const labels=[...hist.dates,...pDates];
+const d1=[...hist.prices,...Array(pDates.length).fill(null)];
+const d2=[
+...Array(hist.dates.length-1).fill(null),
+hist.prices[hist.prices.length-1],
+...pred.daily
+];
+const chart=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Ã™Ë†Ã˜Â§Ã™â€šÃ˜Â¹Ã™Å ',data:d1,borderColor:c1,backgroundColor:'transparent',borderWidth:1.5,tension:.3,pointRadius:0},{label:'Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å ',data:d2,borderColor:c2,backgroundColor:c2+'15',borderWidth:2,borderDash:[4,3],fill:true,tension:.3,pointRadius:2,pointBackgroundColor:c2}]},options:{responsive:true,interaction:{intersect:false,mode:'index'},plugins:{legend:{labels:{boxWidth:10}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+Number(c.parsed.y).toLocaleString()}}},scales:{y:{ticks:{callback:v=>v.toLocaleString()},grid:{color:'#1e2028'}},x:{ticks:{maxRotation:45,maxTicksLimit:12},grid:{color:'#1e2028'}}}}});
+if(id==='chGold')cG=chart;else if(id==='chUSD')cU=chart;else cI=chart;
+}
+
+function drawBacktest(id,data,c1,c2){
+const ctx=document.getElementById(id).getContext('2d');
+if(id==='chBtGold'&&cBG){cBG.destroy();cBG=null;}if(id==='chBtUSD'&&cBU){cBU.destroy();cBU=null;}if(id==='chBtIran'&&cBI){cBI.destroy();cBI=null;}
+const labels=data.map(r=>r.date);
+const chart=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Ã™Ë†Ã˜Â§Ã™â€šÃ˜Â¹Ã™Å ',data:data.map(r=>r.actual),borderColor:c1,backgroundColor:'transparent',borderWidth:2,tension:.3,pointRadius:1},{label:'Ã™Â¾Ã™Å Ã˜Â´Ã¢â‚¬Å’Ã˜Â¨Ã™Å Ã™â€ Ã™Å ',data:data.map(r=>r.predicted),borderColor:c2,backgroundColor:'transparent',borderWidth:2,borderDash:[3,3],tension:.3,pointRadius:1}]},options:{responsive:true,interaction:{intersect:false,mode:'index'},plugins:{legend:{labels:{boxWidth:10}},tooltip:{callbacks:{label:c=>{const e=data[c.dataIndex].error;return c.dataset.label+': '+Number(c.parsed.y).toLocaleString()+' (Ã˜Â®Ã˜Â·Ã˜Â§: '+e+'%)';}}}},scales:{y:{ticks:{callback:v=>v.toLocaleString()},grid:{color:'#1e2028'}},x:{ticks:{maxRotation:45,maxTicksLimit:15},grid:{color:'#1e2028'}}}}});
+if(id==='chBtGold')cBG=chart;else if(id==='chBtUSD')cBU=chart;else cBI=chart;
+}
+
+function drawMethods(w){
+const ctx=document.getElementById('chMethods').getContext('2d');
+if(cM)cM.destroy();
+cM=new Chart(ctx,{type:'bar',data:{labels:Object.keys(w),datasets:[{data:Object.values(w).map(v=>(v*100).toFixed(1)),backgroundColor:['#2563eb','#6366f1','#8b5cf6','#06b6d4','#f59e0b','#ef4444'],borderWidth:0}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>v+'%'},grid:{color:'#1e2028'}},y:{grid:{display:false}}}}});
+}
+
+async function doRefresh(){
+document.getElementById('lastUp').textContent='Ã˜Â¨Ã™â€¡Ã¢â‚¬Å’Ã˜Â±Ã™Ë†Ã˜Â²Ã˜Â±Ã˜Â³Ã˜Â§Ã™â€ Ã™Å ...';
+document.getElementById('statusDot').className='status-dot warn';
+try{await fetch('/api/refresh');await loadData();}catch(e){console.error(e);}
+}
+loadData();setInterval(loadData,300000);
+</script>
+</body>
+</html>

@@ -1,0 +1,235 @@
+﻿module StrengthEngine
+
+using Statistics, Dates
+
+export CurrencyStrength, PairStrength, compute_all_strengths,
+       rank_currencies, rank_pairs
+
+struct CurrencyStrength
+    currency::String
+    score::Float64          # normalized z-score
+    score_raw::Float64      # weighted sum
+    momentum_5d::Float64
+    momentum_20d::Float64
+    trend_bias::String      # bullish/bearish/neutral
+    rank::Int
+end
+
+struct PairStrength
+    symbol::String
+    base::String
+    quote_::String
+    strength_gap::Float64   # base_score - quote_score
+    direction::String       # long/short/neutral
+    tradeability::Float64   # 0-1
+    momentum_align::Float64
+    rank_long::Int
+    rank_short::Int
+end
+
+function safe_ret(prices::Vector{Float64}, lag::Int)
+    n = length(prices)
+    n <= lag && return 0.0
+    p0 = prices[end-lag]
+    p0 <= 0 && return 0.0
+    r = (prices[end] - p0) / p0 * 100
+    isfinite(r) ? clamp(r, -20.0, 20.0) : 0.0
+end
+
+function safe_std(prices::Vector{Float64}, window::Int)
+    n = length(prices)
+    window = min(window, n)
+    window < 2 && return 0.01
+    sl = prices[end-window+1:end]
+    s = std(diff(log.(max.(sl, 1e-10)))) * sqrt(252) * 100
+    isfinite(s) && s > 0 ? s : 0.01
+end
+
+function compute_currency_strength(
+    currency::String,
+    rates::Dict{String, Vector{Float64}},
+    pairs_map::Dict{String, Vector{Tuple{String,Int}}}
+)
+    !haskey(pairs_map, currency) && return 0.0, 0.0, 0.0, 0.0
+
+    pair_refs = pairs_map[currency]
+    weighted_scores = Float64[]
+    mom5_list = Float64[]
+    mom20_list = Float64[]
+
+    for (pair_sym, sign) in pair_refs
+        base_key = lowercase(pair_sym[1:3])
+        quote_key = lowercase(pair_sym[4:6])
+
+        prices = nothing
+        for k in [pair_sym, base_key*"/"*quote_key, base_key*"usd", "usd"*quote_key]
+            if haskey(rates, k)
+                prices = rates[k]
+                break
+            end
+        end
+
+        prices === nothing && continue
+        length(prices) < 6 && continue
+
+        r1   = safe_ret(prices, 1) * sign
+        r5   = safe_ret(prices, 5) * sign
+        r20  = length(prices) > 20 ? safe_ret(prices, 20) * sign : r5
+
+        vol  = safe_std(prices, 20)
+        vol_weight = vol > 0.1 ? 1.0 / vol : 1.0
+
+        score = (0.4*r1 + 0.35*r5 + 0.25*r20)
+        push!(weighted_scores, score * vol_weight)
+        push!(mom5_list, r5)
+        push!(mom20_list, r20)
+    end
+
+    isempty(weighted_scores) && return 0.0, 0.0, 0.0, 0.0
+
+    raw   = mean(weighted_scores)
+    mom5  = isempty(mom5_list)  ? 0.0 : mean(mom5_list)
+    mom20 = isempty(mom20_list) ? 0.0 : mean(mom20_list)
+
+    return raw, mom5, mom20, Float64(length(weighted_scores))
+end
+
+function compute_all_strengths(
+    rates::Dict{String, Vector{Float64}},
+    pairs_map::Dict{String, Vector{Tuple{String,Int}}},
+    currencies::Vector{String}
+)
+    raw_scores = Dict{String,Float64}()
+    mom5s = Dict{String,Float64}()
+    mom20s = Dict{String,Float64}()
+
+    for ccy in currencies
+        raw, m5, m20, cnt = compute_currency_strength(ccy, rates, pairs_map)
+        raw_scores[ccy] = raw
+        mom5s[ccy]  = m5
+        mom20s[ccy] = m20
+    end
+
+    # Normalize to z-scores
+    vals = collect(values(raw_scores))
+    mu = isempty(vals) ? 0.0 : mean(vals)
+    sg = isempty(vals) ? 1.0 : max(std(vals), 0.01)
+
+    scores_z = Dict{String,Float64}(k => (v-mu)/sg for (k,v) in raw_scores)
+
+    # Build result
+    sorted_ccys = sort(currencies, by=c -> get(scores_z, c, 0.0), rev=true)
+
+    result = CurrencyStrength[]
+    for (rank, ccy) in enumerate(sorted_ccys)
+        z    = get(scores_z, ccy, 0.0)
+        raw  = get(raw_scores, ccy, 0.0)
+        m5   = get(mom5s, ccy, 0.0)
+        m20  = get(mom20s, ccy, 0.0)
+
+        bias = if z > 0.5
+            "bullish"
+        elseif z < -0.5
+            "bearish"
+        else
+            "neutral"
+        end
+
+        push!(result, CurrencyStrength(ccy, round(z,digits=3), round(raw,digits=4),
+                                       round(m5,digits=3), round(m20,digits=3),
+                                       bias, rank))
+    end
+
+    return result
+end
+
+function rank_currencies(strengths::Vector{CurrencyStrength})
+    return sort(strengths, by=s->s.score, rev=true)
+end
+
+function compute_pair_strength(
+    pair_sym::String, base::String, quote_ccy::String,
+    strengths::Vector{CurrencyStrength},
+    rates::Dict{String, Vector{Float64}}
+)
+    base_str  = 0.0; quote_str = 0.0
+    for s in strengths
+        if s.currency == base;       base_str  = s.score; end
+        if s.currency == quote_ccy;  quote_str = s.score; end
+    end
+
+    gap = base_str - quote_str
+
+    # Momentum alignment
+    prices = nothing
+    for k in [pair_sym, lowercase(pair_sym)]
+        if haskey(rates, k); prices = rates[k]; break; end
+    end
+
+    mom_align = 0.0
+    if prices !== nothing && length(prices) >= 20
+        r5  = safe_ret(prices, 5)
+        r20 = safe_ret(prices, 20)
+        mom_align = 0.6*r5 + 0.4*r20
+    end
+
+    # Tradeability (strength gap + momentum alignment)
+    trade_score = abs(gap) * 0.6 + abs(mom_align) / 5 * 0.4
+    tradeability = clamp(trade_score / 3.0, 0.0, 1.0)
+
+    direction = if gap > 0.3
+        "long"
+    elseif gap < -0.3
+        "short"
+    else
+        "neutral"
+    end
+
+    return gap, direction, tradeability, mom_align
+end
+
+function rank_pairs(
+    pairs::Vector,
+    strengths::Vector{CurrencyStrength},
+    rates::Dict{String, Vector{Float64}}
+)
+    results = PairStrength[]
+
+    for pair in pairs
+        gap, dir, trade, mom = compute_pair_strength(
+            pair.symbol, pair.base, pair.quote_, strengths, rates
+        )
+        push!(results, PairStrength(
+            pair.symbol, pair.base, pair.quote_,
+            round(gap,digits=3), dir,
+            round(trade,digits=3), round(mom,digits=3),
+            0, 0  # ranks filled below
+        ))
+    end
+
+    # Rank for long (highest positive gap)
+    long_sorted  = sort(findall(p->p.direction=="long",  results), by=i->-results[i].strength_gap)
+    short_sorted = sort(findall(p->p.direction=="short", results), by=i->results[i].strength_gap)
+
+    ranked = copy(results)
+    for (r, idx) in enumerate(long_sorted)
+        ranked[idx] = PairStrength(
+            ranked[idx].symbol, ranked[idx].base, ranked[idx].quote_,
+            ranked[idx].strength_gap, ranked[idx].direction,
+            ranked[idx].tradeability, ranked[idx].momentum_align,
+            r, ranked[idx].rank_short
+        )
+    end
+    for (r, idx) in enumerate(short_sorted)
+        ranked[idx] = PairStrength(
+            ranked[idx].symbol, ranked[idx].base, ranked[idx].quote_,
+            ranked[idx].strength_gap, ranked[idx].direction,
+            ranked[idx].tradeability, ranked[idx].momentum_align,
+            ranked[idx].rank_long, r
+        )
+    end
+
+    return ranked
+end
+
+end

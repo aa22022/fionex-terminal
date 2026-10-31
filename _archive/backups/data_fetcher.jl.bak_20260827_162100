@@ -1,0 +1,465 @@
+﻿module DataFetcher
+
+using JSON3, Dates, Downloads, Random
+
+export fetch_all_data, CurrencyData
+
+struct CurrencyData
+    symbol::String
+    name_fa::String
+    prices::Vector{Float64}
+    current_price::Float64
+    change_pct::Float64
+end
+
+# -----------------------------
+# نام فارسی ارزها
+# -----------------------------
+function get_persian_name(sym::String)
+    names = Dict(
+        "EUR" => "یورو",
+        "GBP" => "پوند انگلیس",
+        "JPY" => "ین ژاپن",
+        "CHF" => "فرانک سوئیس",
+        "AUD" => "دلار استرالیا",
+        "CAD" => "دلار کانادا",
+        "CNY" => "یوان چین",
+        "TRY" => "لیر ترکیه",
+        "AED" => "درهم امارات",
+        "RUB" => "روبل روسیه",
+        "INR" => "روپیه هند",
+        "BRL" => "رئال برزیل",
+        "USD" => "دلار آمریکا",
+        "IRR" => "ریال ایران"
+    )
+    return get(names, sym, sym)
+end
+
+# -----------------------------
+# ابزارهای کمکی
+# -----------------------------
+function normalize_toman(v::Float64)
+    if v > 100_000
+        return v / 10.0
+    end
+    return v
+end
+
+function clean_number(x)
+    if x === nothing
+        return nothing
+    elseif x isa Number
+        v = Float64(x)
+        return isfinite(v) ? v : nothing
+    elseif x isa AbstractString
+        s = strip(replace(x, "," => "", "_" => "", " " => ""))
+        m = match(r"[-+]?\d+(\.\d+)?", s)
+        if m === nothing
+            return nothing
+        end
+        return parse(Float64, m.match)
+    else
+        return nothing
+    end
+end
+
+function fetch_text_downloads(url::String)
+    path, io = mktemp()
+    close(io)
+    try
+        Downloads.download(url, path)
+        return read(path, String)
+    finally
+        if isfile(path)
+            rm(path, force=true)
+        end
+    end
+end
+
+function fetch_text_powershell(url::String)
+    ps = "Invoke-WebRequest -Uri '$url' -UseBasicParsing | Select-Object -ExpandProperty Content"
+    return read(`powershell -NoProfile -Command $ps`, String)
+end
+
+function fetch_text(url::String)
+    try
+        return fetch_text_downloads(url)
+    catch
+        return fetch_text_powershell(url)
+    end
+end
+
+function fetch_json(url::String)
+    return JSON3.read(fetch_text(url))
+end
+
+function build_series_from_current(current::Float64, days::Int; drift::Float64=0.0003, vol::Float64=0.006)
+    dates = [DateTime(today() - Day(days - i)) for i in 1:days]
+    prices = Vector{Float64}(undef, days)
+    prices[end] = current
+
+    for i in (days-1):-1:1
+        shock = randn() * vol
+        denom = 1.0 + drift + shock
+        if abs(denom) < 1e-6
+            denom = 1.0
+        end
+        prices[i] = max(1.0, prices[i+1] / denom)
+    end
+
+    return prices, dates
+end
+
+# -----------------------------
+# شبیه‌سازی fallback
+# -----------------------------
+function simulate_gold_prices(days::Int; current::Float64=4360.0)
+    return build_series_from_current(current, days; drift=0.0002, vol=0.011)
+end
+
+function simulate_usd_irr(days::Int; current::Float64=186_000.0)
+    return build_series_from_current(current, days; drift=0.0007, vol=0.008)
+end
+
+function simulate_iran_gold(days::Int; current::Float64=18_500_000.0)
+    return build_series_from_current(current, days; drift=0.0005, vol=0.009)
+end
+
+function simulate_currency(sym::String, days::Int; current::Union{Nothing,Float64}=nothing)
+    base_prices = Dict(
+        "EUR" => 0.92, "GBP" => 0.79, "JPY" => 157.0,
+        "CHF" => 0.88, "AUD" => 1.53, "CAD" => 1.37,
+        "CNY" => 7.25, "TRY" => 32.5, "AED" => 3.67,
+        "RUB" => 89.0, "INR" => 83.5, "BRL" => 5.1, "NZD" => 1.65
+    )
+
+    base = current === nothing ? get(base_prices, sym, 1.0) : current
+    vol = sym in ["TRY", "RUB", "BRL"] ? 0.014 : 0.005
+    prices, _ = build_series_from_current(base, days; drift=0.0, vol=vol)
+    name_fa = get_persian_name(sym)
+    chg = length(prices) >= 2 ? (last(prices) - prices[end-1]) / prices[end-1] * 100.0 : 0.0
+
+    return CurrencyData(sym, name_fa, prices, last(prices), round(chg, digits=2))
+end
+
+# -----------------------------
+# open.er-api
+# -----------------------------
+function fetch_open_er_latest()
+    out = Dict{String, Float64}()
+    try
+        data = fetch_json("https://open.er-api.com/v6/latest/USD")
+        rates = data[:rates]
+
+        for sym in ["EUR","GBP","JPY","CHF","AUD","CAD","CNY","TRY","AED","RUB","INR","BRL","IRR"]
+            sk = Symbol(sym)
+            try
+                if haskey(rates, sk)
+                    out[sym] = Float64(rates[sk])
+                end
+            catch
+            end
+        end
+    catch e
+        @warn "خطا در open.er-api: $e"
+    end
+    return out
+end
+
+# -----------------------------
+# خواندن تاریخچه TGJU
+# data[row] format تقریبی:
+# [open, low, high, close, change, pct, gregorian_date, jalali_date]
+# -----------------------------
+function fetch_tgju_indicator_history(slugs::Vector{String}, days::Int; toman::Bool=false)
+    for slug in slugs
+        try
+            url = "https://api.tgju.org/v1/market/indicator/summary-table-data/$slug"
+            data = fetch_json(url)
+            rows = data[:data]
+
+            prices = Float64[]
+            dates = DateTime[]
+
+            for row in rows
+                rowlen = try
+                    length(row)
+                catch
+                    0
+                end
+
+                if rowlen < 7
+                    continue
+                end
+
+                val = clean_number(row[4])
+                if val === nothing
+                    val = clean_number(row[1])
+                end
+                if val === nothing
+                    continue
+                end
+
+                date_str = try
+                    string(row[7])
+                catch
+                    ""
+                end
+
+                if isempty(date_str)
+                    continue
+                end
+
+                dt = try
+                    DateTime(Date(date_str, dateformat"yyyy/mm/dd"))
+                catch
+                    continue
+                end
+
+                vf = Float64(val)
+                if toman
+                    vf = normalize_toman(vf)
+                end
+
+                push!(prices, vf)
+                push!(dates, dt)
+            end
+
+            if length(prices) < 5
+                error("داده کافی نیست")
+            end
+
+            idx = sortperm(dates)
+            prices = prices[idx]
+            dates = dates[idx]
+
+            n = min(days, length(prices))
+            return prices[end-n+1:end], dates[end-n+1:end], "TGJU:$slug"
+        catch e
+            @warn "خطا در TGJU برای $slug : $e"
+        end
+    end
+
+    error("هیچ endpoint معتبری از TGJU جواب نداد")
+end
+
+# -----------------------------
+# انس جهانی
+# -----------------------------
+function fetch_gold_history(days::Int=90)
+    try
+        return fetch_tgju_indicator_history(["ons", "ounce", "price_ons"], days; toman=false)
+    catch e
+        @warn "خطا در دریافت انس از TGJU: $e - fallback"
+        p, d = simulate_gold_prices(days)
+        return p, d, "SIMULATED"
+    end
+end
+
+# -----------------------------
+# دلار/تومان
+# -----------------------------
+function fetch_usd_irr(days::Int, latest_rates::Dict{String, Float64})
+    try
+        return fetch_tgju_indicator_history(["price_dollar_rl"], days; toman=true)
+    catch e
+        @warn "خطا در دریافت دلار TGJU: $e"
+
+        if haskey(latest_rates, "IRR")
+            current = normalize_toman(latest_rates["IRR"])
+            prices, dates = build_series_from_current(current, days; drift=0.0002, vol=0.004)
+            prices[end] = current
+            return prices, dates, "open.er-api IRR fallback"
+        end
+
+        prices, dates = simulate_usd_irr(days)
+        return prices, dates, "SIMULATED"
+    end
+end
+
+# -----------------------------
+# طلای 18 عیار ایران
+# -----------------------------
+function fetch_iran_gold(days::Int, gold_prices::Vector{Float64}, gold_dates::Vector{DateTime},
+                         usd_irr_prices::Vector{Float64})
+
+    try
+        return fetch_tgju_indicator_history(["geram18"], days; toman=true)
+    catch e
+        @warn "خطا در دریافت طلای 18 از TGJU: $e - fallback فرمولی"
+
+        n = min(length(gold_prices), length(usd_irr_prices))
+        gp = gold_prices[end-n+1:end]
+        gd = gold_dates[end-n+1:end]
+        up = usd_irr_prices[end-n+1:end]
+
+        theoretical = [gp[i] / 31.1035 * 0.75 * up[i] for i in 1:n]
+        prices = [theoretical[i] * 0.97 for i in 1:n]
+
+        return prices, gd, "formula-based fallback"
+    end
+end
+
+# -----------------------------
+# ارزهای جهانی
+# -----------------------------
+function fetch_currency_rates(symbols::Vector{String}, days::Int, latest_rates::Dict{String, Float64})
+    currencies = CurrencyData[]
+
+    start_date = Dates.format(today() - Day(days + 15), "yyyy-mm-dd")
+    end_date = Dates.format(today(), "yyyy-mm-dd")
+
+    price_map = Dict(sym => Float64[] for sym in symbols)
+    date_map = Dict(sym => DateTime[] for sym in symbols)
+
+    ok_provider = false
+
+    try
+        url = "https://api.frankfurter.app/$(start_date)..$(end_date)?from=USD&to=$(join(symbols, ","))"
+        data = fetch_json(url)
+        rates = data[:rates]
+
+        for (date_key, row) in pairs(rates)
+            dt = DateTime(Date(string(date_key)))
+
+            for sym in symbols
+                sk = Symbol(sym)
+                try
+                    if haskey(row, sk)
+                        push!(price_map[sym], Float64(row[sk]))
+                        push!(date_map[sym], dt)
+                    end
+                catch
+                end
+            end
+        end
+
+        ok_provider = true
+    catch e
+        @warn "خطا در Frankfurter: $e"
+    end
+
+    for sym in symbols
+        ps = price_map[sym]
+        ds = date_map[sym]
+
+        if length(ps) >= 5
+            idx = sortperm(ds)
+            prices = ps[idx]
+            dates = ds[idx]
+            chg = (last(prices) - prices[end-1]) / prices[end-1] * 100.0
+            push!(currencies, CurrencyData(sym, get_persian_name(sym), prices, last(prices), round(chg, digits=2)))
+        else
+            current = haskey(latest_rates, sym) ? latest_rates[sym] : nothing
+            push!(currencies, simulate_currency(sym, days; current=current))
+        end
+    end
+
+    provider = ok_provider ? "frankfurter.app + open.er-api fallback" : "open.er-api/simulated"
+    return currencies, provider
+end
+
+# -----------------------------
+# تابع اصلی
+# -----------------------------
+
+# -----------------------------
+# دریافت داده‌های کریپتو از Binance
+# -----------------------------
+function fetch_binance_klines(symbol::String, days::Int)
+    base_price = symbol == "BTCUSDT" ? 97000.0 : symbol == "ETHUSDT" ? 2650.0 : 175.0
+    limit = min(days, 1000)
+    url = "https://api.binance.com/api/v3/klines?symbol=$(symbol)&interval=1d&limit=$(limit)"
+    
+    # روش ۱: Downloads.download (سریع و مستقیم)
+    try
+        path = Downloads.download(url)
+        raw = read(path, String)
+        rm(path, force=true)
+        data = JSON3.read(raw)
+        
+        prices = Float64[]
+        dates = DateTime[]
+        for kline in data
+            p_close = parse(Float64, string(kline[5]))
+            ms = Int64(kline[1])
+            dt = DateTime(1970, 1, 1) + Millisecond(ms)
+            push!(prices, p_close)
+            push!(dates, dt)
+        end
+        
+        length(prices) >= 5 && return prices, dates, "Binance:$(symbol)"
+    catch e1
+        @warn "Binance Downloads.download failed for $(symbol): $(e1)"
+    end
+    
+    # روش ۲: CoinGecko API (Fallback رایگان)
+    try
+        cg_id = symbol == "BTCUSDT" ? "bitcoin" : symbol == "ETHUSDT" ? "ethereum" : "solana"
+        cg_url = "https://api.coingecko.com/api/v3/coins/$(cg_id)/market_chart?vs_currency=usd&days=$(min(days, 365))"
+        
+        path2 = Downloads.download(cg_url)
+        raw2 = read(path2, String)
+        rm(path2, force=true)
+        cg_data = JSON3.read(raw2)
+        
+        prices = Float64[]
+        dates = DateTime[]
+        for point in cg_data[:prices]
+            ms = Int64(point[1])
+            p = Float64(point[2])
+            dt = DateTime(1970, 1, 1) + Millisecond(ms)
+            push!(prices, p)
+            push!(dates, dt)
+        end
+        
+        length(prices) >= 5 && return prices, dates, "CoinGecko:$(cg_id)"
+    catch e2
+        @warn "CoinGecko also failed for $(symbol): $(e2)"
+    end
+    
+    # روش ۳: شبیه‌سازی (Fallback نهایی)
+    prices, dates = build_series_from_current(base_price, days; drift=0.0006, vol=0.022)
+    return prices, dates, "Simulated:$(symbol)"
+end
+
+function fetch_all_data(days::Int=90)
+    println("  [1/5] نرخ‌های لحظه‌ای جهانی...")
+    latest_rates = fetch_open_er_latest()
+    println("       تعداد نرخ‌ها: $(length(latest_rates))")
+
+    println("  [2/5] تاریخچه انس جهانی...")
+    gold_prices, gold_dates, gold_provider = fetch_gold_history(days)
+    println("       provider: $gold_provider | آخرین: $(round(last(gold_prices), digits=3)) USD")
+
+    println("  [3/5] تاریخچه ارزهای جهانی...")
+    important_currencies = ["EUR","GBP","JPY","CHF","AUD","CAD","CNY","TRY","AED","RUB","INR","BRL","NZD"]
+    currencies, curr_provider = fetch_currency_rates(important_currencies, days, latest_rates)
+    println("       provider: $curr_provider | تعداد: $(length(currencies))")
+
+    println("  [4/5] دلار/تومان...")
+    usd_irr_prices, usd_irr_dates, usd_provider = fetch_usd_irr(days, latest_rates)
+    println("       provider: $usd_provider | آخرین دلار: $(round(last(usd_irr_prices), digits=0)) تومان")
+
+    println("  [5/5] طلای 18 عیار ایران...")
+    iran_gold_prices, iran_gold_dates, iran_provider = fetch_iran_gold(days, gold_prices, gold_dates, usd_irr_prices)
+    println("       provider: $iran_provider | آخرین طلا: $(round(last(iran_gold_prices), digits=0)) تومان/گرم")
+
+    println("  [5b/5] دریافت داده‌های کریپتو از Binance...")
+    btc_p, btc_d, btc_prov = fetch_binance_klines("BTCUSDT", days)
+    eth_p, eth_d, eth_prov = fetch_binance_klines("ETHUSDT", days)
+    sol_p, sol_d, sol_prov = fetch_binance_klines("SOLUSDT", days)
+    println("       BTC: $(round(last(btc_p), digits=1)) | ETH: $(round(last(eth_p), digits=1)) | SOL: $(round(last(sol_p), digits=1))")
+
+    return Dict(
+        "gold_oz" => Dict("prices" => gold_prices, "dates" => gold_dates, "provider" => gold_provider),
+        "currencies" => currencies,
+        "usd_irr" => Dict("prices" => usd_irr_prices, "dates" => usd_irr_dates, "provider" => usd_provider),
+        "iran_gold" => Dict("prices" => iran_gold_prices, "dates" => iran_gold_dates, "provider" => iran_provider),
+        "btc" => Dict("prices" => btc_p, "dates" => btc_d, "provider" => btc_prov),
+        "eth" => Dict("prices" => eth_p, "dates" => eth_d, "provider" => eth_prov),
+        "sol" => Dict("prices" => sol_p, "dates" => sol_d, "provider" => sol_prov)
+    )
+end
+
+end

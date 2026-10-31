@@ -1,0 +1,228 @@
+module SetupDetector
+
+using Statistics, Dates
+
+export detect_setup, SetupResult
+
+struct SetupResult
+    symbol::String
+    bias::String            # BUY, SELL, NO_TRADE
+    setup_type::String
+    entry_low::Float64
+    entry_high::Float64
+    target1::Float64
+    target2::Float64
+    stop_loss::Float64
+    risk_reward::Float64
+    trade_quality::String   # A+, A, B, C, D
+    confidence::Float64     # 0-100 درصد اطمینان
+    trend_score::Float64
+    momentum_score::Float64
+    volatility_score::Float64
+    reasons_for::Vector{String}
+    reasons_against::Vector{String}
+    timeframe::String
+end
+
+function calculate_ema(prices::Vector{Float64}, period::Int)::Vector{Float64}
+    n = length(prices)
+    p = min(period, n)
+    ema = copy(prices)
+    p <= 1 && return ema
+    k = 2.0 / (p + 1.0)
+    ema[p] = mean(prices[1:p])
+    for i in (p + 1):n
+        ema[i] = prices[i] * k + ema[i-1] * (1.0 - k)
+    end
+    return ema
+end
+
+function calculate_rsi(prices::Vector{Float64}, period::Int=14)::Float64
+    n = length(prices)
+    p = min(period, n - 1)
+    p <= 2 && return 50.0
+    gains = 0.0
+    losses = 0.0
+    for i in (n - p + 1):n
+        diff = prices[i] - prices[i-1]
+        if diff > 0
+            gains += diff
+        else
+            losses -= diff
+        end
+    end
+    avg_gain = gains / p
+    avg_loss = losses / p
+    avg_loss == 0.0 && return 100.0
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1.0 + rs))
+end
+
+function calculate_macd(prices::Vector{Float64})::Tuple{Float64, Float64}
+    ema12 = calculate_ema(prices, 12)
+    ema26 = calculate_ema(prices, 26)
+    macd_line = ema12[end] - ema26[end]
+    macd_series = ema12 .- ema26
+    signal_line = calculate_ema(macd_series[max(1, end-15):end], 9)[end]
+    return macd_line, signal_line
+end
+
+function calculate_bollinger(prices::Vector{Float64}, period::Int=20)::Tuple{Float64, Float64, Float64}
+    n = length(prices)
+    p = min(period, n)
+    p <= 1 && return (prices[end], prices[end], prices[end])
+    sma = mean(prices[end-p+1:end])
+    std_dev = std(prices[end-p+1:end])
+    upper = sma + 2.0 * std_dev
+    lower = sma - 2.0 * std_dev
+    return (lower, sma, upper)
+end
+
+# ------------------------------------------------------------------
+# موتور تحلیلی هوشمند با ۶ شاخص + سیستم گرید و درصد اطمینان
+# ------------------------------------------------------------------
+function detect_setup(symbol::String, prices::Vector{Float64})::SetupResult
+    n = length(prices)
+    
+    if n < 5
+        return SetupResult(symbol, "NO_TRADE", "داده ناکافی", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "D", 0.0, 0.0, 0.0, 0.0, String[], String[], "1D")
+    end
+
+    last_price = prices[end]
+    
+    # محاسبه تمام اندیکاتورها
+    ema9 = calculate_ema(prices, 9)
+    ema21 = calculate_ema(prices, 21)
+    ema50 = calculate_ema(prices, 50)
+    rsi = calculate_rsi(prices, 14)
+    macd_line, macd_signal = calculate_macd(prices)
+    (bb_lower, bb_middle, bb_upper) = calculate_bollinger(prices, 20)
+    
+    std_dev = std(prices[max(1, n-20):end])
+    atr = max(std_dev, last_price * 0.005)
+    
+    # ================================================================
+    # سیستم امتیازدهی بولیش/بریش (Bullish/Bearish Scoring)
+    # ================================================================
+    bullish_score = 0
+    bearish_score = 0
+    reasons_for = String[]
+    reasons_against = String[]
+    
+    # ۱. تحلیل EMA (هم‌راستایی)
+    if last_price > ema9[end] && ema9[end] > ema21[end] && ema21[end] > ema50[end]
+        bullish_score += 3
+        push!(reasons_for, "هم‌راستایی کامل EMA (روند صعودی قوی)")
+    elseif last_price > ema21[end] && ema9[end] > ema21[end]
+        bullish_score += 2
+        push!(reasons_for, "EMA کوتاه‌مدت بالای میان‌مدت")
+    elseif last_price < ema9[end] && ema9[end] < ema21[end] && ema21[end] < ema50[end]
+        bearish_score += 3
+        push!(reasons_against, "هم‌راستایی کامل EMA (روند نزولی قوی)")
+    elseif last_price < ema21[end] && ema9[end] < ema21[end]
+        bearish_score += 2
+        push!(reasons_against, "EMA کوتاه‌مدت پایین میان‌مدت")
+    end
+    
+    # ۲. تحلیل RSI
+    if rsi < 30.0
+        bullish_score += 2
+        push!(reasons_for, "RSI در اشباع فروش ($(round(rsi, digits=1)))")
+    elseif rsi < 45.0
+        bullish_score += 1
+        push!(reasons_for, "RSI در ناحیه پولبک ($(round(rsi, digits=1)))")
+    elseif rsi > 70.0
+        bearish_score += 2
+        push!(reasons_against, "RSI در اشباع خرید ($(round(rsi, digits=1)))")
+    elseif rsi > 55.0
+        bearish_score += 1
+        push!(reasons_against, "RSI در ناحیه ریجکشن ($(round(rsi, digits=1)))")
+    end
+    
+    # ۳. تحلیل MACD
+    if macd_line > macd_signal && macd_line > 0
+        bullish_score += 2
+        push!(reasons_for, "MACD صعودی و بالای خط سیگنال")
+    elseif macd_line > macd_signal
+        bullish_score += 1
+        push!(reasons_for, "کراس صعودی MACD")
+    elseif macd_line < macd_signal && macd_line < 0
+        bearish_score += 2
+        push!(reasons_against, "MACD نزولی و پایین خط سیگنال")
+    elseif macd_line < macd_signal
+        bearish_score += 1
+        push!(reasons_against, "کراس نزولی MACD")
+    end
+    
+    # ۴. تحلیل Bollinger Bands
+    if last_price < bb_lower
+        bullish_score += 1
+        push!(reasons_for, "قیمت زیر باند پایین بولینگر")
+    elseif last_price > bb_upper
+        bearish_score += 1
+        push!(reasons_against, "قیمت بالای باند بالای بولینگر")
+    end
+    
+    # ================================================================
+    # تصمیم‌گیری نهایی و گرید‌بندی
+    # ================================================================
+    total_score = bullish_score + bearish_score
+    max_possible = 8.0
+    
+    bias = "NO_TRADE"
+    setup_type = "تحلیل رنج"
+    confidence = 50.0
+    
+    if bullish_score > bearish_score && bullish_score >= 2
+        bias = "BUY"
+        setup_type = "ستاپ خرید چند‌اندیکاتوره"
+        confidence = 50.0 + (bullish_score / max_possible) * 50.0
+        stop_loss = last_price - (atr * 1.5)
+        target1 = last_price + (atr * 2.5)
+        target2 = last_price + (atr * 4.0)
+    elseif bearish_score > bullish_score && bearish_score >= 2
+        bias = "SELL"
+        setup_type = "ستاپ فروش چند‌اندیکاتوره"
+        confidence = 50.0 + (bearish_score / max_possible) * 50.0
+        stop_loss = last_price + (atr * 1.5)
+        target1 = last_price - (atr * 2.5)
+        target2 = last_price - (atr * 4.0)
+    else
+        stop_loss = 0.0
+        target1 = 0.0
+        target2 = 0.0
+    end
+    
+    # گرید‌بندی کیفیت معامله
+    trade_quality = if confidence >= 85.0
+        "A+"
+    elseif confidence >= 75.0
+        "A"
+    elseif confidence >= 65.0
+        "B"
+    elseif confidence >= 55.0
+        "C"
+    else
+        "D"
+    end
+    
+    entry_low = last_price * 0.999
+    entry_high = last_price * 1.001
+    
+    risk = abs(last_price - stop_loss)
+    reward = abs(target1 - last_price)
+    rr_ratio = risk > 0.0 ? round(reward / risk, digits=2) : 0.0
+    
+    return SetupResult(
+        symbol, bias, setup_type,
+        entry_low, entry_high,
+        target1, target2, stop_loss, rr_ratio,
+        trade_quality, round(confidence, digits=1),
+        round((bullish_score + bearish_score) * 10.0, digits=1),
+        rsi, atr,
+        reasons_for, reasons_against,
+        "روزانه (1D)"
+    )
+end
+
+end

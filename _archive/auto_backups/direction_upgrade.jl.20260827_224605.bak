@@ -1,0 +1,292 @@
+﻿# ============================================================
+# Direction / Breakout / Ensemble Confidence Upgrade
+# ============================================================
+
+function _safe_pct_change(cur::Float64, prev::Float64)
+    return abs(prev) < 1e-12 ? 0.0 : (cur / prev - 1.0) * 100.0
+end
+
+function _dir_side(x::Float64, ref::Float64)
+    tol = max(abs(ref) * 0.0008, 1e-8)
+    return x > ref + tol ? 1 : x < ref - tol ? -1 : 0
+end
+
+function breakout_signal(prices::Vector{Float64}; lookback::Int=20)
+    n = length(prices)
+    if n < lookback + 2
+        return 0.0, "Breakout=N/A"
+    end
+
+    prev = prices[end-lookback:end-1]
+    cur = last(prices)
+    hi = maximum(prev)
+    lo = minimum(prev)
+
+    recent = prices[max(1, n-13):n]
+    atr = length(recent) >= 2 ? mean(abs.(diff(recent))) : 0.0
+    pad = max(cur * 0.0015, atr * 0.35)
+
+    if cur > hi + pad
+        return 0.020, "Breakout ↑ بالای $(round(hi,digits=1))"
+    elseif cur < lo - pad
+        return -0.020, "Breakout ↓ زیر $(round(lo,digits=1))"
+    else
+        dist = min(abs(cur - hi), abs(cur - lo)) / max(cur, 1e-10) * 100
+        return 0.0, "Range20d | فاصله تا لبه=$(round(dist,digits=2))%"
+    end
+end
+
+function direction_probability_gold(prices::Vector{Float64},
+                                    dxy::Float64, vix::Float64, us10y::Float64,
+                                    sentiment_score::Float64=0.0)
+    n = length(prices)
+    if n < 30
+        return 0.5, "NEUTRAL", 0.0, ["Direction model: data low"]
+    end
+
+    cur = last(prices)
+    signals = String[]
+    score = 0.0
+
+    # Momentum
+    r3  = n >= 4  ? _safe_pct_change(cur, prices[end-3])  : 0.0
+    r5  = n >= 6  ? _safe_pct_change(cur, prices[end-5])  : 0.0
+    r10 = n >= 11 ? _safe_pct_change(cur, prices[end-10]) : 0.0
+    r20 = n >= 21 ? _safe_pct_change(cur, prices[end-20]) : 0.0
+
+    score += clamp(r3  * 1.0, -5, 5)
+    score += clamp(r5  * 1.2, -6, 6)
+    score += clamp(r10 * 1.4, -8, 8)
+    score += clamp(r20 * 1.1, -10, 10)
+
+    # MA alignment
+    ma10 = n >= 10 ? mean(prices[end-9:end]) : mean(prices)
+    ma20 = n >= 20 ? mean(prices[end-19:end]) : mean(prices)
+    ma50 = n >= 50 ? mean(prices[end-49:end]) : mean(prices)
+
+    if ma10 > ma20
+        score += 5
+    else
+        score -= 5
+    end
+
+    if ma20 > ma50
+        score += 7
+    else
+        score -= 7
+    end
+
+    # RSI
+    rsi = calc_rsi(prices, 14)
+    if rsi > 78
+        score -= 8
+    elseif rsi > 65
+        score += 4
+    elseif rsi < 22
+        score += 9
+    elseif rsi < 35
+        score += 6
+    elseif rsi < 45
+        score -= 4
+    end
+
+    # MACD
+    _, _, hist = calc_macd(prices)
+    score += hist > 0 ? 6 : -6
+
+    # Z-score mean reversion
+    z, z_adj = zscore_signal(prices, 20)
+    if z > 2.0
+        score -= 8
+    elseif z < -2.0
+        score += 8
+    else
+        score += clamp(-z * 2.0, -4, 4)
+    end
+
+    # Breakout
+    br_adj, br_msg = breakout_signal(prices; lookback=20)
+    score += br_adj * 350
+    push!(signals, br_msg)
+
+    # Macro bias for gold
+    if dxy > 105
+        score -= 5
+    elseif dxy < 100
+        score += 4
+    end
+
+    if us10y > 4.8
+        score -= 4
+    elseif us10y < 3.5
+        score += 3
+    end
+
+    if vix > 25
+        score += 4
+    elseif vix < 13
+        score -= 1
+    end
+
+    # Sentiment
+    score += clamp(sentiment_score * 1.5, -6, 6)
+
+    # Probability
+    prob_up = 1.0 / (1.0 + exp(-score / 9.0))
+    label = prob_up > 0.56 ? "UP" : prob_up < 0.44 ? "DOWN" : "NEUTRAL"
+    strength = abs(prob_up - 0.5) * 2.0
+
+    label_fa = label == "UP" ? "تمایل صعودی" : label == "DOWN" ? "تمایل نزولی" : "خنثی"
+    pushfirst!(signals, "Bias: $label_fa | P↑=$(round(prob_up*100,digits=1))% | Score=$(round(score,digits=1))")
+
+    return prob_up, label, strength, signals
+end
+
+function model_agreement_boost(model_preds::Vector{Vector{Float64}}, last_price::Float64, dir_prob::Float64)
+    expected = dir_prob > 0.56 ? 1 : dir_prob < 0.44 ? -1 : 0
+
+    if expected == 0
+        return ones(Float64, length(model_preds))
+    end
+
+    boosts = Float64[]
+    for pred in model_preds
+        if isempty(pred) || !isfinite(pred[1])
+            push!(boosts, 0.90)
+            continue
+        end
+
+        side = _dir_side(pred[1], last_price)
+        if side == expected
+            push!(boosts, 1.18)
+        elseif side == 0
+            push!(boosts, 0.96)
+        else
+            push!(boosts, 0.72)
+        end
+    end
+
+    return boosts
+end
+
+function widen_band(point::Float64, low::Float64, high::Float64, event_risk::Float64)
+    if !isfinite(point) || !isfinite(low) || !isfinite(high)
+        return low, high
+    end
+    if event_risk <= 0
+        return low, high
+    end
+
+    width = max(point - low, high - point)
+    extra = max(width * 0.35, point * event_risk * 0.8)
+    return low - extra, high + extra
+end
+
+function ensemble_confidence(final_preds::Vector{Float64},
+                             base_confs::Vector{Float64},
+                             dir_prob::Float64,
+                             regime_conf::Float64,
+                             event_risk::Float64)
+    vals = [v for v in final_preds if isfinite(v)]
+    base = isempty(base_confs) ? 0.45 : clamp(mean(base_confs), 0.20, 0.90)
+
+    if isempty(vals)
+        conf = 0.75 * base + 0.25 * regime_conf - min(event_risk * 4.0, 0.08)
+        return clamp(conf, 0.35, 0.82)
+    end
+
+    mu = mean(abs.(vals))
+    disp = mu > 1e-10 ? std(vals) / mu : 0.0
+    agreement = 1.0 - clamp(disp / 0.04, 0.0, 0.60)
+    dir_conf = abs(dir_prob - 0.5) * 2.0
+
+    conf = 0.40 * base + 0.25 * agreement + 0.20 * dir_conf + 0.15 * regime_conf
+    conf -= min(event_risk * 4.0, 0.08)
+
+    return clamp(conf, 0.35, 0.82)
+end
+
+
+# ============================================================
+# Direction Model for USD/IRR
+# ============================================================
+
+function direction_probability_usd(usd_prices::Vector{Float64},
+                                    gold_prices::Vector{Float64},
+                                    dxy::Float64, vix::Float64,
+                                    sentiment_usd::Float64=0.0)
+    n = length(usd_prices)
+    if n < 20
+        return 0.5, "NEUTRAL", 0.0, ["USD Direction: data low"]
+    end
+
+    cur = last(usd_prices)
+    signals = String[]
+    score = 0.0
+
+    # Momentum USD
+    r3  = n >= 4  ? _safe_pct_change(cur, usd_prices[end-3])  : 0.0
+    r5  = n >= 6  ? _safe_pct_change(cur, usd_prices[end-5])  : 0.0
+    r10 = n >= 11 ? _safe_pct_change(cur, usd_prices[end-10]) : 0.0
+    r20 = n >= 21 ? _safe_pct_change(cur, usd_prices[end-20]) : 0.0
+
+    score += clamp(r3  * 0.8, -4, 4)
+    score += clamp(r5  * 1.0, -5, 5)
+    score += clamp(r10 * 1.2, -7, 7)
+    score += clamp(r20 * 0.9, -8, 8)
+
+    # MA alignment USD
+    ma10 = n >= 10 ? mean(usd_prices[end-9:end]) : mean(usd_prices)
+    ma20 = n >= 20 ? mean(usd_prices[end-19:end]) : mean(usd_prices)
+    ma50 = n >= 50 ? mean(usd_prices[end-49:end]) : mean(usd_prices)
+
+    if ma10 > ma20; score += 4; else; score -= 4; end
+    if ma20 > ma50; score += 5; else; score -= 5; end
+
+    # Z-score mean reversion USD
+    if n >= 20
+        mu = mean(usd_prices[end-19:end])
+        sigma = std(usd_prices[end-19:end])
+        if sigma > 1e-10
+            z = (cur - mu) / sigma
+            if z > 2.0; score -= 7
+            elseif z < -2.0; score += 7
+            else; score += clamp(-z * 1.5, -3, 3)
+            end
+        end
+    end
+
+    # Gold inverse correlation
+    if length(gold_prices) >= 10
+        g_chg = _safe_pct_change(last(gold_prices), gold_prices[end-min(9,length(gold_prices)-1)])
+        score += clamp(-g_chg * 0.3, -4, 4)
+    end
+
+    # DXY effect on IRR
+    if dxy > 106; score -= 3
+    elseif dxy < 100; score += 3
+    end
+
+    # VIX: high uncertainty can weaken IRR
+    if vix > 30; score += 3
+    elseif vix < 15; score -= 1
+    end
+
+    # Sentiment
+    score += clamp(sentiment_usd * 1.0, -4, 4)
+
+    # Breakout USD
+    br_adj, br_msg = breakout_signal(usd_prices; lookback=15)
+    score += br_adj * 250
+    push!(signals, "USD " * br_msg)
+
+    # Probability
+    prob_up = 1.0 / (1.0 + exp(-score / 8.0))
+    label = prob_up > 0.56 ? "UP" : prob_up < 0.44 ? "DOWN" : "NEUTRAL"
+
+    label_fa = label == "UP" ? "دلار صعودی" : label == "DOWN" ? "دلار نزولی" : "دلار خنثی"
+    pushfirst!(signals, "USD Bias: $label_fa | P↑=$(round(prob_up*100,digits=1))% | Score=$(round(score,digits=1))")
+
+    strength = abs(prob_up - 0.5) * 2.0
+    return prob_up, label, strength, signals
+end

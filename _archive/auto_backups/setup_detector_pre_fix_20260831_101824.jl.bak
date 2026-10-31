@@ -1,0 +1,280 @@
+﻿module SetupDetector
+
+using Statistics, LinearAlgebra
+
+export DivergenceSignal, MarketStructure, AdvancedSetup,
+       detect_divergence, analyze_structure, evaluate_advanced_confluence
+
+# ============================================================
+# Data Types
+# ============================================================
+
+struct DivergenceSignal
+    has_divergence::Bool
+    div_type::String          # "regular_bullish", "regular_bearish", "hidden_bullish", "hidden_bearish", "none"
+    strength::Float64         # 0.0 to 1.0
+    description_fa::String
+end
+
+struct MarketStructure
+    structure_type::String    # "bullish_trend", "bearish_trend", "range_bound", "structure_break_bull", "structure_break_bear"
+    phase::String             # "markup", "markdown", "accumulation", "distribution", "consolidation"
+    last_bos::String          # Break of structure note
+    swing_clarity::Float64    # 0.0 to 1.0
+    structure_fa::String
+end
+
+struct AdvancedSetup
+    quality_grade::String     # "A+", "A", "B", "C", "No Trade"
+    setup_name_fa::String     # "پولبک روند دار (A+)", "شکست ساختار معتبر", ...
+    confluence_score::Float64 # 0 to 100
+    divergence::DivergenceSignal
+    structure::MarketStructure
+    is_overextended::Bool
+    exhaustion_warning::String
+    recommended_rr::Float64
+    triggers::Vector{String}
+    cautions::Vector{String}
+end
+
+# ============================================================
+# 1. Divergence Detection Engine (Price vs RSI)
+# ============================================================
+
+function calc_rsi_series(prices::Vector{Float64}, period::Int=14)
+    n = length(prices)
+    n <= period && return fill(50.0, n)
+    rsi_vals = fill(50.0, n)
+    
+    for i in (period+1):n
+        ch = diff(prices[i-period:i])
+        ag = mean(max.(ch, 0.0))
+        al = mean(max.(-ch, 0.0))
+        rsi_vals[i] = al < 1e-15 ? 100.0 : 100.0 - 100.0 / (1.0 + ag/al)
+    end
+    return rsi_vals
+end
+
+function detect_divergence(prices::Vector{Float64}; lookback::Int=25)
+    n = length(prices)
+    if n < lookback + 5
+        return DivergenceSignal(false, "none", 0.0, "داده ناکافی برای واگرایی")
+    end
+
+    slice_p = prices[end-lookback+1:end]
+    rsi_all = calc_rsi_series(prices, 14)
+    slice_r = rsi_all[end-lookback+1:end]
+    
+    mid = div(lookback, 2)
+    p_half1 = slice_p[1:mid]; p_half2 = slice_p[mid+1:end]
+    r_half1 = slice_r[1:mid]; r_half2 = slice_r[mid+1:end]
+
+    p_low1, p_low2 = minimum(p_half1), minimum(p_half2)
+    p_high1, p_high2 = maximum(p_half1), maximum(p_half2)
+    
+    r_low1, r_low2 = minimum(r_half1), minimum(r_half2)
+    r_high1, r_high2 = maximum(r_half1), maximum(r_half2)
+
+    # 1. Regular Bullish Divergence: Price makes Lower Low, RSI makes Higher Low
+    if p_low2 < p_low1 * 0.998 && r_low2 > r_low1 + 2.0 && slice_r[end] < 45
+        str = min(1.0, (r_low2 - r_low1) / 10.0 + (p_low1 - p_low2)/p_low1 * 10.0)
+        return DivergenceSignal(true, "regular_bullish", round(str, digits=2), "واگرایی معمولی صعودی (RSI Higher Low + Price Lower Low)")
+    end
+
+    # 2. Regular Bearish Divergence: Price makes Higher High, RSI makes Lower High
+    if p_high2 > p_high1 * 1.002 && r_high2 < r_high1 - 2.0 && slice_r[end] > 55
+        str = min(1.0, (r_high1 - r_high2) / 10.0 + (p_high2 - p_high1)/p_high1 * 10.0)
+        return DivergenceSignal(true, "regular_bearish", round(str, digits=2), "واگرایی معمولی نزولی (RSI Lower High + Price Higher High)")
+    end
+
+    # 3. Hidden Bullish Divergence: Price makes Higher Low, RSI makes Lower Low (Trend continuation)
+    if p_low2 > p_low1 * 1.002 && r_low2 < r_low1 - 2.0 && slice_r[end] > 40
+        return DivergenceSignal(true, "hidden_bullish", 0.75, "واگرایی مخفی صعودی (ادامه پرقدرت روند صعودی)")
+    end
+
+    # 4. Hidden Bearish Divergence: Price makes Lower High, RSI makes Higher High
+    if p_high2 < p_high1 * 0.998 && r_high2 > r_high1 + 2.0 && slice_r[end] < 60
+        return DivergenceSignal(true, "hidden_bearish", 0.75, "واگرایی مخفی نزولی (ادامه پرقدرت روند نزولی)")
+    end
+
+    return DivergenceSignal(false, "none", 0.0, "فاقد واگرایی فعال")
+end
+
+# ============================================================
+# 2. Market Structure & Price Action Analysis
+# ============================================================
+
+function analyze_structure(prices::Vector{Float64}; window::Int=30)
+    n = length(prices)
+    if n < window
+        return MarketStructure("range_bound", "consolidation", "N/A", 0.3, "محدوده رنج نامشخص")
+    end
+
+    slice = prices[end-window+1:end]
+    cur = last(prices)
+    
+    # 3-segment swing structure
+    seg = div(window, 3)
+    p1 = slice[1:seg]
+    p2 = slice[seg+1:2seg]
+    p3 = slice[2seg+1:end]
+
+    h1, h2, h3 = maximum(p1), maximum(p2), maximum(p3)
+    l1, l2, l3 = minimum(p1), minimum(p2), minimum(p3)
+
+    is_hh_hl = (h3 > h2 >= h1) && (l3 > l2 >= l1)
+    is_lh_ll = (h3 < h2 <= h1) && (l3 < l2 <= l1)
+
+    # Break of structure (BOS)
+    bos_bull = cur > maximum(slice[1:end-3]) * 1.001
+    bos_bear = cur < minimum(slice[1:end-3]) * 0.999
+
+    if is_hh_hl
+        return MarketStructure("bullish_trend", "markup", "توالی سقف‌ها و کف‌های بالاتر (HH/HL)", 0.85, "روند صعودی ساختاریافته (Bullish Trend)")
+    elseif is_lh_ll
+        return MarketStructure("bearish_trend", "markdown", "توالی سقف‌ها و کف‌های پایین‌تر (LH/LL)", 0.85, "روند نزولی ساختاریافته (Bearish Trend)")
+    elseif bos_bull
+        return MarketStructure("structure_break_bull", "markup", "شکست ساختار به سمت بالا (Bullish BOS)", 0.75, "شکست ساختار صعودی (BOS Up)")
+    elseif bos_bear
+        return MarketStructure("structure_break_bear", "markdown", "شکست ساختار به سمت پایین (Bearish BOS)", 0.75, "شکست ساختار نزولی (BOS Down)")
+    else
+        return MarketStructure("range_bound", "consolidation", "نوسان در محدوده سقف و کف رنج", 0.5, "تراکم و رنج بدون شکست (Range Consolidation)")
+    end
+end
+
+# ============================================================
+# 3. Advanced Confluence Evaluator
+# ============================================================
+
+function evaluate_advanced_confluence(
+    symbol::String,
+    prices::Vector{Float64},
+    bias::String,
+    raw_score::Float64,
+    strength_gap::Float64,
+    mtf_confluence::Float64,
+    mtf_bias::String,
+    dist_to_s::Float64,
+    dist_to_r::Float64,
+    pos_in_range::Float64
+)
+    n = length(prices)
+    cur = last(prices)
+
+    div_sig = detect_divergence(prices; lookback=min(30, n-1))
+    struct_info = analyze_structure(prices; window=min(40, n))
+
+    triggers = String[]
+    cautions = String[]
+    confluence = 0.0
+
+    # Overextension filter (کشش بیش از حد)
+    rsi_vals = calc_rsi_series(prices, 14)
+    last_rsi = rsi_vals[end]
+    is_overextended = false
+    exhaust_msg = "وضعیت تعادلی"
+
+    if bias == "long" && (last_rsi > 78.0 || pos_in_range > 0.88)
+        is_overextended = true
+        exhaust_msg = "اشباع خرید شدید و چسبیده به سقف رنج (ریسک ورود لانگ)"
+        push!(cautions, exhaust_msg)
+    elseif bias == "short" && (last_rsi < 22.0 || pos_in_range < 0.12)
+        is_overextended = true
+        exhaust_msg = "اشباع فروش شدید و چسبیده به کف رنج (ریسک ورود شورت)"
+        push!(cautions, exhaust_msg)
+    end
+
+    # Confluence factor 1: Strength gap
+    if abs(strength_gap) > 1.2
+        confluence += 25.0
+        push!(triggers, "شکاف قدرت استثنایی بین دو ارز ($(round(abs(strength_gap), digits=2)))")
+    elseif abs(strength_gap) > 0.6
+        confluence += 15.0
+        push!(triggers, "برتری واضح قدرت ارز پایه نسبت به متقابل")
+    end
+
+    # Confluence factor 2: MTF Alignment
+    if (bias == "long" && mtf_bias == "bullish") || (bias == "short" && mtf_bias == "bearish")
+        confluence += mtf_confluence * 25.0
+        push!(triggers, "هم‌راستایی کامل تایم‌فریم‌های فرعی و اصلی ($(round(Int, mtf_confluence*100))%)")
+    elseif (bias == "long" && mtf_bias == "bearish") || (bias == "short" && mtf_bias == "bullish")
+        confluence -= 20.0
+        push!(cautions, "تضاد شدید جهت تایم‌فریم‌های بلندمدت با ستاپ")
+    end
+
+    # Confluence factor 3: Market Structure Confirmation
+    if bias == "long" && (struct_info.structure_type in ["bullish_trend", "structure_break_bull"])
+        confluence += 20.0
+        push!(triggers, struct_info.structure_fa)
+    elseif bias == "short" && (struct_info.structure_type in ["bearish_trend", "structure_break_bear"])
+        confluence += 20.0
+        push!(triggers, struct_info.structure_fa)
+    end
+
+    # Confluence factor 4: Divergence confirmation or warning
+    if div_sig.has_divergence
+        if (bias == "long" && div_sig.div_type in ["regular_bullish", "hidden_bullish"]) ||
+           (bias == "short" && div_sig.div_type in ["regular_bearish", "hidden_bearish"])
+            confluence += 15.0
+            push!(triggers, div_sig.description_fa)
+        else
+            confluence -= 25.0
+            push!(cautions, "هشدار واگرایی خلاف جهت: " * div_sig.description_fa)
+        end
+    end
+
+    # Confluence factor 5: Location / S&R Distance
+    if bias == "long" && dist_to_s < 0.6 && dist_to_r > 0.8
+        confluence += 15.0
+        push!(triggers, "موقعیت ورود طلایی بر روی حمایت با فضای رشد تا مقاومت")
+    elseif bias == "short" && dist_to_r < 0.6 && dist_to_s > 0.8
+        confluence += 15.0
+        push!(triggers, "موقعیت ورود طلایی زیر مقاومت با فضای افت تا حمایت")
+    end
+
+    total_conf = clamp(confluence, 0.0, 100.0)
+
+    # Classification & Grading
+    grade = "No Trade"
+    setup_name = "موقعیت نامعتبر"
+    rr = 1.2
+
+    if bias != "neutral" && !is_overextended
+        if total_conf >= 75.0 && abs(strength_gap) >= 0.8
+            grade = "A+"
+            setup_name = bias == "long" ? "💎 سوپر ستاپ پولبک رونددار خرید (A+)" : "💎 سوپر ستاپ پولبک رونددار فروش (A+)"
+            rr = 2.2
+        elseif total_conf >= 60.0
+            grade = "A"
+            setup_name = bias == "long" ? "تأیید روند صعودی پرایس اکشن (A)" : "تأیید روند نزولی پرایس اکشن (A)"
+            rr = 1.8
+        elseif total_conf >= 45.0
+            grade = "B"
+            setup_name = "معامله نوسان‌گیری با ریسک نرمال (B)"
+            rr = 1.5
+        elseif total_conf >= 30.0
+            grade = "C"
+            setup_name = "نوسان‌گیری محتاطانه کف/سقف رنج (C)"
+            rr = 1.3
+        end
+    else
+        if is_overextended
+            push!(cautions, "فیلتر خستگی مانع از صدور ترید در این قیمت شد")
+        end
+    end
+
+    return AdvancedSetup(
+        grade,
+        setup_name,
+        round(total_conf, digits=1),
+        div_sig,
+        struct_info,
+        is_overextended,
+        exhaust_msg,
+        rr,
+        triggers,
+        cautions
+    )
+end
+
+end

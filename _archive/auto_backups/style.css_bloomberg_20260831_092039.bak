@@ -1,0 +1,616 @@
+/* ================================================================
+   🎨 استایل فاخر ایرانی - Persian Elegance
+   Gold Predictor v5.0
+   ================================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-main: #F5F1E8;
+    --bg-panel: #FFFFFF;
+    --bg-secondary: #FBF8F1;
+    --text-primary: #2C3E50;
+    --text-secondary: #5D6D7E;
+    --text-light: #7F8C8D;
+    --gold: #C9A961;
+    --gold-dark: #A08650;
+    --gold-light: #E5C989;
+    --turquoise: #40826D;
+    --turquoise-dark: #2E5F51;
+    --lapis: #264653;
+    --burgundy: #8B3A3A;
+    --green-up: #2E7D5B;
+    --red-down: #C0392B;
+    --border-color: #E5DED0;
+    --shadow-soft: 0 2px 8px rgba(139, 111, 71, 0.08);
+    --shadow-medium: 0 4px 16px rgba(139, 111, 71, 0.12);
+    --shadow-strong: 0 8px 32px rgba(139, 111, 71, 0.18);
+}
+
+html { direction: rtl; }
+
+body {
+    font-family: 'Vazirmatn', Tahoma, sans-serif;
+    background: var(--bg-main);
+    background-image: 
+        radial-gradient(circle at 20% 20%, rgba(201, 169, 97, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(64, 130, 109, 0.05) 0%, transparent 50%);
+    color: var(--text-primary);
+    line-height: 1.7;
+    min-height: 100vh;
+    padding-bottom: 40px;
+}
+
+/* ================================================================
+   🌟 هدر فاخر با نقش اسلیمی
+   ================================================================ */
+.persian-header {
+    background: linear-gradient(135deg, #FBF8F1 0%, #F5F1E8 100%);
+    border-bottom: 3px double var(--gold);
+    box-shadow: var(--shadow-medium);
+    padding: 12px 32px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.header-ornament {
+    color: var(--gold);
+    font-size: 28px;
+    opacity: 0.5;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-grow: 1;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.brand-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-icon {
+    font-size: 42px;
+    color: var(--gold);
+    text-shadow: 0 2px 4px rgba(201, 169, 97, 0.3);
+    animation: gentleRotate 30s linear infinite;
+}
+
+@keyframes gentleRotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.brand-title h1 {
+    font-size: 22px;
+    color: var(--lapis);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.brand-title p {
+    font-size: 12px;
+    color: var(--text-light);
+    margin-top: 2px;
+}
+
+/* منوی ناوبری */
+.persian-nav {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-secondary);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.nav-btn {
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.3s ease;
+}
+
+.nav-btn:hover {
+    background: rgba(201, 169, 97, 0.1);
+    color: var(--gold-dark);
+}
+
+.nav-btn.active {
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    color: white;
+    box-shadow: 0 2px 8px rgba(201, 169, 97, 0.4);
+}
+
+.nav-icon {
+    font-size: 16px;
+}
+
+/* ابزارک‌های سمت چپ هدر */
+.header-widgets {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.live-clock {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-secondary);
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    color: var(--turquoise);
+    font-weight: 600;
+    font-size: 14px;
+    direction: ltr;
+    min-width: 90px;
+    justify-content: center;
+}
+
+.clock-icon {
+    color: var(--gold);
+    font-size: 16px;
+}
+
+.refresh-btn {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, var(--turquoise), var(--turquoise-dark));
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(64, 130, 109, 0.3);
+}
+
+.refresh-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(64, 130, 109, 0.5);
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-light);
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--green-up);
+    box-shadow: 0 0 8px var(--green-up);
+    animation: pulseLive 1.5s infinite alternate;
+}
+
+@keyframes pulseLive {
+    0% { opacity: 0.5; transform: scale(1); }
+    100% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ================================================================
+   ⚠️ بنر هشدار
+   ================================================================ */
+.alert-banner {
+    margin: 20px 32px 0 32px;
+    padding: 12px 20px;
+    background: linear-gradient(90deg, rgba(201, 169, 97, 0.15), rgba(201, 169, 97, 0.05));
+    border-right: 4px solid var(--gold);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--gold-dark);
+    font-weight: 500;
+    box-shadow: var(--shadow-soft);
+}
+
+.alert-icon {
+    font-size: 20px;
+}
+
+/* ================================================================
+   📄 محتوای اصلی
+   ================================================================ */
+.main-container {
+    max-width: 1600px;
+    margin: 24px auto;
+    padding: 0 32px;
+}
+
+.page-section {
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.section-title {
+    text-align: center;
+    margin-bottom: 32px;
+    padding: 24px 20px;
+    background: var(--bg-panel);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-soft);
+    position: relative;
+    overflow: hidden;
+}
+
+.section-title::before,
+.section-title::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 80px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    transform: translateY(-50%);
+}
+
+.section-title::before { right: 20px; }
+.section-title::after { left: 20px; }
+
+.title-ornament {
+    font-size: 32px;
+    color: var(--gold);
+    margin-bottom: 8px;
+}
+
+.section-title h2 {
+    font-size: 24px;
+    color: var(--lapis);
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.section-title p {
+    color: var(--text-light);
+    font-size: 13px;
+}
+
+/* ================================================================
+   📊 گرید ویجت‌ها و کارت‌ها
+   ================================================================ */
+.widget-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.dual-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+    .dual-panel { grid-template-columns: 1fr; }
+}
+
+.kpi-card {
+    background: var(--bg-panel);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-soft);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.kpi-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--gold), transparent);
+    opacity: 0.15;
+    border-bottom-left-radius: 40px;
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-medium);
+    border-color: var(--gold);
+}
+
+.kpi-card h4 {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.kpi-card .value {
+    font-size: 22px;
+    color: var(--lapis);
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+}
+
+.source-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(64, 130, 109, 0.1);
+    color: var(--turquoise);
+    border: 1px solid rgba(64, 130, 109, 0.2);
+    margin-top: 4px;
+}
+
+/* ================================================================
+   🎨 پنل‌های ویجت
+   ================================================================ */
+.widget-panel {
+    background: var(--bg-panel);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-soft);
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.panel-header {
+    padding: 16px 20px;
+    background: linear-gradient(90deg, rgba(201, 169, 97, 0.08), transparent);
+    border-bottom: 2px solid var(--gold);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.panel-header h3 {
+    font-size: 16px;
+    color: var(--lapis);
+    font-weight: 700;
+}
+
+.panel-icon {
+    font-size: 20px;
+}
+
+.chart-wrapper {
+    padding: 20px;
+    height: 300px;
+    position: relative;
+}
+
+.chart-wrapper.large {
+    height: 400px;
+}
+
+.chart-wrapper canvas {
+    max-height: 100%;
+}
+
+/* ================================================================
+   🔥 نقشه حرارتی
+   ================================================================ */
+.heatmap-grid {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.heatmap-card {
+    background: var(--bg-secondary);
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.heatmap-card h4 {
+    font-size: 14px;
+    color: var(--lapis);
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+/* ================================================================
+   ✧ رژیم بازار و ستاپ‌ها
+   ================================================================ */
+.regime-widget {
+    padding: 20px;
+}
+
+.regime-card {
+    background: var(--bg-secondary);
+    padding: 16px;
+    border-radius: 8px;
+    border-right: 4px solid var(--turquoise);
+}
+
+.regime-card h4 {
+    color: var(--lapis);
+    margin-bottom: 10px;
+}
+
+.regime-card p {
+    color: var(--text-secondary);
+    margin: 4px 0;
+    font-size: 14px;
+}
+
+.regime-card ul {
+    margin-top: 8px;
+    padding-right: 18px;
+}
+
+.regime-card li {
+    color: var(--gold-dark);
+    font-size: 13px;
+    margin: 2px 0;
+}
+
+.setups-container {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.setup-card {
+    background: var(--bg-secondary);
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    border-right: 4px solid var(--gold);
+    transition: all 0.3s;
+}
+
+.setup-card:hover {
+    box-shadow: var(--shadow-medium);
+    transform: translateY(-2px);
+}
+
+.setup-card h4 {
+    color: var(--lapis);
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+
+.setup-card p {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin: 2px 0;
+}
+
+.setup-mini {
+    background: var(--bg-secondary);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    border-right: 3px solid var(--turquoise);
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+/* ================================================================
+   🎯 کارت پیش‌بینی
+   ================================================================ */
+.pred-card {
+    background: var(--bg-panel);
+    padding: 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    border-top: 3px solid var(--gold);
+    box-shadow: var(--shadow-soft);
+}
+
+.pred-card h4 {
+    color: var(--lapis);
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.pred-card p {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 4px 0;
+}
+
+/* ================================================================
+   📋 جدول‌های فاخر
+   ================================================================ */
+.table-wrapper {
+    padding: 20px;
+    overflow-x: auto;
+}
+
+.persian-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.persian-table th {
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    color: white;
+    padding: 12px;
+    text-align: right;
+    font-weight: 600;
+}
+
+.persian-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.persian-table tr:hover {
+    background: var(--bg-secondary);
+}
+
+/* ================================================================
+   ✦ فوتر
+   ================================================================ */
+.persian-footer {
+    text-align: center;
+    padding: 30px 20px;
+    color: var(--text-light);
+    font-size: 12px;
+    margin-top: 40px;
+    border-top: 2px solid var(--border-color);
+}
+
+.footer-ornament {
+    color: var(--gold);
+    font-size: 20px;
+    letter-spacing: 8px;
+    margin-bottom: 8px;
+}
+
+/* ================================================================
+   📱 ریسپانسیو
+   ================================================================ */
+@media (max-width: 1200px) {
+    .persian-nav { flex-wrap: wrap; }
+}
+
+@media (max-width: 768px) {
+    .persian-header { padding: 10px 16px; flex-direction: column; }
+    .main-container { padding: 0 12px; }
+    .widget-grid { grid-template-columns: 1fr 1fr; }
+    .heatmap-grid { grid-template-columns: 1fr; }
+}

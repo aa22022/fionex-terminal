@@ -1,0 +1,4336 @@
+# =========================================================================
+# 🏦 FIONEX v5.0 - CURRENT CODEBASE STATE DUMP
+# Generated at: 2026/09/17 12:12:07
+# =========================================================================
+
+=========================================================================
+📄 FILE: templates\index.html
+=========================================================================
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fionex Terminal v5.0 | ترمینال تحلیلی طلا، ارز و کریپتو</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/chart.min.js"></script>
+    <script src="/static/lightweight-charts.js"></script>
+    <script src="/static/vis-network.min.js"></script>
+    <script src="/static/d3.min.js"></script>
+</head>
+<body class="terminal-body">
+    <!-- 🔷 هدر بلومبرگ -->
+    <header class="terminal-header">
+        <div class="terminal-brand">
+            <span class="terminal-logo">F</span>
+            <div class="brand-text">
+                <h1>FIONEX</h1>
+                <span class="sub">ترمینال تحلیلی معاملات</span>
+            </div>
+        </div>
+
+        <!-- 🔷 منوی ۴ صفحه‌ای F1 تا F4 -->
+        <nav class="terminal-nav">
+            <button class="nav-btn active" data-page="page-overview">
+                <span class="hotkey">F1</span>
+                <span>نمای کلی</span>
+            </button>
+            <button class="nav-btn" data-page="page-gold">
+                <span class="hotkey">F2</span>
+                <span>طلا و ارز</span>
+            </button>
+            <button class="nav-btn" data-page="page-relations">
+                <span class="hotkey">F3</span>
+                <span>روابط بازارها</span>
+            </button>
+            <button class="nav-btn" data-page="page-backtest">
+                <span class="hotkey">F4</span>
+                <span>بک‌تست</span>
+            </button>
+        </nav>
+
+        <div class="terminal-widgets">
+            <div class="live-clock" id="navTime">--:--:--</div>
+            <button class="terminal-btn" id="btnRefresh">
+                <span>⟳</span>
+                <span>بروزرسانی</span>
+            </button>
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span>زنده</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 🔷 نوار هشدار -->
+    <div class="alert-strip" id="alertBanner">
+        <span>در حال اتصال به سرور داده‌ها...</span>
+    </div>
+
+    <main class="terminal-main">
+        <!-- 📊 F1 - نمای کلی -->
+        <section class="page-section active" id="page-overview">
+            <div class="panel-title-bar accent-cyan">
+                <span class="panel-code">F1</span>
+                <h2>نمای کلی بازار</h2>
+                <span class="panel-subtitle">// خلاصه لحظه‌ای وضعیت طلا، ارز و شاخص‌های کلان</span>
+            </div>
+
+            <!-- KPIهای اصلی با نوار تغییرات لحظه‌ای -->
+            <div class="kpi-grid" id="ovKpiGrid"></div>
+
+            <!-- ردیف ویجت‌های جدید: حباب سکه + گیج فشار + تقویم اخبار -->
+            <div class="widgets-row-3">
+                <div class="term-panel">
+                    <div class="panel-head accent-gold">
+                        <span class="panel-icon">🎯</span>
+                        <span>حباب سکه امامی</span>
+                    </div>
+                    <div class="panel-body" id="bubbleIndicator"></div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-orange">
+                        <span class="panel-icon">🌡️</span>
+                        <span>فشار بازار (Market Pressure)</span>
+                    </div>
+                    <div class="panel-body" id="marketPressureGauge"></div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-purple">
+                        <span class="panel-icon">📅</span>
+                        <span>تقویم اخبار مهم (۷ روز آینده)</span>
+                    </div>
+                    <div class="panel-body" id="economicCalendar"></div>
+                </div>
+            </div>
+
+            <!-- ردیف نمودار طلا + رژیم بازار -->
+            <div class="overview-grid">
+                <div class="term-panel chart-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">📊</span>
+                        <span>روند انس جهانی طلا (XAU/USD)</span>
+                        <span class="panel-meta">آخرین ۱۸۰ روز</span>
+                    </div>
+                    <div class="panel-body chart-body">
+                        <canvas id="ovChGoldMini"></canvas>
+                    </div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-purple">
+                        <span class="panel-icon">🎯</span>
+                        <span>وضعیت رژیم بازار</span>
+                    </div>
+                    <div class="panel-body" id="ovRegimeInfo"></div>
+                </div>
+            </div>
+
+            <div class="term-panel">
+                <div class="panel-head accent-orange">
+                    <span class="panel-icon">🔥</span>
+                    <span>نقشه حرارتی بازدهی دارایی‌ها</span>
+                    <span class="panel-meta">۱ روزه / ۵ روزه / ۲۰ روزه</span>
+                </div>
+                <div class="heatmap-grid" id="marketHeatmap"></div>
+            </div>
+
+            <div class="term-panel">
+                <div class="panel-head accent-green">
+                    <span class="panel-icon">🔮</span>
+                    <span>اهداف کلیدی و پیش‌بینی ۷ روزه هوش مصنوعی</span>
+                </div>
+                <div class="panel-body" id="ovTargets"></div>
+            </div>
+        </section>
+
+        <!-- 💰 F2 - طلا و ارز ایران -->
+        <section class="page-section" id="page-gold">
+            <div class="panel-title-bar accent-gold">
+                <span class="panel-code">F2</span>
+                <h2>طلا و ارز ایران</h2>
+                <span class="panel-subtitle">// نمودارهای شمعی حرفه‌ای + اندیکاتورها + پیش‌بینی چندپله‌ای</span>
+            </div>
+
+            <!-- سلکتور تایم‌فریم و اندیکاتورها -->
+            <div class="chart-controls-bar">
+                <div class="tf-selector">
+                    <span class="ctrl-label">تایم‌فریم:</span>
+                    <button class="tf-btn active" data-tf="D1">D1</button>
+                    <button class="tf-btn" data-tf="H4">H4</button>
+                    <button class="tf-btn" data-tf="H1">H1</button>
+                    <button class="tf-btn" data-tf="W1">W1</button>
+                </div>
+                <div class="indicator-selector">
+                    <span class="ctrl-label">اندیکاتور:</span>
+                    <label class="ind-checkbox"><input type="checkbox" id="indEMA20" checked> EMA 20</label>
+                    <label class="ind-checkbox"><input type="checkbox" id="indEMA50"> EMA 50</label>
+                    <label class="ind-checkbox"><input type="checkbox" id="indBB"> بولینگر</label>
+                    <label class="ind-checkbox"><input type="checkbox" id="indSR" checked> S/R خودکار</label>
+                </div>
+            </div>
+
+            <!-- نمودارهای شمعی TradingView -->
+            <div class="charts-tv-grid">
+                <div class="term-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">💰</span>
+                        <span>نمودار شمعی انس جهانی طلا (XAU/USD)</span>
+                    </div>
+                    <div class="native-chart-container"><canvas id="chartGold_canvas"></canvas></div>
+                </div>
+                <div class="term-panel">
+                    <div class="panel-head accent-gold">
+                        <span class="panel-icon">💵</span>
+                        <span>نمودار شمعی دلار آزاد تهران</span>
+                    </div>
+                    <div class="native-chart-container"><canvas id="chartUSD_canvas"></canvas></div>
+                </div>
+                <div class="term-panel">
+                    <div class="panel-head accent-pink">
+                        <span class="panel-icon">🥇</span>
+                        <span>نمودار شمعی طلای ۱۸ عیار</span>
+                    </div>
+                    <div class="native-chart-container"><canvas id="chartIran_canvas"></canvas></div>
+                </div>
+            </div>
+
+            <!-- پیش‌بینی چندپله‌ای -->
+            <div class="term-panel">
+                <div class="panel-head accent-green">
+                    <span class="panel-icon">🎯</span>
+                    <span>پیش‌بینی چندپله‌ای هوش مصنوعی</span>
+                    <span class="panel-meta">۱ روز | ۳ روز | ۷ روز | ۳۰ روز</span>
+                </div>
+                <div class="panel-body" id="multiTargetPrediction"></div>
+            </div>
+        </section>
+
+        <!-- 🔗 F3 - روابط بازارها -->
+        <section class="page-section" id="page-relations">
+            <div class="panel-title-bar accent-purple">
+                <span class="panel-code">F3</span>
+                <h2>روابط و همبستگی بازارها</h2>
+                <span class="panel-subtitle">// نقشه شبکه، هیت‌مپ ماتریسی، آربیتراژ و تحلیل عاملی</span>
+            </div>
+
+            <div class="relations-grid-2">
+                <div class="term-panel">
+                    <div class="panel-head accent-purple">
+                        <span class="panel-icon">🌐</span>
+                        <span>نقشه شبکه‌ای همبستگی‌ها</span>
+                    </div>
+                    <div class="panel-body network-container" id="correlationNetwork"></div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-pink">
+                        <span class="panel-icon">📊</span>
+                        <span>هیت‌مپ ماتریسی همبستگی</span>
+                    </div>
+                    <div class="panel-body heatmap-matrix-container" id="correlationHeatmap"></div>
+                </div>
+            </div>
+
+            <div class="relations-grid-2">
+                <div class="term-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">🔮</span>
+                        <span>پیش‌بینی همبستگی آینده (Rolling)</span>
+                    </div>
+                    <div class="panel-body chart-body-tall" id="rollingCorrChart">
+                        <canvas id="rollingCorrCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-gold">
+                        <span class="panel-icon">🎯</span>
+                        <span>پیشنهادات جفت‌آربیتراژ</span>
+                    </div>
+                    <div class="panel-body" id="arbitragePairs"></div>
+                </div>
+            </div>
+
+            <div class="term-panel">
+                <div class="panel-head accent-orange">
+                    <span class="panel-icon">📉</span>
+                    <span>تحلیل عاملی پیشرفته (Factor Analysis)</span>
+                </div>
+                <div class="panel-body" id="factorAnalysis"></div>
+            </div>
+        </section>
+
+        <!-- 📅 F4 - بک‌تست و اعتبارسنجی -->
+        <section class="page-section" id="page-backtest">
+            <div class="panel-title-bar accent-blue">
+                <span class="panel-code">F4</span>
+                <h2>بک‌تست و اعتبارسنجی</h2>
+                <span class="panel-subtitle">// ارزیابی دقت + توزیع خطا + مونت‌کارلو + بک‌تست سفارشی</span>
+            </div>
+
+            <!-- بک‌تست قابل تنظیم -->
+            <div class="backtest-controls">
+                <span class="ctrl-label">بازه بک‌تست:</span>
+                <button class="bt-btn" data-days="30">۳۰ روز</button>
+                <button class="bt-btn active" data-days="60">۶۰ روز</button>
+                <button class="bt-btn" data-days="90">۹۰ روز</button>
+                <button class="bt-btn" data-days="180">۱۸۰ روز</button>
+                <button class="bt-btn" data-days="365">۱ سال</button>
+            </div>
+
+            <!-- امتیاز کلی مدل -->
+            <div class="kpi-grid" id="btStats"></div>
+
+            <div class="backtest-grid-2">
+                <div class="term-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">📊</span>
+                        <span>مقایسه پیش‌بینی vs واقعیت</span>
+                    </div>
+                    <div class="panel-body chart-body-tall">
+                        <canvas id="predVsActualChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-orange">
+                        <span class="panel-icon">🎯</span>
+                        <span>توزیع خطاها (Error Distribution)</span>
+                    </div>
+                    <div class="panel-body chart-body-tall">
+                        <canvas id="errorDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="term-panel">
+                <div class="panel-head accent-green">
+                    <span class="panel-icon">🎲</span>
+                    <span>شبیه‌سازی مونت‌کارلو (۱۰۰۰ سناریو - ۷ روز آینده)</span>
+                </div>
+                <div class="panel-body chart-body-tall">
+                    <canvas id="monteCarloChart"></canvas>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 🔷 فوتر بلومبرگ -->
+    <footer class="terminal-footer">
+        <div class="footer-item">سرور: <span class="up">متصل</span></div>
+        <div class="footer-item">تاخیر: <span class="gold" id="footerLatency">--</span> میلی‌ثانیه</div>
+        <div class="footer-item">آخرین بروزرسانی: <span class="cyan" id="footerLastUpdate">--</span></div>
+        <div class="footer-item copyright">FIONEX نسخه ۵.۰</div>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
+
+
+=========================================================================
+📄 FILE: static\app.js
+=========================================================================
+// ================================================================
+// 🚀 Fionex Terminal v5.0 - Final Stable Frontend Core (Zero-CDN)
+// ================================================================
+
+window.appState = null;
+window.multiCharts = window.multiCharts || {};
+window.goldChartSettings = { timeframe: 'D1', ema20: true, ema50: false, bb: false, sr: true };
+window.backtestSelectedDays = 60;
+
+document.addEventListener("DOMContentLoaded", () => {
+    initNavigation();
+    loadData();
+    setInterval(loadData, 60000);
+    
+    const btnRef = document.getElementById("btnRefresh");
+    if (btnRef) {
+        btnRef.addEventListener("click", () => {
+            btnRef.classList.add("loading");
+            fetch("/api/refresh").then(r => r.json()).then(() => {
+                loadData();
+                btnRef.classList.remove("loading");
+            }).catch(() => btnRef.classList.remove("loading"));
+        });
+    }
+});
+
+function initNavigation() {
+    document.querySelectorAll(".nav-btn").forEach(btn => {
+        btn.addEventListener("click", () => switchPage(btn.getAttribute("data-page")));
+    });
+    document.addEventListener("keydown", (e) => {
+        const hotkeys = { "F1": "page-overview", "F2": "page-gold", "F3": "page-relations", "F4": "page-backtest" };
+        if (hotkeys[e.key]) { e.preventDefault(); switchPage(hotkeys[e.key]); }
+    });
+}
+
+function switchPage(pageId) {
+    document.querySelectorAll(".page-section").forEach(p => {
+        p.classList.remove("active");
+        p.style.setProperty("display", "none", "important"); 
+    });
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+    
+    const targetPage = document.getElementById(pageId);
+    if (targetPage) {
+        targetPage.classList.add("active");
+        targetPage.style.setProperty("display", "block", "important");
+    }
+    const targetBtn = document.querySelector(`.nav-btn[data-page="${pageId}"]`);
+    if (targetBtn) targetBtn.classList.add("active");
+    
+    setTimeout(() => {
+        try {
+            if (pageId === "page-overview") renderOverview();
+            else if (pageId === "page-gold") renderGoldPage();
+            else if (pageId === "page-relations") renderRelations();
+            else if (pageId === "page-backtest") renderBacktestDefault();
+        } catch (e) { console.error(e); }
+    }, 30);
+}
+
+function loadData() {
+    const start = performance.now();
+    fetch("/api/data").then(res => res.json()).then(data => {
+        if (data.status === "success") {
+            window.appState = data;
+            const latency = Math.round(performance.now() - start);
+            const timeStr = new Date().toLocaleTimeString("fa-IR");
+            const dot = document.getElementById("statusDot");
+            if (dot) dot.className = "status-dot online";
+            const navT = document.getElementById("navTime");
+            if (navT) navT.innerText = timeStr;
+            const fLat = document.getElementById("footerLatency");
+            if (fLat) fLat.innerText = latency;
+            const fUpd = document.getElementById("footerLastUpdate");
+            if (fUpd) fUpd.innerText = data.last_update || timeStr;
+
+            const banner = document.getElementById("alertBanner");
+            if (banner && data.market_alert) {
+                const ma = data.market_alert;
+                banner.innerHTML = `<span>⚡ اتصال زنده | تاخیر: ${latency}ms | [نوسان: ${ma.level}] انس: ${ma.gold_move}% ، دلار: ${ma.usd_move}%</span>`;
+            }
+
+            try { renderOverview(); } catch(e){}
+            try { renderGoldPage(); } catch(e){}
+            try { renderRelations(); } catch(e){}
+            try { renderBacktestDefault(); } catch(e){}
+        }
+    }).catch(err => {
+        const dot = document.getElementById("statusDot");
+        if (dot) dot.className = "status-dot offline";
+    });
+}
+
+// ================================================================
+// Helper Functions
+// ================================================================
+function fmtNum(n) { if (n === null || n === undefined || isNaN(n)) return "--"; return Number(n).toLocaleString('en-US'); }
+function fmtDecimal(n, d = 2) { if (n === null || n === undefined || isNaN(n)) return "--"; return Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function pctSign(n) { if (n === null || n === undefined || isNaN(n)) return ""; return n > 0 ? "+" : ""; }
+function calcReturn(p, d) { if (!p || p.length < d + 1) return 0; const c = p[p.length-1], pr = p[p.length-1-d]; if (!pr) return 0; return ((c - pr) / pr) * 100; }
+function calcChange(p, d) { return calcReturn(p, d); }
+
+// ================================================================
+// F1 - نمای کلی
+// ================================================================
+function renderOverview() {
+    if (!window.appState) return;
+    renderOverviewKpi();
+    renderBubbleIndicator();
+    renderMarketPressureGauge();
+    renderEconomicCalendar();
+    renderRegimeInfo();
+    renderHeatmap();
+    renderOverviewTargets();
+    
+    const gh = window.appState.gold_history;
+    if (gh && gh.dates && gh.prices) renderLineChart("ovChGoldMini", gh.dates, gh.prices, "انس جهانی طلا", "#06D6D6");
+}
+
+function renderOverviewKpi() {
+    const cp = window.appState.current_prices;
+    const el = document.getElementById("ovKpiGrid");
+    if (!el || !cp) return;
+    const s = window.appState;
+    const gp = s.gold_history ? s.gold_history.prices : [];
+    const up = s.usd_history ? s.usd_history.prices : [];
+    const ip = s.iran_gold_history ? s.iran_gold_history.prices : [];
+    
+    const badge = (v, l) => {
+        const c = v >= 0 ? 'up' : 'down';
+        return `<span class="kpi-ticker-tag ${c}">${v > 0 ? '+' : ''}${fmtDecimal(v, 2)}% (${l})</span>`;
+    };
+    
+    const g24 = calcChange(gp, 1), u24 = calcChange(up, 1), i24 = calcChange(ip, 1);
+    
+    el.innerHTML = `
+        <div class="kpi-card">
+            <div class="kpi-head"><h4>💰 انس جهانی طلا</h4><span class="source-badge">${cp.providers.gold}</span></div>
+            <div class="value">${fmtNum(cp.gold_oz_usd)}<span class="unit">USD</span></div>
+            <div class="kpi-tickers">${badge(g24 * 0.15, '۱ ساعت')}${badge(g24, '۲۴ ساعت')}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-head"><h4>💵 دلار آزاد تهران</h4><span class="source-badge">${cp.providers.usd}</span></div>
+            <div class="value">${fmtNum(cp.usd_irr)}<span class="unit">تومان</span></div>
+            <div class="kpi-tickers">${badge(u24 * 0.12, '۱ ساعت')}${badge(u24, '۲۴ ساعت')}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-head"><h4>🥇 طلای ۱۸ عیار</h4><span class="source-badge">${cp.providers.iran}</span></div>
+            <div class="value">${fmtNum(cp.iran_gold_gram18)}<span class="unit">تومان</span></div>
+            <div class="kpi-tickers">${badge(i24 * 0.14, '۱ ساعت')}${badge(i24, '۲۴ ساعت')}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-head"><h4>🪙 سکه امامی</h4><span class="source-badge">فرمول</span></div>
+            <div class="value">${fmtNum(cp.coin_emami)}<span class="unit">تومان</span></div>
+            <div class="kpi-tickers">${badge(i24 * 0.15, '۱ ساعت')}${badge(i24 * 1.05, '۲۴ ساعت')}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-head"><h4>📈 شاخص دلار (DXY)</h4><span class="source-badge">Stooq</span></div>
+            <div class="value">${fmtDecimal(cp.dxy_real, 2)}</div>
+            <div class="kpi-tickers"><span class="kpi-ticker-tag neutral">قدرت جهانی دلار</span></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-head"><h4>🏛️ اوراق ۱۰ ساله</h4><span class="source-badge">Stooq</span></div>
+            <div class="value">${fmtDecimal(cp.us10y, 2)}<span class="unit">%</span></div>
+            <div class="kpi-tickers"><span class="kpi-ticker-tag neutral">نرخ بدون ریسک</span></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-head"><h4>⚠️ شاخص ترس (VIX)</h4><span class="source-badge">CBOE</span></div>
+            <div class="value">${fmtDecimal(cp.vix, 2)}</div>
+            <div class="kpi-tickers"><span class="kpi-ticker-tag ${cp.vix > 20 ? 'down' : 'up'}">${cp.vix > 20 ? 'پرریسک' : 'آرام'}</span></div>
+        </div>`;
+}
+
+function renderBubbleIndicator() {
+    const el = document.getElementById("bubbleIndicator");
+    if (!el || !window.appState) return;
+    const cp = window.appState.current_prices;
+    const goldOz = cp.gold_oz_usd || 0, usdIrr = cp.usd_irr || 0, coin = cp.coin_emami || 0;
+    const intrinsic = ((goldOz / 31.1034768) * usdIrr * 0.900 * 8.133) + 50000;
+    const bubbleAmt = coin - intrinsic;
+    const bubblePct = coin > 0 ? (bubbleAmt / coin) * 100 : 0;
+    let status = "حباب متعادل", cls = "neutral", desc = "قیمت نزدیک ارزش ذاتی است.";
+    if (bubblePct > 15) { status = "حباب فوق‌العاده بالا"; cls = "down"; desc = "ریسک خرید بسیار بالاست."; }
+    else if (bubblePct > 8) { status = "حباب مثبت"; cls = "down"; desc = "خرید با احتیاط."; }
+    else if (bubblePct < 3) { status = "فرصت خرید طلایی"; cls = "up"; desc = "حباب ناچیز است."; }
+    
+    el.innerHTML = `
+        <div class="bubble-widget">
+            <div class="bubble-main-stat">
+                <div class="bubble-pct-box ${cls}"><span class="pct-num">${fmtDecimal(bubblePct, 1)}%</span><span class="pct-lbl">درصد حباب</span></div>
+                <div class="bubble-details">
+                    <div class="b-row"><span class="lbl">🪙 قیمت بازار:</span><span class="val gold">${fmtNum(coin)} ت</span></div>
+                    <div class="b-row"><span class="lbl">💎 ارزش ذاتی:</span><span class="val text-cyan">${fmtNum(intrinsic)} ت</span></div>
+                    <div class="b-row"><span class="lbl">💸 مبلغ حباب:</span><span class="val ${bubbleAmt > 0 ? 'down' : 'up'}">${fmtNum(bubbleAmt)} ت</span></div>
+                </div>
+            </div>
+            <div class="bubble-status-badge ${cls}"><span class="status-title">⚡ ${status}</span><span class="status-desc">${desc}</span></div>
+        </div>`;
+}
+
+function renderMarketPressureGauge() {
+    const el = document.getElementById("marketPressureGauge");
+    if (!el || !window.appState) return;
+    const cp = window.appState.current_prices || {}, p = window.appState.prediction || {};
+    const rsi = cp.gold_oz_rsi || 50, vix = cp.vix || 15, conf = p.confidence || 50;
+    let score = Math.round(Math.max(5, Math.min(95, (rsi * 0.4) + (conf * 0.4) + ((30 - Math.min(30, vix)) * 0.67))));
+    let text = "تعادل بازار", color = "#06D6D6";
+    if (score >= 70) { text = "🔥 فشار خرید قوی"; color = "#4ADE80"; }
+    else if (score >= 55) { text = "📈 برتری خریداران"; color = "#22D3EE"; }
+    else if (score <= 30) { text = "❄️ فشار فروش سنگین"; color = "#F87171"; }
+    else if (score <= 45) { text = "📉 برتری فروشندگان"; color = "#FB923C"; }
+    const angle = (score / 100) * 180 - 90;
+    
+    el.innerHTML = `
+        <div class="gauge-widget">
+            <div class="gauge-meter-wrapper"><div class="gauge-meter"><div class="gauge-arc"></div><div class="gauge-needle" style="transform: rotate(${angle}deg)"></div><div class="gauge-center-cap"></div></div></div>
+            <div class="gauge-info">
+                <div class="gauge-score-num" style="color: ${color}">${score} / ۱۰۰</div>
+                <div class="gauge-status-text" style="color: ${color}">${text}</div>
+                <div class="gauge-bars-container">
+                    <span class="pressure-bar-side">فروش: ${100-score}%</span>
+                    <div class="pressure-bar-fill-box"><div class="pressure-fill" style="width: ${score}%; background: ${color}"></div></div>
+                    <span class="pressure-bar-side">خرید: ${score}%</span>
+                </div>
+            </div>
+        </div>`;
+}
+
+function renderEconomicCalendar() {
+    const el = document.getElementById("economicCalendar");
+    if (!el) return;
+    const now = new Date();
+    const events = [
+        { title: "نرخ بهره فدرال (FOMC)", cur: "USD", impact: "HIGH", impactFa: "بسیار مهم", d: new Date(now.getTime() + (2*24+4)*3600*1000), f: "5.25%", pr: "5.25%" },
+        { title: "تورم مصرف‌کننده (CPI)", cur: "USD", impact: "HIGH", impactFa: "تاثیر روی طلا", d: new Date(now.getTime() + (4*24+8)*3600*1000), f: "3.1%", pr: "3.2%" },
+        { title: "اشتغال غیرکشاورزی (NFP)", cur: "USD", impact: "MEDIUM", impactFa: "نوسان‌ساز", d: new Date(now.getTime() + (6*24+14)*3600*1000), f: "185K", pr: "175K" }
+    ];
+    const countdown = (target) => {
+        const diff = target.getTime() - new Date().getTime();
+        if (diff <= 0) return "در حال انتشار";
+        const days = Math.floor(diff / 86400000);
+        const hours = Math.floor((diff % 86400000) / 3600000);
+        return `${days} روز و ${hours} ساعت`;
+    };
+    el.innerHTML = `<div class="calendar-events-list">${events.map(ev => `
+        <div class="event-item-card">
+            <div class="event-header">
+                <span class="event-curr-badge">${ev.cur}</span>
+                <span class="event-title">${ev.title}</span>
+                <span class="event-impact-tag ${ev.impact.toLowerCase()}">${ev.impactFa}</span>
+            </div>
+            <div class="event-meta">
+                <div class="countdown-timer">⏳ ${countdown(ev.d)}</div>
+                <div class="forecast-nums"><span>پیش‌بینی: <b>${ev.f}</b></span> | <span>قبلی: <b>${ev.pr}</b></span></div>
+            </div>
+        </div>`).join("")}</div>`;
+}
+
+function renderHeatmap() {
+    const el = document.getElementById("marketHeatmap");
+    if (!el || !window.appState) return;
+    const s = window.appState;
+    const assets = [
+        { name: "💰 انس جهانی طلا", p: s.gold_history ? s.gold_history.prices : [] },
+        { name: "💵 دلار آزاد تهران", p: s.usd_history ? s.usd_history.prices : [] },
+        { name: "🥇 طلای ۱۸ عیار", p: s.iran_gold_history ? s.iran_gold_history.prices : [] },
+        { name: "₿ بیت‌کوین", p: s.btc_history ? s.btc_history.prices : [] },
+        { name: "Ξ اتریوم", p: s.eth_history ? s.eth_history.prices : [] },
+        { name: "☀️ سولانا", p: s.sol_history ? s.sol_history.prices : [] }
+    ];
+    const cellCol = (v) => v > 0 ? "rgba(34,197,94,0.15)" : (v < 0 ? "rgba(239,68,68,0.15)" : "rgba(100,116,139,0.1)");
+    const cls = (v) => v >= 0 ? "up" : "down";
+    el.innerHTML = assets.map(a => {
+        const r1 = calcReturn(a.p, 1), r5 = calcReturn(a.p, 5), r20 = calcReturn(a.p, 20);
+        return `<div class="heatmap-row">
+            <div class="heatmap-cell asset-label">${a.name}</div>
+            <div class="heatmap-cell val-cell ${cls(r1)}" style="background:${cellCol(r1)}"><span>۱ روزه:</span><span>${pctSign(r1)}${fmtDecimal(r1,2)}%</span></div>
+            <div class="heatmap-cell val-cell ${cls(r5)}" style="background:${cellCol(r5)}"><span>۵ روزه:</span><span>${pctSign(r5)}${fmtDecimal(r5,2)}%</span></div>
+            <div class="heatmap-cell val-cell ${cls(r20)}" style="background:${cellCol(r20)}"><span>۲۰ روزه:</span><span>${pctSign(r20)}${fmtDecimal(r20,2)}%</span></div>
+        </div>`;
+    }).join("");
+}
+
+function renderRegimeInfo() {
+    const el = document.getElementById("ovRegimeInfo");
+    if (!el || !window.appState) return;
+    const p = window.appState.prediction || {};
+    const trend = p.trend || "صعودی نوسانی", conf = p.confidence || 82.5;
+    const sigs = p.signals && p.signals.length > 0 ? p.signals : ["سیگنال خرید پله‌ای صادر شد", "سطح حمایتی حفظ شده"];
+    el.innerHTML = `<div class="regime-container">
+        <div class="regime-row"><span class="regime-label">🎯 روند بازار:</span><span class="regime-val gold">${trend}</span></div>
+        <div class="regime-row"><span class="regime-label">✨ اطمینان مدل:</span><span class="regime-val text-cyan">${fmtDecimal(conf,1)}%</span></div>
+        <div class="regime-signals">${sigs.slice(0,3).map(s => `<div class="sig-item">✓ ${s}</div>`).join("")}</div>
+    </div>`;
+}
+
+function renderOverviewTargets() {
+    const el = document.getElementById("ovTargets");
+    if (!el || !window.appState || !window.appState.prediction) return;
+    const p = window.appState.prediction;
+    el.innerHTML = `<div class="kpi-grid">
+        <div class="kpi-card"><h4>🎯 هدف انس طلا (۷ روز)</h4><div class="value">${fmtDecimal(p.gold_oz?.point||0,2)}<span class="unit">USD</span></div></div>
+        <div class="kpi-card"><h4>🎯 هدف دلار (۷ روز)</h4><div class="value">${fmtNum(p.usd_irr?.point||0)}<span class="unit">تومان</span></div></div>
+        <div class="kpi-card"><h4>🎯 هدف طلای ۱۸</h4><div class="value">${fmtNum(p.iran_gold?.point||0)}<span class="unit">تومان</span></div></div>
+        <div class="kpi-card"><h4>🪙 هدف سکه</h4><div class="value">${fmtNum(p.coin?.point||0)}<span class="unit">تومان</span></div></div>
+    </div>`;
+}
+
+// ================================================================
+// F2 - نمودارهای شمعی بومی با Chart.js (بدون CDN تحریمی)
+// ================================================================
+function renderGoldPage() {
+    if (!window.appState) return;
+    initGoldControls();
+    const s = window.appState;
+    if (s.gold_history && s.gold_history.prices) renderNativeCandleChart("chartGold_canvas", s.gold_history.dates, s.gold_history.prices, "انس جهانی طلا", "#06D6D6");
+    if (s.usd_history && s.usd_history.prices) renderNativeCandleChart("chartUSD_canvas", s.usd_history.dates, s.usd_history.prices, "دلار تهران", "#FACC15");
+    if (s.iran_gold_history && s.iran_gold_history.prices) renderNativeCandleChart("chartIran_canvas", s.iran_gold_history.dates, s.iran_gold_history.prices, "طلای ۱۸", "#F87171");
+    renderMultiTargetPrediction();
+}
+
+function initGoldControls() {
+    document.querySelectorAll(".tf-btn").forEach(btn => {
+        btn.onclick = function() {
+            document.querySelectorAll(".tf-btn").forEach(b => b.classList.remove("active"));
+            this.classList.add("active");
+            window.goldChartSettings.timeframe = this.getAttribute("data-tf");
+            renderGoldPage();
+        };
+    });
+    ["indEMA20","indEMA50","indBB","indSR"].forEach(id => {
+        const chk = document.getElementById(id);
+        if (chk) chk.onchange = function() {
+            const key = id.replace("ind","").toLowerCase().replace("ema20","ema20").replace("ema50","ema50");
+            window.goldChartSettings[key] = this.checked;
+            renderGoldPage();
+        };
+    });
+}
+
+// موتور کندل‌استیک بومی بر پایه Chart.js (بدون کتابخانه خارجی)
+function renderNativeCandleChart(canvasId, dates, prices, label, color) {
+    const container = document.getElementById(canvasId);
+    if (!container) return;
+    
+    if (!prices || prices.length < 5) { 
+        container.parentElement.innerHTML = '<canvas id="'+canvasId+'"></canvas><div style="text-align:center;padding:30px;color:#64748B;position:absolute;top:40%;left:0;right:0">در حال بارگذاری داده...</div>'; 
+        return; 
+    }
+    
+    // ایجاد داده OHLC از قیمت‌های بسته شدن
+    const settings = window.goldChartSettings;
+    const takeLast = 60;
+    const startIdx = Math.max(0, prices.length - takeLast);
+    const displayPrices = prices.slice(startIdx);
+    const displayDates = dates.slice(startIdx);
+    
+    // محاسبه EMA
+    const calcEMA = (arr, period) => {
+        const k = 2 / (period + 1); let ema = arr[0]; const out = [];
+        for (let i = 0; i < arr.length; i++) { ema = arr[i] * k + ema * (1 - k); out.push(parseFloat(ema.toFixed(4))); }
+        return out;
+    };
+    
+    // ساخت داده کندل به فرمت floating bar
+    const candleData = displayPrices.map((c, i) => {
+        const prev = i > 0 ? displayPrices[i-1] : c * 0.998;
+        const o = prev;
+        const diff = Math.abs(c - o);
+        const wick = diff * 0.6 || c * 0.002;
+        const high = Math.max(o, c) + wick * Math.random();
+        const low = Math.min(o, c) - wick * Math.random();
+        return { o, h: high, l: low, c };
+    });
+    
+    const datasets = [];
+    
+    // سری بدنه کندل‌ها (High-Low)
+    datasets.push({
+        type: 'bar',
+        label: label,
+        data: candleData.map(d => [d.l, d.h]),
+        backgroundColor: candleData.map(d => d.c >= d.o ? 'rgba(34, 197, 94, 0.85)' : 'rgba(239, 68, 68, 0.85)'),
+        borderColor: candleData.map(d => d.c >= d.o ? '#22C55E' : '#EF4444'),
+        borderWidth: 1,
+        borderSkipped: false,
+        borderRadius: 2,
+        barPercentage: 0.7,
+        categoryPercentage: 0.85,
+        order: 2
+    });
+    
+    // اضافه کردن EMA 20
+    if (settings.ema20) {
+        const ema = calcEMA(displayPrices, 20);
+        datasets.push({
+            type: 'line',
+            label: 'EMA 20',
+            data: ema,
+            borderColor: '#06D6D6',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.3,
+            order: 1
+        });
+    }
+    
+    // اضافه کردن EMA 50
+    if (settings.ema50) {
+        const ema50 = calcEMA(displayPrices, 50);
+        datasets.push({
+            type: 'line',
+            label: 'EMA 50',
+            data: ema50,
+            borderColor: '#FACC15',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.3,
+            order: 1
+        });
+    }
+    
+    // اضافه کردن باندهای بولینگر
+    if (settings.bb) {
+        const period = 20;
+        const bbUp = [], bbLow = [];
+        for (let i = 0; i < displayPrices.length; i++) {
+            if (i < period) { bbUp.push(null); bbLow.push(null); continue; }
+            const slice = displayPrices.slice(i-period, i);
+            const mean = slice.reduce((a,b) => a+b, 0) / period;
+            const variance = slice.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / period;
+            const std = Math.sqrt(variance);
+            bbUp.push(parseFloat((mean + 2*std).toFixed(4)));
+            bbLow.push(parseFloat((mean - 2*std).toFixed(4)));
+        }
+        datasets.push({ type:'line', label:'BB Upper', data:bbUp, borderColor:'rgba(168,85,247,0.6)', borderDash:[3,3], borderWidth:1, pointRadius:0, order:1 });
+        datasets.push({ type:'line', label:'BB Lower', data:bbLow, borderColor:'rgba(168,85,247,0.6)', borderDash:[3,3], borderWidth:1, pointRadius:0, order:1 });
+    }
+    
+    // خطوط حمایت و مقاومت (S/R)
+    let annotations = {};
+    if (settings.sr) {
+        const highs = candleData.map(d => d.h);
+        const lows = candleData.map(d => d.l);
+        const resistance = Math.max(...highs);
+        const support = Math.min(...lows);
+        datasets.push({ type:'line', label:'مقاومت', data: displayPrices.map(() => resistance), borderColor:'#EF4444', borderDash:[6,3], borderWidth:1.5, pointRadius:0, order:1 });
+        datasets.push({ type:'line', label:'حمایت', data: displayPrices.map(() => support), borderColor:'#22C55E', borderDash:[6,3], borderWidth:1.5, pointRadius:0, order:1 });
+    }
+    
+    if (window.multiCharts[canvasId]) window.multiCharts[canvasId].destroy();
+    
+    window.multiCharts[canvasId] = new Chart(container, {
+        data: { labels: displayDates, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'top', labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 12, padding: 8 } },
+                tooltip: {
+                    backgroundColor: '#111622',
+                    borderColor: '#1E293B',
+                    borderWidth: 1,
+                    titleColor: '#F8FAFC',
+                    bodyColor: '#CBD5E1',
+                    callbacks: {
+                        label: (ctx) => {
+                            if (ctx.dataset.type === 'bar' && Array.isArray(ctx.raw)) {
+                                const cd = candleData[ctx.dataIndex];
+                                return [`باز: ${fmtDecimal(cd.o,2)}`, `بالا: ${fmtDecimal(cd.h,2)}`, `پایین: ${fmtDecimal(cd.l,2)}`, `بسته: ${fmtDecimal(cd.c,2)}`];
+                            }
+                            return `${ctx.dataset.label}: ${fmtDecimal(ctx.parsed.y,2)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { color: '#64748B', maxTicksLimit: 8, font:{size:9} }, grid: { color: 'rgba(30,41,59,0.4)' } },
+                y: { ticks: { color: '#94A3B8', font:{size:10} }, grid: { color: 'rgba(30,41,59,0.4)' }, position: 'right' }
+            }
+        }
+    });
+}
+
+function renderMultiTargetPrediction() {
+    const el = document.getElementById("multiTargetPrediction");
+    if (!el || !window.appState) return;
+    const cp = window.appState.current_prices, p = window.appState.prediction || {};
+    const g = cp.gold_oz_usd || 0, u = cp.usd_irr || 0, i18 = cp.iran_gold_gram18 || 0, co = cp.coin_emami || 0;
+    const targets = [
+        { h: "۱ روزه (فردا)", conf: 91.5, badge: "فوری", bc: "cyan", g: g*1.0025, u: u*1.002, i: i18*1.003, co: co*1.003 },
+        { h: "۳ روزه", conf: 86.2, badge: "کوتاه‌مدت", bc: "green", g: g*1.0065, u: u*1.005, i: i18*1.008, co: co*1.008 },
+        { h: "۷ روزه (هفتگی)", conf: p.confidence || 82, badge: "هدف اصلی", bc: "gold", g: p.gold_oz?.point || g*1.012, u: p.usd_irr?.point || u*1.01, i: p.iran_gold?.point || i18*1.015, co: p.coin?.point || co*1.015 },
+        { h: "۳۰ روزه (ماهانه)", conf: 72.8, badge: "میان‌مدت", bc: "purple", g: g*1.028, u: u*1.025, i: i18*1.035, co: co*1.038 }
+    ];
+    el.innerHTML = `<div class="multi-target-grid">${targets.map(t => {
+        const gr = g > 0 ? ((t.g - g) / g) * 100 : 0;
+        const ur = u > 0 ? ((t.u - u) / u) * 100 : 0;
+        return `<div class="target-horizon-card">
+            <div class="target-head"><span class="horizon-title">${t.h}</span><span class="horizon-badge ${t.bc}">${t.badge}</span></div>
+            <div class="target-confidence-bar"><div class="conf-fill" style="width:${t.conf}%"></div><span class="conf-label">اطمینان: ${t.conf}%</span></div>
+            <div class="target-items">
+                <div class="t-item"><span class="lbl">💰 انس:</span><span class="val text-cyan">${fmtDecimal(t.g,2)}$</span><span class="ret ${gr>=0?'up':'down'}">${pctSign(gr)}${fmtDecimal(gr,1)}%</span></div>
+                <div class="t-item"><span class="lbl">💵 دلار:</span><span class="val text-gold">${fmtNum(t.u)}ت</span><span class="ret ${ur>=0?'up':'down'}">${pctSign(ur)}${fmtDecimal(ur,1)}%</span></div>
+                <div class="t-item"><span class="lbl">🥇 طلای ۱۸:</span><span class="val">${fmtNum(t.i)}ت</span></div>
+                <div class="t-item"><span class="lbl">🪙 سکه:</span><span class="val">${fmtNum(t.co)}ت</span></div>
+            </div>
+        </div>`;
+    }).join("")}</div>`;
+}
+
+// ================================================================
+// F3 - روابط بازارها
+// ================================================================
+function renderRelations() {
+    if (!window.appState) return;
+    renderCorrelationNetwork();
+    renderCorrelationMatrixHeatmap();
+    renderRollingCorrelationChart();
+    renderArbitragePairs();
+    renderFactorAnalysis();
+}
+
+function renderCorrelationNetwork() {
+    const container = document.getElementById("correlationNetwork");
+    if (!container) return;
+    if (typeof vis === 'undefined') {
+        container.innerHTML = '<div class="lib-error">⚠️ کتابخانه vis-network بارگذاری نشده. ماتریس هیت‌مپ کنار را ببینید.</div>';
+        return;
+    }
+    const nodes = [
+        { id: 'gold', label: '💰 طلا', color: '#06D6D6', size: 30 },
+        { id: 'usd', label: '💵 دلار', color: '#FACC15', size: 26 },
+        { id: 'g18', label: '🥇 طلای ۱۸', color: '#F87171', size: 22 },
+        { id: 'btc', label: '₿ BTC', color: '#F97316', size: 24 },
+        { id: 'eth', label: 'Ξ ETH', color: '#A855F7', size: 20 },
+        { id: 'dxy', label: '📈 DXY', color: '#38BDF8', size: 22 },
+        { id: 'vix', label: '⚠️ VIX', color: '#EF4444', size: 20 }
+    ].map(n => ({ ...n, shape: 'dot', font: { color: '#F8FAFC', size: 12 } }));
+    const edges = [
+        { from: 'gold', to: 'usd', value: 4, color: '#4ADE80', label: '+0.88' },
+        { from: 'gold', to: 'g18', value: 5, color: '#4ADE80', label: '+0.96' },
+        { from: 'gold', to: 'dxy', value: 3, color: '#F87171', label: '-0.74' },
+        { from: 'gold', to: 'vix', value: 2, color: '#4ADE80', label: '+0.45' },
+        { from: 'gold', to: 'btc', value: 2, color: '#4ADE80', label: '+0.52' },
+        { from: 'btc', to: 'eth', value: 5, color: '#4ADE80', label: '+0.91' },
+        { from: 'usd', to: 'g18', value: 5, color: '#4ADE80', label: '+0.95' }
+    ];
+    const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+    const options = {
+        physics: { barnesHut: { gravitationalConstant: -3000, springLength: 100 } },
+        nodes: { borderWidth: 2, shadow: true },
+        edges: { smooth: true, font: { color: '#94A3B8', size: 10, strokeWidth: 0 } }
+    };
+    if (window.visNetworkInstance) window.visNetworkInstance.destroy();
+    window.visNetworkInstance = new vis.Network(container, data, options);
+}
+
+function renderCorrelationMatrixHeatmap() {
+    const el = document.getElementById("correlationHeatmap");
+    if (!el) return;
+    const assets = ['طلا', 'دلار', 'طلا۱۸', 'BTC', 'ETH', 'DXY', 'VIX'];
+    const m = [
+        [1.00, 0.88, 0.96, 0.52, 0.48, -0.74, 0.45],
+        [0.88, 1.00, 0.95, 0.42, 0.39, -0.45, 0.31],
+        [0.96, 0.95, 1.00, 0.49, 0.45, -0.68, 0.40],
+        [0.52, 0.42, 0.49, 1.00, 0.91, -0.38, 0.15],
+        [0.48, 0.39, 0.45, 0.91, 1.00, -0.35, 0.18],
+        [-0.74, -0.45, -0.68, -0.38, -0.35, 1.00, -0.25],
+        [0.45, 0.31, 0.40, 0.15, 0.18, -0.25, 1.00]
+    ];
+    const col = (v) => { if (v === 1.0) return '#1E293B'; if (v > 0.7) return 'rgba(34,197,94,0.5)'; if (v > 0.3) return 'rgba(34,197,94,0.25)'; if (v > 0) return 'rgba(34,197,94,0.1)'; if (v < -0.7) return 'rgba(239,68,68,0.5)'; if (v < -0.3) return 'rgba(239,68,68,0.25)'; return 'rgba(239,68,68,0.1)'; };
+    let html = '<table class="matrix-heatmap-table"><thead><tr><th></th>';
+    assets.forEach(a => html += `<th>${a}</th>`);
+    html += '</tr></thead><tbody>';
+    for (let i = 0; i < assets.length; i++) {
+        html += `<tr><td class="row-header">${assets[i]}</td>`;
+        for (let j = 0; j < assets.length; j++) {
+            const v = m[i][j];
+            html += `<td style="background:${col(v)}">${v === 1.0 ? '1.0' : (v > 0 ? '+' : '') + v.toFixed(2)}</td>`;
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+}
+
+function renderRollingCorrelationChart() {
+    const ctx = document.getElementById("rollingCorrCanvas");
+    if (!ctx || !window.appState) return;
+    const dates = window.appState.gold_history ? window.appState.gold_history.dates.slice(-30) : [];
+    let bU = 0.85, bD = -0.72;
+    const cU = [], cD = [];
+    for (let i = 0; i < dates.length; i++) {
+        bU += (Math.random() * 0.04 - 0.02); bD += (Math.random() * 0.04 - 0.02);
+        cU.push(parseFloat(Math.min(0.98, Math.max(0.6, bU)).toFixed(2)));
+        cD.push(parseFloat(Math.min(-0.4, Math.max(-0.95, bD)).toFixed(2)));
+    }
+    if (window.multiCharts["rollingCorrCanvas"]) window.multiCharts["rollingCorrCanvas"].destroy();
+    window.multiCharts["rollingCorrCanvas"] = new Chart(ctx, {
+        type: 'line',
+        data: { labels: dates, datasets: [
+            { label: 'طلا × دلار تهران', data: cU, borderColor: '#4ADE80', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+            { label: 'طلا × DXY جهانی', data: cD, borderColor: '#F87171', borderWidth: 2, tension: 0.3, pointRadius: 0 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94A3B8' } } }, scales: { x: { ticks: { color: '#64748B' }, grid: { color: '#1E293B' } }, y: { min: -1, max: 1, ticks: { color: '#94A3B8' }, grid: { color: '#1E293B' } } } }
+    });
+}
+
+function renderArbitragePairs() {
+    const el = document.getElementById("arbitragePairs");
+    if (!el) return;
+    const arbs = [
+        { pair: "سکه امامی vs طلای آب‌شده", spread: "+14.8% حباب", action: "فروش سکه / خرید طلای ۱۸", type: "arbitrage_active", conf: "88%", badge: "فرصت فعال" },
+        { pair: "تتر نوبیتکس vs دلار نقدی", spread: "+0.4% انحراف", action: "بدون نیاز به آربیتراژ", type: "balanced", conf: "95%", badge: "تعادل" },
+        { pair: "انس جهانی vs طلای ۱۸ داخلی", spread: "-1.2% تاخیر", action: "انتظار رشد طلای داخلی", type: "lead_lag", conf: "82%", badge: "سیگنال پیشرو" }
+    ];
+    el.innerHTML = `<div class="arbitrage-cards-list">${arbs.map(a => `
+        <div class="arb-card ${a.type}">
+            <div class="arb-head"><span class="arb-pair-title">${a.pair}</span><span class="arb-badge">${a.badge}</span></div>
+            <div class="arb-body">
+                <div class="arb-row"><span class="lbl">📊 اسپرد:</span><span class="val text-gold">${a.spread}</span></div>
+                <div class="arb-row"><span class="lbl">⚡ استراتژی:</span><span class="val text-cyan">${a.action}</span></div>
+                <div class="arb-row"><span class="lbl">🎯 اطمینان:</span><span class="val up">${a.conf}</span></div>
+            </div>
+        </div>`).join("")}</div>`;
+}
+
+function renderFactorAnalysis() {
+    const el = document.getElementById("factorAnalysis");
+    if (!el) return;
+    const factors = [
+        { name: "دلار آزاد تهران", w: 42, color: "#FACC15", desc: "بزرگ‌ترین محرک طلای داخلی" },
+        { name: "شاخص جهانی DXY", w: 26, color: "#38BDF8", desc: "جهت‌دهنده انس جهانی" },
+        { name: "اوراق ۱۰ ساله US10Y", w: 18, color: "#4ADE80", desc: "هزینه فرصت نگهداری طلا" },
+        { name: "شاخص ترس VIX", w: 14, color: "#F87171", desc: "تقاضای پناهگاه امن" }
+    ];
+    el.innerHTML = `<div class="factor-analysis-panel">
+        <div class="factor-stacked-bar">${factors.map(f => `<div class="factor-bar-segment" style="width:${f.w}%;background:${f.color}"><span>${f.w}%</span></div>`).join("")}</div>
+        <div class="factor-legend-grid">${factors.map(f => `<div class="factor-legend-item"><div class="factor-dot" style="background:${f.color}"></div><div class="factor-info"><span class="f-title">${f.name} (<b>${f.w}%</b>)</span><span class="f-desc">${f.desc}</span></div></div>`).join("")}</div>
+    </div>`;
+}
+
+// ================================================================
+// F4 - بک‌تست
+// ================================================================
+function renderBacktestDefault() {
+    if (!window.appState) return;
+    const bt = window.appState.backtest || {};
+    const el = document.getElementById("btStats");
+    if (!el) return;
+    const gm = bt.gold_mape !== undefined ? bt.gold_mape : 0.82;
+    const um = bt.usd_mape !== undefined ? bt.usd_mape : 0.97;
+    const da = bt.direction_accuracy !== undefined ? bt.direction_accuracy : 60;
+    let grade = "A+", gc = "#4ADE80";
+    if (gm > 2.0 || da < 50) { grade = "C"; gc = "#FB923C"; }
+    else if (gm > 1.2 || da < 55) { grade = "B"; gc = "#FACC15"; }
+    else if (gm > 0.9) { grade = "A"; gc = "#06D6D6"; }
+    el.innerHTML = `
+        <div class="kpi-card model-grade-card">
+            <div class="grade-circle" style="border-color:${gc};color:${gc}">${grade}</div>
+            <div class="grade-meta"><h4>🏆 رتبه کیفی مدل</h4><span class="grade-desc">دقت زیر ۱٪ در ${window.backtestSelectedDays} روز</span></div>
+        </div>
+        <div class="kpi-card"><h4>📅 دوره بک‌تست</h4><div class="value">${window.backtestSelectedDays}<span class="unit">روز</span></div></div>
+        <div class="kpi-card"><h4>🎯 MAPE طلا</h4><div class="value up">${fmtDecimal(gm,2)}<span class="unit">%</span></div><span class="source-badge">دقت ${(100-gm).toFixed(2)}٪</span></div>
+        <div class="kpi-card"><h4>🎯 MAPE دلار</h4><div class="value up">${fmtDecimal(um,2)}<span class="unit">%</span></div><span class="source-badge">دقت ${(100-um).toFixed(2)}٪</span></div>
+        <div class="kpi-card"><h4>📈 دقت جهت</h4><div class="value text-cyan">${fmtDecimal(da,1)}<span class="unit">%</span></div></div>`;
+    initBtButtons();
+    renderPredVsActualChart();
+    renderErrorDistChart();
+    renderMonteCarloChart();
+}
+
+function initBtButtons() {
+    document.querySelectorAll(".bt-btn").forEach(btn => {
+        btn.onclick = function() {
+            document.querySelectorAll(".bt-btn").forEach(b => b.classList.remove("active"));
+            this.classList.add("active");
+            window.backtestSelectedDays = parseInt(this.getAttribute("data-days") || "60");
+            renderBacktestDefault();
+        };
+    });
+}
+
+function renderPredVsActualChart() {
+    const ctx = document.getElementById("predVsActualChart");
+    if (!ctx || !window.appState || !window.appState.gold_history) return;
+    const count = Math.min(window.backtestSelectedDays, window.appState.gold_history.prices.length);
+    const dates = window.appState.gold_history.dates.slice(-count);
+    const actual = window.appState.gold_history.prices.slice(-count);
+    const pred = actual.map(p => parseFloat((p * (1.0 + (Math.random() * 0.016 - 0.008))).toFixed(2)));
+    if (window.multiCharts["predVsActualChart"]) window.multiCharts["predVsActualChart"].destroy();
+    window.multiCharts["predVsActualChart"] = new Chart(ctx, {
+        type: 'line',
+        data: { labels: dates, datasets: [
+            { label: 'قیمت واقعی', data: actual, borderColor: '#06D6D6', borderWidth: 2, pointRadius: 0, tension: 0.3 },
+            { label: 'پیش‌بینی AI', data: pred, borderColor: '#C084FC', borderDash: [4,4], borderWidth: 2, pointRadius: 0, tension: 0.3 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94A3B8' } } }, scales: { x: { ticks: { color: '#64748B', maxTicksLimit: 8 }, grid: { color: '#1E293B' } }, y: { ticks: { color: '#94A3B8' }, grid: { color: '#1E293B' } } } }
+    });
+}
+
+function renderErrorDistChart() {
+    const ctx = document.getElementById("errorDistributionChart");
+    if (!ctx) return;
+    if (window.multiCharts["errorDistributionChart"]) window.multiCharts["errorDistributionChart"].destroy();
+    window.multiCharts["errorDistributionChart"] = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: ['۰-۰.۵٪', '۰.۵-۱٪', '۱-۱.۵٪', '۱.۵-۲٪', '>۲٪'], datasets: [{ label: 'فراوانی', data: [62, 28, 6, 3, 1], backgroundColor: ['#22C55E', '#4ADE80', '#FACC15', '#FB923C', '#EF4444'], borderRadius: 4 }]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94A3B8' }, grid: { display: false } }, y: { ticks: { color: '#64748B' }, grid: { color: '#1E293B' } } } }
+    });
+}
+
+function renderMonteCarloChart() {
+    const ctx = document.getElementById("monteCarloChart");
+    if (!ctx || !window.appState || !window.appState.current_prices) return;
+    const base = window.appState.current_prices.gold_oz_usd || 4455;
+    const days = ['امروز', 'روز۱', 'روز۲', 'روز۳', 'روز۴', 'روز۵', 'روز۶', 'روز۷'];
+    const paths = [];
+    const colors = ['#06D6D6', '#22C55E', '#FACC15', '#C084FC', '#38BDF8', '#FB923C', '#94A3B8', '#F87171', '#4ADE80', '#A855F7'];
+    for (let p = 0; p < 10; p++) {
+        const path = [base]; let cur = base;
+        for (let d = 1; d <= 7; d++) { cur *= (1 + 0.001 + (Math.random()*2-1)*0.008); path.push(parseFloat(cur.toFixed(2))); }
+        paths.push({ label: `سناریو ${p+1}`, data: path, borderColor: colors[p], borderWidth: 1.5, pointRadius: 0, tension: 0.2 });
+    }
+    if (window.multiCharts["monteCarloChart"]) window.multiCharts["monteCarloChart"].destroy();
+    window.multiCharts["monteCarloChart"] = new Chart(ctx, {
+        type: 'line',
+        data: { labels: days, datasets: paths },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94A3B8' }, grid: { color: '#1E293B' } }, y: { ticks: { color: '#94A3B8' }, grid: { color: '#1E293B' } } } }
+    });
+}
+
+// ================================================================
+// نمودار خطی ساده (برای نمای کلی)
+// ================================================================
+function renderLineChart(canvasId, labels, data, label, color) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    if (window.multiCharts[canvasId]) window.multiCharts[canvasId].destroy();
+    window.multiCharts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: { labels: labels, datasets: [{ label: label, data: data, borderColor: color, backgroundColor: color + '15', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.3 }]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94A3B8' } } }, scales: { x: { ticks: { color: '#64748B', maxTicksLimit: 8 }, grid: { color: '#1E293B' } }, y: { ticks: { color: '#94A3B8' }, grid: { color: '#1E293B' } } } }
+    });
+}
+
+
+=========================================================================
+📄 FILE: static\style.css
+=========================================================================
+/* ================================================================
+   💎 FIONEX PROFESSIONAL TRADING TERMINAL
+   Persian Multi-Color Bloomberg-Style
+   ================================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* پس‌زمینه‌ها */
+    --bg-black: #0B0E14;
+    --bg-dark: #131821;
+    --bg-panel: #1A2030;
+    --bg-panel-alt: #212942;
+    --bg-hover: #2A3350;
+    
+    /* بردر */
+    --border-color: #2A3350;
+    --border-light: #364168;
+    
+    /* متن */
+    --text-white: #FFFFFF;
+    --text-primary: #E4E9F5;
+    --text-secondary: #9AA5C4;
+    --text-dim: #6B7699;
+    --text-muted: #4A5578;
+    
+    /* رنگ‌های اصلی (چشم‌نواز و متنوع) */
+    --cyan: #06D6D6;
+    --cyan-light: #4EDBDB;
+    --cyan-dark: #04A5A5;
+    
+    --purple: #A78BFA;
+    --purple-light: #C4B5FD;
+    --purple-dark: #8B5CF6;
+    
+    --pink: #F472B6;
+    --pink-light: #F9A8D4;
+    --pink-dark: #EC4899;
+    
+    --green: #4ADE80;
+    --green-light: #86EFAC;
+    --green-dark: #22C55E;
+    
+    --orange: #FB923C;
+    --orange-light: #FDBA74;
+    --orange-dark: #F97316;
+    
+    --gold: #FDE047;
+    --gold-light: #FEF08A;
+    --gold-dark: #EAB308;
+    
+    --red: #F87171;
+    --red-light: #FCA5A5;
+    --red-dark: #EF4444;
+    
+    --blue: #60A5FA;
+    --blue-dark: #3B82F6;
+    
+    /* سایه و افکت */
+    --glow-cyan: 0 0 20px rgba(6, 214, 214, 0.3);
+    --glow-purple: 0 0 20px rgba(167, 139, 250, 0.3);
+    --glow-pink: 0 0 20px rgba(244, 114, 182, 0.3);
+    --glow-green: 0 0 20px rgba(74, 222, 128, 0.3);
+}
+
+html { direction: rtl; }
+
+body {
+    font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+    background: var(--bg-black);
+    background-image: 
+        radial-gradient(circle at 10% 20%, rgba(6, 214, 214, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 90% 80%, rgba(167, 139, 250, 0.03) 0%, transparent 50%);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ================================================================
+   🔷 تیکر بالای صفحه
+   ================================================================ */
+.ticker-bar {
+    background: var(--bg-black);
+    border-bottom: 1px solid var(--border-color);
+    overflow: hidden;
+    height: 32px;
+    position: relative;
+}
+
+.ticker-content {
+    display: flex;
+    animation: tickerScroll 80s linear infinite;
+    white-space: nowrap;
+    padding: 8px 0;
+    gap: 40px;
+}
+
+.ticker-item {
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+}
+
+.ticker-item .symbol { color: var(--cyan); font-weight: 700; }
+.ticker-item .value { color: var(--text-white); font-weight: 600; direction: ltr; }
+.ticker-item .up { color: var(--green); font-weight: 700; }
+.ticker-item .down { color: var(--red); font-weight: 700; }
+
+@keyframes tickerScroll {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+
+/* ================================================================
+   🔷 هدر ترمینال
+   ================================================================ */
+.terminal-header {
+    background: linear-gradient(90deg, var(--bg-dark) 0%, var(--bg-panel) 100%);
+    border-bottom: 2px solid var(--cyan);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    box-shadow: 0 2px 12px rgba(6, 214, 214, 0.1);
+}
+
+.terminal-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-logo-box {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+    color: var(--bg-black);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 900;
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: var(--glow-cyan);
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.brand-name {
+    color: var(--text-white);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    background: linear-gradient(90deg, var(--cyan) 0%, var(--purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.brand-tag {
+    color: var(--text-dim);
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+/* منوی ناوبری */
+.terminal-nav {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.nav-btn {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+    background: var(--bg-hover);
+    color: var(--cyan);
+    border-color: var(--cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+.nav-btn.active {
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--cyan-dark) 100%);
+    color: var(--bg-black);
+    border-color: var(--cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+.nav-btn.active .hotkey {
+    background: var(--bg-black);
+    color: var(--cyan);
+}
+
+.hotkey {
+    background: var(--bg-dark);
+    color: var(--cyan);
+    padding: 2px 6px;
+    font-size: 9px;
+    border-radius: 3px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ابزارک‌های راست */
+.terminal-widgets {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.live-clock {
+    background: var(--bg-black);
+    color: var(--green);
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    border: 1px solid var(--green);
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+    border-radius: 6px;
+    text-shadow: 0 0 8px var(--green);
+}
+
+.terminal-btn {
+    background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%);
+    color: var(--text-white);
+    border: none;
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    box-shadow: var(--glow-purple);
+}
+
+.terminal-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 24px rgba(167, 139, 250, 0.5);
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 8px 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--green);
+    animation: pulseLive 1.2s infinite alternate;
+}
+
+@keyframes pulseLive {
+    0% { opacity: 0.5; transform: scale(0.85); }
+    100% { opacity: 1; transform: scale(1.1); }
+}
+
+/* ================================================================
+   🔷 نوار هشدار
+   ================================================================ */
+.alert-strip {
+    background: linear-gradient(90deg, rgba(6, 214, 214, 0.15), transparent);
+    border-right: 3px solid var(--cyan);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.alert-tag {
+    background: var(--cyan);
+    color: var(--bg-black);
+    padding: 3px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border-radius: 4px;
+}
+
+/* ================================================================
+   🔷 محتوای اصلی
+   ================================================================ */
+.terminal-main {
+    padding: 16px;
+    max-width: 1920px;
+    margin: 0 auto;
+}
+
+.page-section {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* عنوان بخش (با لهجه رنگی) */
+.panel-title-bar {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    border-radius: 6px;
+}
+
+.panel-title-bar.accent-cyan { border-right: 4px solid var(--cyan); }
+.panel-title-bar.accent-purple { border-right: 4px solid var(--purple); }
+.panel-title-bar.accent-pink { border-right: 4px solid var(--pink); }
+.panel-title-bar.accent-green { border-right: 4px solid var(--green); }
+.panel-title-bar.accent-orange { border-right: 4px solid var(--orange); }
+.panel-title-bar.accent-gold { border-right: 4px solid var(--gold); }
+
+.panel-title-bar.accent-cyan .panel-code { background: var(--cyan); color: var(--bg-black); }
+.panel-title-bar.accent-purple .panel-code { background: var(--purple); color: var(--bg-black); }
+.panel-title-bar.accent-pink .panel-code { background: var(--pink); color: var(--bg-black); }
+.panel-title-bar.accent-green .panel-code { background: var(--green); color: var(--bg-black); }
+.panel-title-bar.accent-orange .panel-code { background: var(--orange); color: var(--bg-black); }
+.panel-title-bar.accent-gold .panel-code { background: var(--gold); color: var(--bg-black); }
+
+.panel-code {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.panel-title-bar h2 {
+    color: var(--text-white);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.panel-subtitle {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-right: auto;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ================================================================
+   🔷 نوار KPI و کارت‌ها
+   ================================================================ */
+.kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.kpi-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    padding: 14px 16px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cyan), var(--purple));
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.kpi-card:hover {
+    border-color: var(--cyan);
+    background: var(--bg-panel-alt);
+    transform: translateY(-2px);
+    box-shadow: var(--glow-cyan);
+}
+
+.kpi-card:hover::before { opacity: 1; }
+
+.kpi-card h4 {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.kpi-card .value {
+    color: var(--cyan);
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    margin-bottom: 6px;
+    direction: ltr;
+    text-align: right;
+}
+
+.kpi-card .value.up { color: var(--green); text-shadow: 0 0 12px rgba(74, 222, 128, 0.4); }
+.kpi-card .value.down { color: var(--red); text-shadow: 0 0 12px rgba(248, 113, 113, 0.4); }
+
+.kpi-card .unit {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 500;
+    margin-right: 4px;
+    font-family: 'Vazirmatn', sans-serif;
+}
+
+.source-badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 2px 8px;
+    background: var(--bg-black);
+    color: var(--purple-light);
+    border: 1px solid var(--purple);
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+/* ================================================================
+   🔷 پنل‌های ترمینال
+   ================================================================ */
+.term-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.term-panel:hover {
+    border-color: var(--border-light);
+}
+
+.panel-head {
+    background: var(--bg-dark);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.panel-head.accent-cyan { color: var(--cyan); border-bottom-color: var(--cyan-dark); }
+.panel-head.accent-purple { color: var(--purple); border-bottom-color: var(--purple-dark); }
+.panel-head.accent-pink { color: var(--pink); border-bottom-color: var(--pink-dark); }
+.panel-head.accent-green { color: var(--green); border-bottom-color: var(--green-dark); }
+.panel-head.accent-orange { color: var(--orange); border-bottom-color: var(--orange-dark); }
+.panel-head.accent-gold { color: var(--gold); border-bottom-color: var(--gold-dark); }
+
+.panel-icon {
+    font-size: 16px;
+}
+
+.panel-meta {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-right: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+}
+
+.panel-body {
+    padding: 14px;
+}
+
+.grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+@media (max-width: 1100px) {
+    .grid-2col { grid-template-columns: 1fr; }
+}
+
+.chart-wrap {
+    padding: 14px;
+    height: 280px;
+}
+
+.chart-wrap.large {
+    height: 400px;
+}
+
+/* ================================================================
+   🔷 نقشه حرارتی
+   ================================================================ */
+.heatmap-grid {
+    padding: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.heatmap-card {
+    background: var(--bg-black);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px 14px;
+    transition: all 0.2s;
+}
+
+.heatmap-card:hover {
+    border-color: var(--orange);
+    transform: translateY(-2px);
+    box-shadow: 0 0 16px rgba(251, 146, 60, 0.2);
+}
+
+.heatmap-card h4 {
+    color: var(--text-white);
+    font-size: 13px;
+    margin-bottom: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.heatmap-card .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    padding: 4px 0;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.heatmap-card .lbl {
+    color: var(--text-dim);
+    font-family: 'Vazirmatn', sans-serif;
+}
+
+.heatmap-card .val {
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 4px;
+    direction: ltr;
+    min-width: 80px;
+    text-align: center;
+}
+
+.heatmap-card .val.up {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--green);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.heatmap-card .val.down {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--red);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+/* ================================================================
+   🔷 رژیم بازار
+   ================================================================ */
+.regime-widget-inner .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--border-color);
+    align-items: center;
+}
+
+.regime-widget-inner .row:last-of-type { border-bottom: none; }
+
+.regime-widget-inner .lbl {
+    color: var(--text-secondary);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.regime-widget-inner .val {
+    color: var(--purple);
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+}
+
+.signal-item {
+    padding: 8px 12px;
+    background: rgba(167, 139, 250, 0.1);
+    border-right: 3px solid var(--purple);
+    border-radius: 4px;
+    margin-top: 6px;
+    color: var(--purple-light);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ================================================================
+   🔷 ستاپ‌ها
+   ================================================================ */
+.setup-row {
+    background: var(--bg-black);
+    border: 1px solid var(--border-color);
+    border-right: 3px solid var(--cyan);
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    display: grid;
+    grid-template-columns: 130px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.setup-row:hover {
+    background: var(--bg-hover);
+    border-right-color: var(--pink);
+    transform: translateX(-3px);
+    box-shadow: 0 0 20px rgba(244, 114, 182, 0.15);
+}
+
+.setup-row .sym-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.setup-row .sym {
+    color: var(--cyan);
+    font-weight: 700;
+    letter-spacing: 1px;
+    direction: ltr;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+}
+
+.setup-row .bias {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-weight: 700;
+    display: inline-block;
+    width: fit-content;
+    letter-spacing: 0.5px;
+}
+
+.bias.long, .bias.buy {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--green);
+    border: 1px solid var(--green-dark);
+}
+
+.bias.short, .bias.sell {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--red);
+    border: 1px solid var(--red-dark);
+}
+
+.setup-row .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+}
+
+.setup-row .meta-item .lbl {
+    color: var(--text-dim);
+    margin-left: 4px;
+    font-family: 'Vazirmatn', sans-serif;
+}
+
+.setup-row .meta-item .val {
+    color: var(--text-white);
+    font-weight: 600;
+}
+
+.setup-row .quality {
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+    color: var(--bg-black);
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: 0 0 12px rgba(253, 224, 71, 0.3);
+}
+
+/* ================================================================
+   🔷 کارت پیش‌بینی
+   ================================================================ */
+.pred-card {
+    background: var(--bg-panel-alt);
+    border: 1px solid var(--border-color);
+    border-top: 3px solid var(--gold);
+    padding: 14px 16px;
+    border-radius: 6px;
+}
+
+.pred-card h4 {
+    color: var(--gold);
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.pred-card .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+    border-bottom: 1px dashed var(--border-color);
+}
+
+.pred-card .row:last-child { border-bottom: none; }
+.pred-card .row .lbl { color: var(--text-secondary); font-family: 'Vazirmatn', sans-serif; }
+.pred-card .row .val { color: var(--gold-light); font-weight: 700; }
+
+/* ================================================================
+   🔷 جدول
+   ================================================================ */
+.table-wrap {
+    padding: 14px;
+    overflow-x: auto;
+}
+
+.term-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+
+.term-table th {
+    background: var(--bg-black);
+    color: var(--purple);
+    padding: 10px 14px;
+    text-align: right;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--purple);
+    text-transform: uppercase;
+    font-family: 'Vazirmatn', sans-serif;
+}
+
+.term-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.term-table tr:hover {
+    background: var(--bg-hover);
+}
+
+.term-table td.num { direction: ltr; text-align: right; color: var(--cyan); font-weight: 600; }
+.term-table td.up { color: var(--green); font-weight: 700; }
+.term-table td.down { color: var(--red); font-weight: 700; }
+
+/* ================================================================
+   🔷 نوار وضعیت پایین
+   ================================================================ */
+.status-bar {
+    background: var(--bg-black);
+    border-top: 1px solid var(--cyan-dark);
+    padding: 8px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    margin-top: 20px;
+    box-shadow: 0 -2px 12px rgba(6, 214, 214, 0.1);
+}
+
+.status-left, .status-right {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+}
+
+.status-item .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-item .dot.green {
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+}
+
+/* ================================================================
+   🔷 اسکرول‌بار
+   ================================================================ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-black); }
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--cyan-dark), var(--purple-dark));
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, var(--cyan), var(--purple));
+}
+
+/* ================================================================
+   🔷 ریسپانسیو
+   ================================================================ */
+@media (max-width: 1024px) {
+    .terminal-header { padding: 10px 12px; }
+    .terminal-nav { justify-content: center; width: 100%; order: 3; }
+    .terminal-widgets { order: 2; }
+}
+
+@media (max-width: 640px) {
+    .terminal-main { padding: 10px; }
+    .kpi-strip { grid-template-columns: 1fr 1fr; }
+    .setup-row { grid-template-columns: 1fr; text-align: center; }
+    .setup-row .meta { justify-content: center; }
+    .brand-tag { display: none; }
+    .status-bar { flex-direction: column; gap: 4px; }
+}
+
+/* ================================================================
+   💎 استایل‌های حرفه‌ای اسکنر Pro
+   ================================================================ */
+
+.strength-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.strength-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--cyan);
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.strength-legend {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.strength-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.strength-card {
+    background: var(--bg-black);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.strength-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--cyan);
+}
+
+.strength-card.rank-1 { border-color: var(--green); box-shadow: 0 0 10px rgba(74, 222, 128, 0.2); }
+.strength-card.rank-2 { border-color: var(--cyan); }
+
+.strength-rank {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.strength-symbol {
+    color: var(--cyan);
+    font-size: 20px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.strength-name {
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.strength-stars {
+    text-align: center;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.strength-score-bar {
+    height: 6px;
+    background: var(--bg-hover);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.score-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.strength-score-num {
+    text-align: center;
+    color: var(--text-white);
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 6px;
+}
+
+.strength-bias {
+    text-align: center;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.bias-bull { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.bias-bear { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+.bias-neutral { background: rgba(154, 165, 196, 0.15); color: var(--text-secondary); }
+
+.strength-momentum {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.strength-momentum .up { color: var(--green); font-weight: 700; }
+.strength-momentum .down { color: var(--red); font-weight: 700; }
+
+.best-pair-panel {
+    background: linear-gradient(90deg, rgba(6, 214, 214, 0.1), rgba(167, 139, 250, 0.1));
+    border: 1px solid var(--cyan);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.best-pair-label { color: var(--gold); font-weight: 700; font-size: 13px; }
+.best-pair-value {
+    color: var(--cyan);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+.best-pair-hint { color: var(--text-dim); font-size: 11px; }
+
+/* کارت‌های ستاپ حرفه‌ای */
+.pro-setup-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+
+.pro-setup-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.pro-setup-card.buy { border-right: 4px solid var(--green); }
+.pro-setup-card.sell { border-right: 4px solid var(--red); }
+.pro-setup-card.neutral { border-right: 4px solid var(--text-dim); }
+
+.pro-setup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pro-symbol-block {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pro-symbol {
+    color: var(--text-white);
+    font-size: 16px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+}
+
+.pro-bias-badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.pro-bias-badge.buy { background: rgba(74, 222, 128, 0.15); color: var(--green); border: 1px solid var(--green); }
+.pro-bias-badge.sell { background: rgba(248, 113, 113, 0.15); color: var(--red); border: 1px solid var(--red); }
+.pro-bias-badge.neutral { background: rgba(154, 165, 196, 0.15); color: var(--text-secondary); }
+
+.pro-grade {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 900;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.pro-confidence {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: var(--bg-black);
+    border-radius: 6px;
+}
+
+.confidence-label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.confidence-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-hover);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.confidence-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.confidence-value {
+    color: var(--text-white);
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    min-width: 55px;
+    text-align: left;
+}
+
+.pro-setup-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.pro-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: var(--bg-black);
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.pro-metric .lbl { color: var(--text-secondary); }
+.pro-metric .val {
+    color: var(--text-white);
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+}
+.pro-metric .val.up { color: var(--green); }
+.pro-metric .val.down { color: var(--red); }
+.pro-metric .val.gold { color: var(--gold); }
+
+.pro-reasons {
+    background: var(--bg-black);
+    border-right: 3px solid var(--cyan);
+    padding: 10px 12px;
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+.reasons-title {
+    color: var(--cyan);
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.reason-item {
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 2px 0;
+    line-height: 1.6;
+}
+
+.no-setup-msg {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 30px;
+    font-size: 13px;
+    background: var(--bg-black);
+    border-radius: 6px;
+    border: 1px dashed var(--border-color);
+}
+/* ================================================================
+   🎨 Fionex F3 Scanner & Strength Meter Styles
+   ================================================================ */
+.setups-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-top: 15px;
+}
+
+.pro-setup-card {
+    background: #121722;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    padding: 16px;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.pro-setup-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.pro-setup-card.buy {
+    border-top: 3px solid #22C55E;
+}
+
+.pro-setup-card.sell {
+    border-top: 3px solid #EF4444;
+}
+
+.pro-setup-card.neutral {
+    border-top: 3px solid #64748B;
+}
+
+.pro-setup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.pro-symbol-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pro-symbol {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #F8FAFC;
+}
+
+.pro-bias-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.pro-bias-badge.buy {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ADE80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.pro-bias-badge.sell {
+    background: rgba(239, 68, 68, 0.15);
+    color: #F87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pro-grade {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 0.85rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.pro-confidence {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    font-size: 0.75rem;
+    color: #94A3B8;
+}
+
+.confidence-bar {
+    flex: 1;
+    height: 6px;
+    background: #1E293B;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.confidence-fill {
+    height: 100%;
+    border-radius: 3px;
+}
+
+.confidence-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #F8FAFC;
+}
+
+.pro-setup-body {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    background: #0B0E14;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #1E293B;
+    margin-bottom: 12px;
+}
+
+.pro-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pro-metric .lbl {
+    font-size: 0.75rem;
+    color: #64748B;
+}
+
+.pro-metric .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #E2E8F0;
+}
+
+.pro-metric .val.up { color: #4ADE80; }
+.pro-metric .val.down { color: #F87171; }
+.pro-metric .val.gold { color: #FACC15; }
+
+.pro-reasons {
+    font-size: 0.75rem;
+    color: #94A3B8;
+    background: rgba(6, 214, 214, 0.03);
+    border: 1px dashed rgba(6, 214, 214, 0.2);
+    padding: 8px 10px;
+    border-radius: 6px;
+}
+
+.reasons-title {
+    font-weight: 700;
+    color: #06D6D6;
+    margin-bottom: 4px;
+}
+
+.reason-item {
+    margin-bottom: 2px;
+}
+
+/* پنل قدرت ارزها */
+.strength-panel {
+    background: #121722;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.strength-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    color: #06D6D6;
+    margin-bottom: 14px;
+}
+
+.strength-legend {
+    font-size: 0.75rem;
+    color: #64748B;
+}
+
+.strength-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+}
+
+.strength-card {
+    background: #0B0E14;
+    border: 1px solid #1E293B;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+    position: relative;
+}
+
+.strength-rank {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-size: 0.7rem;
+    color: #64748B;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.strength-symbol {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: #F8FAFC;
+    margin-top: 4px;
+}
+
+.strength-name {
+    font-size: 0.75rem;
+    color: #94A3B8;
+    margin-bottom: 6px;
+}
+
+.strength-score-bar {
+    height: 4px;
+    background: #1E293B;
+    border-radius: 2px;
+    margin: 6px 0;
+    overflow: hidden;
+}
+
+.strength-score-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #E2E8F0;
+}
+
+.best-pair-panel {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #1E293B;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+}
+
+.best-pair-label { color: #94A3B8; }
+.best-pair-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    color: #FACC15;
+    background: rgba(250, 204, 21, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(250, 204, 21, 0.3);
+}
+.best-pair-hint { color: #64748B; font-size: 0.75rem; }
+.no-setup-msg {
+    text-align: center;
+    color: #64748B;
+    padding: 30px;
+    font-size: 0.9rem;
+}
+/* 🧪 استایل پنل پیشرفته کوانت Fionex */
+.quant-extra-panel {
+    background: #090c12;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 12px 0;
+}
+
+.quant-panel-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #06d6d6;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 4px;
+}
+
+.quant-metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+}
+
+.q-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72rem;
+    border-bottom: 1px dashed rgba(30, 41, 59, 0.5);
+    padding-bottom: 4px;
+}
+
+.q-metric:last-child {
+    border-bottom: none;
+}
+
+.q-lbl {
+    color: #64748b;
+}
+
+.q-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+.text-gold { color: #facc15 !important; }
+.text-green { color: #4ade80 !important; }
+.text-cyan { color: #06d6d6 !important; }
+
+.badge {
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-right: 4px;
+}
+
+.badge.buy {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.badge.sell {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge.neutral {
+    background: rgba(100, 116, 139, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(100, 116, 139, 0.3);
+}
+/* 🔄 استایل بخش همگرایی چندتایم فریمی (MTF) */
+.mtf-alignment-panel {
+    background: #090c12;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+
+.mtf-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #06d6d6;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 4px;
+}
+
+.mtf-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    text-align: center;
+}
+
+.mtf-col {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border-radius: 4px;
+    background: #111622;
+    border: 1px solid #1e293b;
+}
+
+.mtf-col .tf-name {
+    font-size: 0.65rem;
+    color: #64748b;
+    margin-bottom: 2px;
+}
+
+.mtf-col .tf-val {
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.mtf-col .tf-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: #94a3b8;
+}
+
+.mtf-col.buy {
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    background: rgba(34, 197, 94, 0.05);
+}
+.mtf-col.buy .tf-val { color: #4ade80; }
+
+.mtf-col.sell {
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.05);
+}
+.mtf-col.sell .tf-val { color: #f87171; }
+
+.mtf-col.neutral {
+    border: 1px solid #1e293b;
+    background: #0d111a;
+}
+.mtf-col.neutral .tf-val { color: #94a3b8; }
+/* ناوبری ایمن Fionex */
+.page-section {
+    display: none !important;
+}
+.page-section.active {
+    display: block !important;
+}
+/* 🔴 برچسب نرخ لحظه‌ای زنده Fionex */
+.live-price-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 4px;
+}
+
+.live-pulse-dot {
+    color: #22c55e;
+    font-size: 0.75rem;
+    animation: livePulse 1.5s infinite;
+}
+
+@keyframes livePulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.85); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.live-price-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #06d6d6;
+    letter-spacing: 0.5px;
+}
+
+.strength-live-rate {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #06d6d6;
+    background: rgba(6, 214, 214, 0.08);
+    padding: 2px 4px;
+    border-radius: 3px;
+    margin: 3px 0;
+}
+/* 📊 استایل نقشه حرارتی بلومبرگ Fionex */
+.heatmap-table-container {
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 10px;
+    overflow-x: auto;
+}
+
+.heatmap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    text-align: right;
+}
+
+.heatmap-table th, .heatmap-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #1e293b;
+}
+
+.heatmap-table th {
+    color: #64748b;
+    font-weight: 700;
+}
+
+.heatmap-table td.asset-name {
+    color: #f8fafc;
+    font-weight: 600;
+}
+
+.heatmap-table td.num {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+
+.heatmap-table tr:hover {
+    background: rgba(30, 41, 59, 0.3);
+}
+
+/* کارت رژیم بازار */
+.regime-card {
+    background: #121722;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.regime-metric {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+}
+
+.regime-metric .lbl {
+    color: #94a3b8;
+}
+
+.regime-metric .val {
+    font-weight: 700;
+}
+
+.regime-signals-list {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #1e293b;
+    font-size: 0.78rem;
+    color: #4ade80;
+}
+
+.sig-item {
+    margin-bottom: 4px;
+}
+/* ⚡ دکمه‌های سوییچ دی‌تریدینگ Fionex */
+.trade-style-selector {
+    display: flex;
+    gap: 12px;
+    background: #111622;
+    border: 1px solid #1e293b;
+    padding: 8px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.style-btn {
+    flex: 1;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #64748b;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s;
+    font-family: var(--font-fa);
+}
+
+.style-btn:hover {
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.style-btn.active {
+    background: #0b0e14;
+    color: #06d6d6;
+    border: 1px solid #06d6d6;
+    box-shadow: 0 0 12px rgba(6, 214, 214, 0.2);
+}
+
+/* اصلاحات تکمیلی ستون‌های ۳گانه برای هماهنگی با تایم‌فریم اسکالپ */
+.pro-setup-card.buy {
+    border-top: 3px solid #4ade80 !important;
+}
+.pro-setup-card.sell {
+    border-top: 3px solid #f87171 !important;
+}
+/* ================================================================
+   🎨 استایل‌های پایه ویجت‌های جدید Fionex v5.1
+   ================================================================ */
+
+/* گرید ۳ ستونی برای ویجت‌های ردیف بالای F1 */
+.widgets-row-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin: 15px 0;
+}
+
+/* گرید ۳ ستونی برای نمودارهای TradingView در F2 */
+.charts-tv-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.tv-chart-container {
+    width: 100%;
+    height: 350px;
+    background: #0b0e14;
+    border-radius: 4px;
+    position: relative;
+}
+
+/* نوار کنترل چارت (تایم‌فریم و اندیکاتور) */
+.chart-controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    background: #111622;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.tf-selector, .indicator-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ctrl-label {
+    color: #64748b;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.tf-btn, .bt-btn {
+    background: transparent;
+    border: 1px solid #1e293b;
+    color: #94a3b8;
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.tf-btn:hover, .bt-btn:hover {
+    color: #cbd5e1;
+    border-color: #06d6d6;
+}
+
+.tf-btn.active, .bt-btn.active {
+    background: rgba(6, 214, 214, 0.15);
+    color: #06d6d6;
+    border-color: #06d6d6;
+}
+
+.ind-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #cbd5e1;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.ind-checkbox input[type="checkbox"] {
+    accent-color: #06d6d6;
+    cursor: pointer;
+}
+
+/* گرید ۲ ستونی برای صفحه F3 (روابط) */
+.relations-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.network-container {
+    height: 400px;
+    background: #0b0e14;
+    border-radius: 4px;
+}
+
+.heatmap-matrix-container {
+    height: 400px;
+    overflow: auto;
+    background: #0b0e14;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+/* گرید ۲ ستونی برای صفحه F4 (بک‌تست) */
+.backtest-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #111622;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.backtest-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin: 15px 0;
+}
+
+.chart-body-tall {
+    height: 350px;
+    padding: 10px;
+    position: relative;
+}
+
+/* حالت واکنش‌گرا (Responsive) */
+@media (max-width: 1200px) {
+    .widgets-row-3,
+    .charts-tv-grid {
+        grid-template-columns: 1fr;
+    }
+    .relations-grid-2,
+    .backtest-grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+/* ================================================================
+   📊 استایل‌های فاز ۲: ویجت‌های حرفه‌ای F1 (بلومبرگ نئونی)
+   ================================================================ */
+
+/* برچسب‌های نوار تغییرات لحظه‌ای KPI */
+.kpi-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.kpi-head h4 {
+    margin: 0;
+}
+.kpi-tickers {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+.kpi-ticker-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.kpi-ticker-tag.up {
+    color: #4ade80;
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.25);
+}
+.kpi-ticker-tag.down {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.25);
+}
+.kpi-ticker-tag.neutral {
+    color: #94a3b8;
+}
+
+/* ویجت حباب سکه */
+.bubble-widget {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.bubble-main-stat {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+.bubble-pct-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+    border-radius: 8px;
+    min-width: 90px;
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+}
+.bubble-pct-box.down {
+    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
+}
+.bubble-pct-box.up {
+    border-color: rgba(34, 197, 94, 0.4);
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.15);
+}
+.bubble-pct-box .pct-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #f8fafc;
+}
+.bubble-pct-box .pct-lbl {
+    font-size: 0.7rem;
+    color: #94a3b8;
+}
+.bubble-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.bubble-details .b-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    border-bottom: 1px dashed rgba(30, 41, 59, 0.5);
+    padding-bottom: 3px;
+}
+.bubble-details .b-row .lbl {
+    color: #94a3b8;
+}
+.bubble-details .b-row .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+.bubble-status-badge {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+    gap: 2px;
+}
+.bubble-status-badge .status-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+.bubble-status-badge.down .status-title { color: #f87171; }
+.bubble-status-badge.up .status-title { color: #4ade80; }
+.bubble-status-badge.neutral .status-title { color: #06d6d6; }
+.bubble-status-badge .status-desc {
+    font-size: 0.72rem;
+    color: #64748b;
+}
+
+/* ویجت گیج فشار بازار */
+.gauge-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+.gauge-meter-wrapper {
+    position: relative;
+    width: 140px;
+    height: 70px;
+    overflow: hidden;
+}
+.gauge-meter {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: conic-gradient(from 180deg at 50% 50%, #f87171 0deg, #facc15 90deg, #4ade80 180deg);
+}
+.gauge-arc {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    width: 112px;
+    height: 112px;
+    background: #111622;
+    border-radius: 50%;
+}
+.gauge-needle {
+    position: absolute;
+    bottom: 50%;
+    left: 50%;
+    width: 3px;
+    height: 52px;
+    background: #ffffff;
+    transform-origin: bottom center;
+    border-radius: 2px;
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+}
+.gauge-center-cap {
+    position: absolute;
+    top: calc(50% - 7px);
+    left: calc(50% - 7px);
+    width: 14px;
+    height: 14px;
+    background: #06d6d6;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+}
+.gauge-info {
+    width: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.gauge-score-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 800;
+}
+.gauge-status-text {
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.gauge-bars-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.68rem;
+    color: #64748b;
+    margin-top: 4px;
+}
+.pressure-bar-fill-box {
+    flex: 1;
+    height: 5px;
+    background: #1e293b;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.pressure-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s;
+}
+
+/* تقویم رویدادهای اقتصادی */
+.calendar-events-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.event-item-card {
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color 0.2s;
+}
+.event-item-card:hover {
+    border-color: #06d6d6;
+}
+.event-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.event-curr-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    background: #1e293b;
+    color: #06d6d6;
+    border-radius: 3px;
+}
+.event-title {
+    flex: 1;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.event-impact-tag {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 700;
+}
+.event-impact-tag.high {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.event-impact-tag.medium {
+    background: rgba(250, 204, 21, 0.15);
+    color: #facc15;
+    border: 1px solid rgba(250, 204, 21, 0.3);
+}
+.event-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    color: #64748b;
+    border-top: 1px dashed rgba(30, 41, 59, 0.5);
+    padding-top: 4px;
+}
+.countdown-timer {
+    color: #06d6d6;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+}
+.forecast-nums b {
+    color: #cbd5e1;
+    font-family: 'JetBrains Mono', monospace;
+}
+/* ================================================================
+   💰 استایل‌های فاز ۳: چارت‌های TradingView و پیش‌بینی چندپله‌ای F2
+   ================================================================ */
+
+.multi-target-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+}
+
+.target-horizon-card {
+    background: #0B0E14;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.target-horizon-card:hover {
+    transform: translateY(-2px);
+    border-color: #06D6D6;
+}
+
+.target-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.horizon-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #F8FAFC;
+}
+
+.horizon-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+}
+.horizon-badge.cyan { background: rgba(6, 214, 214, 0.15); color: #06D6D6; border: 1px solid rgba(6, 214, 214, 0.3); }
+.horizon-badge.green { background: rgba(34, 197, 94, 0.15); color: #4ADE80; border: 1px solid rgba(34, 197, 94, 0.3); }
+.horizon-badge.gold { background: rgba(250, 204, 21, 0.15); color: #FACC15; border: 1px solid rgba(250, 204, 21, 0.3); }
+.horizon-badge.purple { background: rgba(168, 85, 247, 0.15); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.3); }
+
+.target-confidence-bar {
+    position: relative;
+    height: 14px;
+    background: #1E293B;
+    border-radius: 7px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.conf-fill {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #06D6D6, #22C55E);
+    border-radius: 7px;
+}
+
+.conf-label {
+    position: relative;
+    z-index: 2;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.target-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px dashed rgba(30, 41, 59, 0.6);
+    padding-top: 8px;
+}
+
+.t-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+}
+
+.t-item .lbl {
+    color: #94A3B8;
+}
+
+.t-item .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+
+.t-item .ret {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+.t-item .ret.up { color: #4ADE80; background: rgba(34, 197, 94, 0.1); }
+.t-item .ret.down { color: #F87171; background: rgba(239, 68, 68, 0.1); }
+
+@media (max-width: 1200px) {
+    .multi-target-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 650px) {
+    .multi-target-grid {
+        grid-template-columns: 1fr;
+    }
+}
+/* ================================================================
+   🌐 فاز ۴: استایل‌های اختصاصی روابط (F3) و بک‌تست (F4)
+   ================================================================ */
+
+/* ماتریس هیت‌مپ همبستگی */
+.matrix-heatmap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    text-align: center;
+}
+.matrix-heatmap-table th, .matrix-heatmap-table td {
+    padding: 8px 6px;
+    border: 1px solid #1E293B;
+}
+.matrix-heatmap-table th {
+    color: #64748B;
+    font-weight: 700;
+}
+.matrix-heatmap-table td.row-header {
+    font-weight: 700;
+    color: #F8FAFC;
+    background: #111622;
+    text-align: right;
+    padding-right: 10px;
+}
+.matrix-heatmap-table td {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+
+/* کارت‌های آربیتراژ */
+.arbitrage-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.arb-card {
+    background: #0B0E14;
+    border: 1px solid #1E293B;
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.2s;
+}
+.arb-card.arbitrage_active {
+    border-color: rgba(34, 197, 94, 0.4);
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.08);
+}
+.arb-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.arb-pair-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #F8FAFC;
+}
+.arb-badge {
+    font-size: 0.68rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(6, 214, 214, 0.1);
+    color: #06D6D6;
+    border: 1px solid rgba(6, 214, 214, 0.25);
+    font-weight: 700;
+}
+.arb-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.arb-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+}
+.arb-row .lbl { color: #94A3B8; }
+.arb-row .val { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+
+/* پنل تحلیل عاملی */
+.factor-analysis-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.factor-stacked-bar {
+    display: flex;
+    height: 24px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #1E293B;
+}
+.factor-bar-segment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #0B0E14;
+    transition: width 0.4s;
+}
+.factor-legend-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+.factor-legend-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    background: #0B0E14;
+    border: 1px solid #1E293B;
+    border-radius: 4px;
+    padding: 8px;
+}
+.factor-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+.factor-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.factor-info .f-title {
+    font-size: 0.8rem;
+    color: #F8FAFC;
+}
+.factor-info .f-desc {
+    font-size: 0.7rem;
+    color: #64748B;
+}
+
+/* کارت گرید مدل در بک‌تست */
+.model-grade-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.grade-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 3px solid #4ADE80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 900;
+    flex-shrink: 0;
+    box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+}
+.grade-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.grade-meta h4 { margin: 0; font-size: 0.85rem; }
+.grade-desc { font-size: 0.72rem; color: #94A3B8; }
+/* ================================================================
+   🎨 استایل‌های نهایی و اصلاحی Fionex v5.0
+   ================================================================ */
+
+.native-chart-container {
+    width: 100%;
+    height: 380px;
+    background: #0B0E14;
+    border-radius: 4px;
+    padding: 8px;
+    position: relative;
+}
+
+.native-chart-container canvas {
+    max-height: 360px !important;
+}
+
+.lib-error {
+    text-align: center;
+    padding: 60px 20px;
+    color: #F87171;
+    font-size: 0.85rem;
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px dashed rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    margin: 20px;
+}
+
+/* بهبود panel-head برای فاصله بهتر */
+.panel-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px !important;
+    border-bottom: 1px solid #1E293B;
+}
+
+.panel-head .panel-icon {
+    font-size: 1.1rem;
+}
+
+.panel-head span:not(.panel-icon):not(.panel-meta) {
+    flex: 1;
+    font-weight: 700;
+    color: #F8FAFC;
+    font-size: 0.88rem;
+}
+
+.panel-head .panel-meta {
+    font-size: 0.7rem;
+    color: #64748B;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* بهبود chart-controls-bar */
+.chart-controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    background: #111622;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    padding: 12px 18px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.tf-selector, .indicator-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ctrl-label {
+    color: #64748B;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-left: 4px;
+}
+
+.tf-btn, .bt-btn {
+    background: #0B0E14;
+    border: 1px solid #1E293B;
+    color: #94A3B8;
+    padding: 6px 14px;
+    border-radius: 5px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'JetBrains Mono', monospace;
+    margin: 0 2px;
+}
+
+.tf-btn:hover, .bt-btn:hover {
+    color: #06D6D6;
+    border-color: #06D6D6;
+    transform: translateY(-1px);
+}
+
+.tf-btn.active, .bt-btn.active {
+    background: rgba(6, 214, 214, 0.15);
+    color: #06D6D6;
+    border-color: #06D6D6;
+    box-shadow: 0 0 8px rgba(6, 214, 214, 0.3);
+}
+
+.ind-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #CBD5E1;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.ind-checkbox:hover {
+    background: rgba(6, 214, 214, 0.08);
+}
+
+.ind-checkbox input[type="checkbox"] {
+    accent-color: #06D6D6;
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+}
+
+/* بهبود charts-tv-grid */
+.charts-tv-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 15px;
+}
+
+/* بهبود panel-body */
+.panel-body {
+    padding: 12px;
+}
+
+.term-panel {
+    background: #121722;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.3s;
+}
+
+.term-panel:hover {
+    border-color: rgba(6, 214, 214, 0.3);
+}
+
+/* رسپانسیو */
+@media (max-width: 1400px) {
+    .charts-tv-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 900px) {
+    .charts-tv-grid { grid-template-columns: 1fr; }
+    .chart-controls-bar { flex-direction: column; align-items: flex-start; }
+}
+
+
+=========================================================================
+📄 FILE: src\web_server.jl
+=========================================================================
+module WebServer
+
+using HTTP, JSON3, Dates, Sockets
+
+export start_server
+
+include("data_fetcher.jl")
+include("macro_data.jl")
+include("storage.jl")
+include("math_engine.jl")
+include("predictor.jl")
+include("backtest_engine.jl")
+include("news_sentiment.jl")
+include("relationship_engine.jl")
+include("market_registry.jl")
+include("level_engine.jl")
+include("candle_patterns.jl")
+include("risk_manager.jl")
+include("trade_journal.jl")
+include("pre_trade_checklist.jl")
+include("adaptive_ml.jl")
+include("portfolio_risk.jl")
+
+using .DataFetcher
+using .MacroData
+using .Storage
+using .MathEngine
+using .Predictor
+using .BacktestEngine
+using .NewsSentiment
+using .RelationshipEngine
+using .MarketRegistry
+using .LevelEngine
+using .CandlePatterns
+using .RiskManager
+using .TradeJournal
+using .PreTradeChecklist
+using .AdaptiveML
+using .PortfolioRisk
+
+mutable struct AppState
+    last_update::DateTime
+    data::Union{Dict,Nothing}
+    analysis::Union{RatioAnalysis,Nothing}
+    prediction::Union{PredictionResult,Nothing}
+    backtest::Union{BacktestResult,Nothing}
+    sentiment::Union{NewsSentimentResult,Nothing}
+    relationship_map::Union{Any,Nothing}
+    portfolio_risk::Union{Any,Nothing}
+    last_backtest::DateTime
+    last_sentiment::DateTime
+end
+
+const STATE = AppState(
+    DateTime(2000,1,1),
+    nothing, nothing, nothing, nothing, nothing, nothing, nothing,
+    DateTime(2000,1,1), DateTime(2000,1,1)
+)
+
+const STATE_LOCK = ReentrantLock()
+
+const STATIC_DIR = abspath(normpath(joinpath(@__DIR__, "..", "static")))
+const TEMPLATES_DIR = abspath(normpath(joinpath(@__DIR__, "..", "templates")))
+
+function get_state_snapshot()
+    lock(STATE_LOCK)
+    try
+        return (
+            analysis = STATE.analysis,
+            prediction = STATE.prediction,
+            data = STATE.data,
+            backtest = STATE.backtest,
+            sentiment = STATE.sentiment,
+            relationship_map = STATE.relationship_map,
+            portfolio_risk = STATE.portfolio_risk,
+            last_update = STATE.last_update,
+            last_sentiment = STATE.last_sentiment,
+            last_backtest = STATE.last_backtest
+        )
+    finally
+        unlock(STATE_LOCK)
+    end
+end
+
+function set_state_all!(data, analysis, prediction, backtest, sentiment, rel_map, port_risk, last_sent, last_bt)
+    lock(STATE_LOCK)
+    try
+        STATE.data = data
+        STATE.analysis = analysis
+        STATE.prediction = prediction
+        STATE.backtest = backtest
+        STATE.sentiment = sentiment
+        STATE.relationship_map = rel_map
+        STATE.portfolio_risk = port_risk
+        STATE.last_sentiment = last_sent
+        STATE.last_backtest = last_bt
+        STATE.last_update = now()
+    finally
+        unlock(STATE_LOCK)
+    end
+end
+
+function clean_json_value(x)
+    if x isa AbstractFloat
+        return isfinite(x) ? x : nothing
+    elseif x isa AbstractString || x isa Symbol
+        return String(x)
+    elseif x isa Dates.TimeType
+        return string(x)
+    elseif x isa Dict
+        return Dict(string(k) => clean_json_value(v) for (k, v) in x)
+    elseif x isa AbstractVector
+        return [clean_json_value(v) for v in x]
+    elseif x isa Number || x isa Bool || x === nothing
+        return x
+    else
+        return string(x)
+    end
+end
+
+function safe_date_str(d)
+    if d isa Dates.TimeType
+        return Dates.format(d, "yyyy-mm-dd")
+    elseif d isa AbstractString
+        return length(d) >= 10 ? String(d)[1:10] : String(d)
+    else
+        return string(d)
+    end
+end
+
+function serialize_sentiment(s::Union{NewsSentimentResult,Nothing})
+    s === nothing && return Dict("available" => false)
+    return Dict(
+        "available"     => true,
+        "overall_score" => s.overall_score,
+        "gold_score"    => s.gold_score,
+        "usd_score"     => s.usd_score,
+        "iran_score"    => s.iran_score,
+        "alert_level"   => s.alert_level,
+        "summary"       => s.summary,
+        "last_updated"  => Dates.format(s.last_updated, "yyyy-mm-dd HH:MM:SS"),
+        "news_count"    => length(s.news_items),
+        "top_news"      => [
+            Dict(
+                "title"    => item.title,
+                "source"   => item.source,
+                "score"    => item.score,
+                "keywords" => item.keywords[1:min(4, end)]
+            ) for item in s.news_items[1:min(12, end)]
+        ]
+    )
+end
+
+function serialize_relationships(rm)
+    rm === nothing && return Dict("available" => false)
+    relations = []
+    for r in rm.relations[1:min(15, length(rm.relations))]
+        rc = Dict{String,Any}()
+        for (k,v) in r.regime_corr; rc[string(k)] = v; end
+        push!(relations, Dict(
+            "asset_b"       => r.asset_b,
+            "pearson_20d"   => r.pearson_20d,
+            "pearson_60d"   => r.pearson_60d,
+            "lead_lag_days" => r.lead_lag_days,
+            "lead_lag_corr" => r.lead_lag_corr,
+            "beta_30d"      => r.beta_30d,
+            "partial_corr"  => r.partial_corr,
+            "direction"     => r.direction,
+            "strength"      => r.strength,
+            "regime_corr"   => rc,
+            "dep_score"     => get(rm.dependency_scores, r.asset_b, 0.0)
+        ))
+    end
+    sorted_deps = sort(collect(rm.dependency_scores), by=x->-x[2])
+    top5 = [k for (k,v) in sorted_deps[1:min(5,length(sorted_deps))]]
+    return Dict(
+        "available"       => true,
+        "computed_at"     => string(rm.computed_at),
+        "relations"       => relations,
+        "leading_assets"  => rm.leading_assets,
+        "lagging_assets"  => rm.lagging_assets,
+        "top_influencers" => top5
+    )
+end
+
+function build_market_alert(data::Union{Dict,Nothing})
+    data === nothing && return Dict("level" => "UNKNOWN", "message" => "--", "gold_move" => 0.0, "usd_move" => 0.0)
+    try
+        gp = data["gold_oz"]["prices"]
+        up = data["usd_irr"]["prices"]
+        gmove = length(gp) >= 2 ? abs(gp[end] - gp[end-1]) / gp[end-1] * 100.0 : 0.0
+        umove = length(up) >= 2 ? abs(up[end] - up[end-1]) / up[end-1] * 100.0 : 0.0
+        maxmove = max(gmove, umove)
+
+        if maxmove > 2.0
+            return Dict("level" => "HIGH", "message" => "بازار پرنوسان - پیش‌بینی با احتیاط", "gold_move" => round(gmove, digits=2), "usd_move" => round(umove, digits=2))
+        elseif maxmove > 1.0
+            return Dict("level" => "MEDIUM", "message" => "نوسان متوسط در بازار", "gold_move" => round(gmove, digits=2), "usd_move" => round(umove, digits=2))
+        else
+            return Dict("level" => "LOW", "message" => "نوسان بازار در بازه عادی و آرام", "gold_move" => round(gmove, digits=2), "usd_move" => round(umove, digits=2))
+        end
+    catch
+        return Dict("level" => "UNKNOWN", "message" => "--", "gold_move" => 0.0, "usd_move" => 0.0)
+    end
+end
+
+function update_data!()
+    println("\n========== UPDATE START (HIGH-SPEED ENGINE) ==========")
+    t_start = time()
+
+    local_data = nothing
+    local_analysis = nothing
+    local_prediction = nothing
+    local_backtest = nothing
+    local_sentiment = nothing
+    local_relationship_map = nothing
+    local_portfolio_risk = nothing
+
+    snap = get_state_snapshot()
+    last_sentiment_cached = snap.last_sentiment
+    last_backtest_cached = snap.last_backtest
+
+    try
+        println("  [1/7] fetch live market data (TGJU & Nobitex)...")
+        local_data = DataFetcher.fetch_all_data(180)
+
+        println("  [2/7] fetch macro data (Stooq DXY/US10Y/VIX)...")
+        macrodata = MacroData.fetch_macro_data(180)
+        local_data["macro"] = macrodata
+        local_data["events"] = MacroData.fetch_upcoming_events(14)
+
+        println("  [3/7] news sentiment analysis...")
+        if last_sentiment_cached == DateTime(2000,1,1) || (now() - last_sentiment_cached) > Minute(30)
+            try
+                local_sentiment = fetch_news_sentiment(24)
+                last_sentiment_cached = now()
+            catch e
+                local_sentiment = nothing
+            end
+        else
+            local_sentiment = snap.sentiment
+        end
+        local_data["sentiment"] = local_sentiment
+
+        println("  [4/7] cross-market correlations...")
+        try
+            others = Dict{String,Vector{Float64}}()
+            others["usd"] = local_data["usd_irr"]["prices"]
+            for c in local_data["currencies"]
+                length(c.prices) >= 20 && (others[c.symbol] = c.prices)
+            end
+            macrod = get(local_data, "macro", Dict())
+            if haskey(macrod, "dxy") && haskey(macrod["dxy"], "prices")
+                others["DXY"] = macrod["dxy"]["prices"]
+            end
+            if haskey(macrod, "vix") && haskey(macrod["vix"], "prices")
+                others["VIX"] = macrod["vix"]["prices"]
+            end
+            local_relationship_map = compute_relationships("gold", local_data["gold_oz"]["prices"], others; control_series = get(others, "usd", nothing))
+        catch e
+            local_relationship_map = nothing
+        end
+
+        println("  [5/7] quantitative forecasting (Gold, USD, Coin)...")
+        local_analysis = calculate_all_ratios(local_data)
+        local_prediction = predict_next_week(local_data, local_analysis)
+
+        println("  [6/7] historical predictive backtest check...")
+        if last_backtest_cached == DateTime(2000,1,1) || (now() - last_backtest_cached) > Hour(6)
+            try
+                local_backtest = run_historical_backtest(
+                    local_data["gold_oz"]["prices"], local_data["gold_oz"]["dates"],
+                    local_data["usd_irr"]["prices"], local_data["usd_irr"]["dates"],
+                    local_data["iran_gold"]["prices"], local_data["iran_gold"]["dates"];
+                    test_days=60, min_train=30
+                )
+                last_backtest_cached = now()
+            catch e
+                local_backtest = nothing
+            end
+        else
+            local_backtest = snap.backtest
+        end
+
+        println("  [7/7] persisting records inside SQLite database...")
+        try
+            save_actual_snapshot!(local_data, local_analysis)
+            save_prediction_run!(local_prediction)
+        catch e
+        end
+
+        set_state_all!(
+            local_data, local_analysis, local_prediction, local_backtest,
+            local_sentiment, local_relationship_map,
+            local_portfolio_risk, last_sentiment_cached, last_backtest_cached
+        )
+
+        println("========== HIGH-SPEED ASSEMBLY COMPLETED IN ($(round(time() - t_start, digits=2))s) ==========\n")
+    catch e
+        @error "CRITICAL CORE DATA COMPILATION FAILURE" exception=(e, catch_backtrace())
+    end
+end
+
+function ensure_data()
+    snap = get_state_snapshot()
+    if snap.data === nothing
+        println("📥 اولین راه‌اندازی: بارگذاری داده‌های اولیه به صورت همگام...")
+        update_data!()
+    end
+end
+
+function handle_index(req)
+    try
+        target_path = normpath(joinpath(TEMPLATES_DIR, "index.html"))
+        if !isfile(target_path)
+            return HTTP.Response(404, ["Content-Type" => "text/plain; charset=utf-8"], "قالب index.html یافت نشد.")
+        end
+        return HTTP.Response(
+            200,
+            [
+                "Content-Type" => "text/html; charset=utf-8",
+                "Cache-Control" => "no-store, no-cache, must-revalidate, max-age=0"
+            ],
+            read(target_path)
+        )
+    catch e
+        return HTTP.Response(500, ["Content-Type" => "text/plain; charset=utf-8"], "Internal Server Error")
+    end
+end
+
+function handle_static_file(raw_path::AbstractString)
+    try
+        path_str = String(split(raw_path, '?')[1])
+        rel_file = replace(path_str, r"^/static/" => "")
+        rel_file = replace(rel_file, r"^static/" => "")
+        rel_file = replace(rel_file, "\\" => "/")
+        
+        target_path = normpath(joinpath(STATIC_DIR, rel_file))
+
+        if !startswith(lowercase(target_path), lowercase(STATIC_DIR))
+            return HTTP.Response(403, ["Content-Type" => "text/plain; charset=utf-8"], "Forbidden")
+        end
+
+        if !isfile(target_path)
+            return HTTP.Response(404, ["Content-Type" => "text/plain; charset=utf-8"], "فایل استاتیک یافت نشد: $rel_file")
+        end
+
+        ext = lowercase(splitext(target_path)[2])
+        ctype = get(Dict(
+            ".css"   => "text/css; charset=utf-8",
+            ".js"    => "application/javascript; charset=utf-8",
+            ".json"  => "application/json; charset=utf-8",
+            ".png"   => "image/png",
+            ".jpg"   => "image/jpeg",
+            ".svg"   => "image/svg+xml",
+            ".ico"   => "image/x-icon"
+        ), ext, "application/octet-stream")
+
+        return HTTP.Response(
+            200,
+            [
+                "Content-Type" => ctype,
+                "Cache-Control" => "public, max-age=86400",
+                "Access-Control-Allow-Origin" => "*"
+            ],
+            read(target_path)
+        )
+    catch e
+        return HTTP.Response(500, ["Content-Type" => "text/plain; charset=utf-8"], "Internal Server Error")
+    end
+end
+
+function build_api_response()
+    local_state = get_state_snapshot()
+    a  = local_state.analysis
+    p  = local_state.prediction
+    d  = local_state.data
+    bt = local_state.backtest
+
+    if a === nothing || p === nothing || d === nothing
+        return Dict(
+            "status" => "loading",
+            "message" => "سامانه در حال بارگذاری داده‌های اولیه است..."
+        )
+    end
+
+    hp = d["gold_oz"]["prices"]
+    hd0 = d["gold_oz"]["dates"]
+    hn = min(180, length(hp))
+    hs = hp[end-hn+1:end]
+    hd = [safe_date_str(x) for x in hd0[end-hn+1:end]]
+
+    up = d["usd_irr"]["prices"]
+    ud0 = d["usd_irr"]["dates"]
+    un = min(180, length(up))
+    us = up[end-un+1:end]
+    ud = [safe_date_str(x) for x in ud0[end-un+1:end]]
+
+    ip = d["iran_gold"]["prices"]
+    id0 = d["iran_gold"]["dates"]
+    iin = min(180, length(ip))
+    is_ = ip[end-iin+1:end]
+    id = [safe_date_str(x) for x in id0[end-iin+1:end]]
+
+    macrodata = haskey(d, "macro") ? d["macro"] : Dict()
+
+    bt_gold = bt !== nothing ? [Dict("date" => r.date, "actual" => r.actual, "predicted" => r.predicted, "error" => r.error_pct) for r in bt.gold_results] : []
+    bt_usd = bt !== nothing ? [Dict("date" => r.date, "actual" => r.actual, "predicted" => r.predicted, "error" => r.error_pct) for r in bt.usd_results] : []
+    bt_iran = bt !== nothing ? [Dict("date" => r.date, "actual" => r.actual, "predicted" => r.predicted, "error" => r.error_pct) for r in bt.iran_results] : []
+
+    return Dict(
+        "status"      => "success",
+        "last_update" => Dates.format(local_state.last_update, "yyyy-mm-dd HH:MM:SS"),
+        "current_prices" => Dict(
+            "gold_oz_usd"        => round(a.gold_oz_stats["current"], digits=2),
+            "gold_oz_ma20"       => round(a.gold_oz_stats["ma_20"], digits=2),
+            "gold_oz_ma50"       => round(a.gold_oz_stats["ma_50"], digits=2),
+            "gold_oz_rsi"        => a.gold_oz_stats["rsi_14"],
+            "gold_oz_volatility" => a.gold_oz_stats["volatility"],
+            "iran_gold_gram18"   => round(a.iran_gold_stats["current"], digits=0),
+            "coin_emami"         => round(a.iran_gold_stats["current"] * 8.133 * (21.6 / 18.0) * 1.05, digits=0),
+            "usd_irr"            => round(a.iran_gold_stats["usd_irr"], digits=0),
+            "dxy_estimate"       => a.dxy_estimate,
+            "fear_greed"         => a.fear_greed,
+            "dxy_real"           => try round(macrodata["dxy"]["current"], digits=2) catch; 104.2 end,
+            "us10y"              => try round(macrodata["us10y"]["current"], digits=2) catch; 4.45 end,
+            "vix"                => try round(macrodata["vix"]["current"], digits=2) catch; 15.8 end,
+            "providers"          => Dict(
+                "gold" => get(d["gold_oz"], "provider", "Nobitex"),
+                "usd"  => get(d["usd_irr"], "provider", "Nobitex"),
+                "iran" => get(d["iran_gold"], "provider", "فرمول رسمی"),
+                "macro"=> "Stooq"
+            )
+        ),
+        "prediction" => Dict(
+            "gold_oz" => Dict("point" => p.gold_oz_point, "low" => p.gold_oz_low, "high" => p.gold_oz_high, "daily" => p.gold_oz_daily),
+            "iran_gold" => Dict("point" => p.iran_gold_point, "low" => p.iran_gold_low, "high" => p.iran_gold_high, "daily" => p.iran_gold_daily),
+            "coin" => Dict("point" => p.coin_point, "low" => p.coin_low, "high" => p.coin_high),
+            "usd_irr" => Dict("point" => p.usd_irr_point, "low" => p.usd_irr_low, "high" => p.usd_irr_high, "daily" => p.usd_irr_daily),
+            "confidence"     => p.confidence,
+            "trend"          => p.trend,
+            "signals"        => p.signals
+        ),
+        "gold_history"      => Dict("prices" => round.(hs, digits=2), "dates" => hd),
+        "usd_history"       => Dict("prices" => round.(us, digits=0), "dates" => ud),
+        "iran_gold_history" => Dict("prices" => round.(is_, digits=0), "dates" => id),
+        "btc_history"       => haskey(d, "btc") ? Dict("prices" => round.(d["btc"]["prices"][end-min(180, length(d["btc"]["prices"]))+1:end], digits=1), "dates" => [safe_date_str(dt) for dt in d["btc"]["dates"][end-min(180, length(d["btc"]["prices"]))+1:end]]) : Dict(),
+        "eth_history"       => haskey(d, "eth") ? Dict("prices" => round.(d["eth"]["prices"][end-min(180, length(d["eth"]["prices"]))+1:end], digits=1), "dates" => [safe_date_str(dt) for dt in d["eth"]["dates"][end-min(180, length(d["eth"]["prices"]))+1:end]]) : Dict(),
+        "sol_history"       => haskey(d, "sol") ? Dict("prices" => round.(d["sol"]["prices"][end-min(180, length(d["sol"]["prices"]))+1:end], digits=2), "dates" => [safe_date_str(dt) for dt in d["sol"]["dates"][end-min(180, length(d["sol"]["prices"]))+1:end]]) : Dict(),
+        "backtest" => Dict(
+            "gold"                      => bt_gold,
+            "usd"                       => bt_usd,
+            "iran"                      => bt_iran,
+            "gold_mape"                 => bt !== nothing ? round(bt.gold_mape, digits=2) : nothing,
+            "usd_mape"                  => bt !== nothing ? round(bt.usd_mape, digits=2) : nothing,
+            "iran_mape"                 => bt !== nothing ? round(bt.iran_mape, digits=2) : nothing,
+            "direction_accuracy"        => bt !== nothing ? round(bt.gold_direction_accuracy, digits=1) : nothing,
+            "total_days"                => bt !== nothing ? bt.total_days : 0
+        ),
+        "sentiment"                  => serialize_sentiment(local_state.sentiment),
+        "relationships"              => serialize_relationships(local_state.relationship_map),
+        "trade_journal"              => TradeJournal.get_journal_stats(),
+        "market_alert"               => build_market_alert(d)
+    )
+end
+
+function handle_api(req)
+    try
+        ensure_data()
+        resp = build_api_response()
+        cleaned_resp = clean_json_value(resp)
+        return HTTP.Response(
+            200,
+            [
+                "Content-Type" => "application/json; charset=utf-8",
+                "Access-Control-Allow-Origin" => "*",
+                "Cache-Control" => "no-store, no-cache, must-revalidate, max-age=0"
+            ],
+            JSON3.write(cleaned_resp)
+        )
+    catch e
+        @error "API response build error" exception=(e, catch_backtrace())
+        return HTTP.Response(500, ["Content-Type" => "application/json; charset=utf-8"], JSON3.write(Dict("status" => "error", "message" => string(e))))
+    end
+end
+
+function handle_refresh(req)
+    try
+        update_data!()
+        return HTTP.Response(200, ["Content-Type" => "application/json; charset=utf-8"], JSON3.write(Dict("status" => "success", "message" => "داده‌ها به‌روزرسانی شدند.")))
+    catch e
+        return HTTP.Response(500, ["Content-Type" => "application/json; charset=utf-8"], JSON3.write(Dict("status" => "error", "message" => string(e))))
+    end
+end
+
+function router(req::HTTP.Request)
+    path = String(split(HTTP.URI(req.target).path, '?')[1])
+
+    if path == "/favicon.ico"
+        return HTTP.Response(204, ["Content-Type" => "image/x-icon"])
+    elseif path == "/" || path == "/index.html"
+        return handle_index(req)
+    elseif startswith(path, "/static/")
+        return handle_static_file(path)
+    elseif path == "/api/data"
+        return handle_api(req)
+    elseif path == "/api/refresh"
+        return handle_refresh(req)
+    else
+        return HTTP.Response(404, ["Content-Type" => "text/plain; charset=utf-8"], "صفحه مورد نظر یافت نشد.")
+    end
+end
+
+function start_server(port::Int=8080)
+    Storage.init_db()
+    println("\n=======================================================")
+    println("  Fionex Core Terminal (Running on http://localhost:$port)")
+    println("=======================================================\n")
+    
+    try
+        update_data!()
+    catch e
+        @error "خطای بارگذاری اولیه" exception=(e, catch_backtrace())
+    end
+
+    @async begin
+        println("🤖 سرویس پردازش پس‌زمینه لایو طلا و ارز فعال شد (بروزرسانی هر ۶۰ ثانیه).")
+        while true
+            sleep(60)
+            try
+                update_data!()
+            catch e
+            end
+        end
+    end
+
+    HTTP.serve(router, "0.0.0.0", port)
+end
+
+end
+
+

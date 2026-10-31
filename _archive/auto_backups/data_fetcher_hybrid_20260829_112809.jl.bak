@@ -1,0 +1,283 @@
+module DataFetcher
+
+using HTTP, JSON3, Dates, Statistics
+
+export fetch_all_data, fetch_upcoming_events, CurrencyData
+
+struct CurrencyData
+    symbol::String
+    name_fa::String
+    prices::Vector{Float64}
+    dates::Vector{DateTime}
+    latest::Float64
+    change_pct::Float64
+end
+
+const HTTP_HEADERS = ["User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) GoldPredictor/5.0"]
+
+# ------------------------------------------------------------------
+# لایه پایه HTTP: فقط اتصال خام به اینترنت. هیچ داده یا قیمتی اینجا
+# حدس زده نمی‌شود؛ فقط تلاش برای گرفتن پاسخ واقعی از سرور مرجع است.
+# ------------------------------------------------------------------
+function http_get_raw(url::String; timeout::Int=10)
+    try
+        resp = HTTP.get(url, HTTP_HEADERS; connect_timeout=timeout, request_timeout=timeout, status_exception=false)
+        if resp.status == 200
+            return String(resp.body)
+        end
+    catch e
+        @debug "HTTP GET failed" url=url exception=e
+    end
+    return nothing
+end
+
+function http_get_json(url::String; timeout::Int=10, retries::Int=2)
+    for attempt in 1:retries
+        body = http_get_raw(url; timeout=timeout)
+        if body !== nothing
+            try
+                return JSON3.read(body)
+            catch e
+                @debug "JSON parse failed" url=url exception=e
+            end
+        end
+        attempt < retries && sleep(0.6)
+    end
+    return nothing
+end
+
+# ------------------------------------------------------------------
+# نوبیتکس - تاریخچه واقعی روزانه (UDF History API)
+# چون فرمت دقیق resolution ممکن است بین نسخه‌های API فرق کند،
+# چند فرمت متداول امتحان می‌شود تا واقعاً داده معتبر برگردد.
+# ------------------------------------------------------------------
+function fetch_nobitex_udf(symbol::String, days::Int)
+    to_ts   = Int(round(datetime2unix(now())))
+    from_ts = Int(round(datetime2unix(now() - Day(days + 5))))
+
+    for res in ("D", "1D", "1440")
+        url = "https://api.nobitex.ir/market/udf/history?symbol=$symbol&resolution=$res&from=$from_ts&to=$to_ts"
+        j = http_get_json(url; timeout=10, retries=1)
+        j === nothing && continue
+        try
+            status = String(get(j, :s, "error"))
+            status != "ok" && continue
+            ts = j.t
+            closes = j.c
+            (length(ts) == 0 || length(closes) == 0) && continue
+
+            prices = Float64[]
+            dates  = DateTime[]
+            for i in 1:length(ts)
+                c = tryparse(Float64, string(closes[i]))
+                (c === nothing || c <= 0.0) && continue
+                push!(prices, c)
+                push!(dates, unix2datetime(Float64(ts[i])))
+            end
+            length(prices) >= 5 && return prices, dates
+        catch e
+            @debug "Nobitex UDF parse error" symbol=symbol resolution=res exception=e
+            continue
+        end
+    end
+    return nothing, nothing
+end
+
+# ------------------------------------------------------------------
+# CoinGecko - تاریخچه واقعی روزانه بازار (Market Chart API)
+# ------------------------------------------------------------------
+function fetch_coingecko_market_chart(coin_id::String, days::Int; vs_currency::String="usd")
+    d = clamp(days, 2, 365)
+    url = "https://api.coingecko.com/api/v3/coins/$coin_id/market_chart?vs_currency=$vs_currency&days=$d&interval=daily"
+    j = http_get_json(url; timeout=12, retries=2)
+    (j === nothing || !haskey(j, :prices)) && return nothing, nothing
+    try
+        arr = j.prices
+        prices = Float64[]
+        dates  = DateTime[]
+        for pair in arr
+            ts_ms = Float64(pair[1])
+            price = Float64(pair[2])
+            price <= 0.0 && continue
+            push!(prices, price)
+            push!(dates, unix2datetime(ts_ms / 1000.0))
+        end
+        length(prices) < 5 && return nothing, nothing
+        return prices, dates
+    catch e
+        @debug "CoinGecko parse error" coin_id=coin_id exception=e
+        return nothing, nothing
+    end
+end
+
+# ------------------------------------------------------------------
+# Frankfurter - نرخ تاریخی واقعی ارزهای اصلی جهانی نسبت به دلار
+# ------------------------------------------------------------------
+function fetch_frankfurter_timeseries(days::Int, symbols::Vector{String})
+    result = Dict{String, Vector{Tuple{DateTime,Float64}}}()
+    for s in symbols
+        result[s] = Tuple{DateTime,Float64}[]
+    end
+
+    end_date   = today()
+    start_date = end_date - Day(days)
+    sym_str    = join(symbols, ",")
+    url = "https://api.frankfurter.app/$(start_date)..$(end_date)?from=USD&to=$sym_str"
+    j = http_get_json(url; timeout=10, retries=2)
+    (j === nothing || !haskey(j, :rates)) && return Dict{String,Tuple{Vector{Float64},Vector{DateTime}}}()
+
+    try
+        for (dsym, valobj) in pairs(j.rates)
+            dstr = String(dsym)
+            dt = try
+                DateTime(Date(dstr))
+            catch
+                continue
+            end
+            for s in symbols
+                ssym = Symbol(s)
+                if haskey(valobj, ssym)
+                    v = tryparse(Float64, string(valobj[ssym]))
+                    v !== nothing && push!(result[s], (dt, v))
+                end
+            end
+        end
+    catch e
+        @debug "Frankfurter parse error" exception=e
+    end
+
+    final = Dict{String,Tuple{Vector{Float64},Vector{DateTime}}}()
+    for s in symbols
+        sorted_pairs = sort(result[s], by = x -> x[1])
+        if length(sorted_pairs) >= 3
+            final[s] = ([p[2] for p in sorted_pairs], [p[1] for p in sorted_pairs])
+        end
+    end
+    return final
+end
+
+# ------------------------------------------------------------------
+# ترکیب منابع برای هر دارایی: هیچ عدد ثابتی به‌عنوان قیمت وجود ندارد.
+# اگر تمام منابع واقعی شکست بخورند، نتیجه nothing است (نه یک حدس).
+# ------------------------------------------------------------------
+function fetch_gold_oz_history(days::Int)
+    p, d = fetch_coingecko_market_chart("pax-gold", days; vs_currency="usd")
+    p !== nothing && return p, d, "CoinGecko(PAXG)"
+
+    p, d = fetch_nobitex_udf("PAXGUSDT", days)
+    p !== nothing && return p, d, "Nobitex(PAXG/USDT)"
+
+    return nothing, nothing, "unavailable"
+end
+
+# فقط یکسان‌سازی واحد (ریال↔تومان) بر مبنای مرتبه بزرگی مقدار دریافتی
+# است - این «حدس قیمت» نیست، بلکه تشخیص واحد گزارش‌شده توسط API است.
+function normalize_toman_series(prices::Vector{Float64})
+    isempty(prices) && return prices
+    med = median(prices)
+    return med > 300000.0 ? (prices ./ 10.0) : prices
+end
+
+function fetch_usd_irr_history(days::Int)
+    for sym in ("USDTIRT", "USDTIRR")
+        p, d = fetch_nobitex_udf(sym, days)
+        if p !== nothing
+            return normalize_toman_series(p), d, "Nobitex($sym)"
+        end
+    end
+    return nothing, nothing, "unavailable"
+end
+
+function fetch_crypto_pair_history(nobitex_symbol::String, coingecko_id::String, days::Int)
+    p, d = fetch_nobitex_udf(nobitex_symbol, days)
+    p !== nothing && return p, d, "Nobitex"
+
+    p, d = fetch_coingecko_market_chart(coingecko_id, days; vs_currency="usd")
+    p !== nothing && return p, d, "CoinGecko"
+
+    return nothing, nothing, "unavailable"
+end
+
+# ------------------------------------------------------------------
+# تابع اصلی: صرفاً تجمیع‌کننده داده‌های واقعی. اگر داده حیاتی
+# (طلا یا دلار) در دسترس نباشد، خطا پرتاب می‌شود تا لایه بالاتر
+# داده‌های معتبر قبلی را حفظ کند (به‌جای جایگزینی با عدد ساختگی).
+# ------------------------------------------------------------------
+function fetch_all_data(history_days::Int=200)
+    days = clamp(history_days, 30, 365)
+
+    println("  [1/5] دریافت تاریخچه واقعی انس جهانی طلا از منابع مرجع...")
+    gold_p, gold_d, gold_src = fetch_gold_oz_history(days)
+    if gold_p === nothing
+        error("عدم دسترسی به هیچ منبع معتبری برای انس جهانی طلا (CoinGecko و Nobitex هر دو شکست خوردند)")
+    end
+    println("       منبع: $gold_src | آخرین مقدار: $(round(gold_p[end], digits=2)) USD | رکورد: $(length(gold_p))")
+
+    println("  [2/5] دریافت تاریخچه واقعی نرخ دلار تهران از نوبیتکس...")
+    usd_p, usd_d, usd_src = fetch_usd_irr_history(days)
+    if usd_p === nothing
+        error("عدم دسترسی به منبع معتبری برای نرخ دلار تهران (Nobitex)")
+    end
+    println("       منبع: $usd_src | آخرین مقدار: $(round(Int, usd_p[end])) تومان | رکورد: $(length(usd_p))")
+
+    println("  [3/5] محاسبه طلای ۱۸ عیار بر مبنای داده‌های واقعی بالا...")
+    n_common = min(length(gold_p), length(usd_p))
+    troy_gram = 31.1034768
+    iran_p = Float64[]
+    iran_d = DateTime[]
+    for i in 1:n_common
+        g = gold_p[end - n_common + i]
+        u = usd_p[end - n_common + i]
+        push!(iran_p, (g / troy_gram) * 0.75 * u * 1.012)
+        push!(iran_d, usd_d[end - n_common + i])
+    end
+    println("       آخرین طلای ۱۸ عیار محاسبه‌شده: $(round(Int, iran_p[end])) تومان")
+
+    println("  [4/5] دریافت تاریخچه واقعی رمزارزها...")
+    btc_p, btc_d, btc_src = fetch_crypto_pair_history("BTCUSDT", "bitcoin", days)
+    eth_p, eth_d, eth_src = fetch_crypto_pair_history("ETHUSDT", "ethereum", days)
+    sol_p, sol_d, sol_src = fetch_crypto_pair_history("SOLUSDT", "solana", days)
+
+    btc_p === nothing && (btc_p = Float64[]; btc_d = DateTime[])
+    eth_p === nothing && (eth_p = Float64[]; eth_d = DateTime[])
+    sol_p === nothing && (sol_p = Float64[]; sol_d = DateTime[])
+    println("       BTC: $btc_src ($(length(btc_p)) رکورد) | ETH: $eth_src ($(length(eth_p))) | SOL: $sol_src ($(length(sol_p)))")
+
+    println("  [5/5] دریافت تاریخچه واقعی ارزهای اصلی جهانی از Frankfurter...")
+    fx_symbols = ["EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "CNY", "TRY"]
+    fx_series  = fetch_frankfurter_timeseries(days, fx_symbols)
+
+    names_fa = Dict(
+        "EUR"=>"یورو", "GBP"=>"پوند", "JPY"=>"ین ژاپن", "CHF"=>"فرانک سوئیس",
+        "CAD"=>"دلار کانادا", "AUD"=>"دلار استرالیا", "CNY"=>"یوان چین", "TRY"=>"لیر ترکیه"
+    )
+    currencies = CurrencyData[]
+    rates = Dict{String,Float64}("USD" => 1.0)
+    for sym in fx_symbols
+        if haskey(fx_series, sym)
+            p, d = fx_series[sym]
+            push!(currencies, CurrencyData(sym, get(names_fa, sym, sym), p, d, p[end], 0.0))
+            rates[sym] = p[end]
+        end
+    end
+    println("       دریافت شد از Frankfurter: $(join([c.symbol for c in currencies], ", "))")
+
+    return Dict{String,Any}(
+        "gold_oz"    => Dict("prices" => gold_p, "dates" => gold_d, "provider" => gold_src),
+        "usd_irr"    => Dict("prices" => usd_p, "dates" => usd_d, "provider" => usd_src),
+        "iran_gold"  => Dict("prices" => iran_p, "dates" => iran_d, "provider" => "Computed(Live)"),
+        "currencies" => currencies,
+        "rates"      => rates,
+        "btc" => Dict("prices" => btc_p, "dates" => btc_d, "provider" => btc_src),
+        "eth" => Dict("prices" => eth_p, "dates" => eth_d, "provider" => eth_src),
+        "sol" => Dict("prices" => sol_p, "dates" => sol_d, "provider" => sol_src)
+    )
+end
+
+function fetch_upcoming_events(days_ahead::Int=14)
+    # این تابع در مسیر اصلی برنامه استفاده نمی‌شود (MacroData.fetch_upcoming_events
+    # جایگزین فعال آن است). فقط برای سازگاری با فراخوانی‌های احتمالی نگه داشته شده.
+    return Dict[]
+end
+
+end

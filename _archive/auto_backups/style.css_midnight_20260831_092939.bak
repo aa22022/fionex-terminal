@@ -1,0 +1,694 @@
+/* ================================================================
+   💼 BLOOMBERG TERMINAL STYLE
+   Gold Predictor v5.0 - Wall Street Professional
+   ================================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-black: #000000;
+    --bg-dark: #0A0A0A;
+    --bg-panel: #101010;
+    --bg-panel-alt: #151515;
+    --bg-hover: #1F1F1F;
+    --border-color: #2A2A2A;
+    --border-active: #FF9E00;
+    --text-white: #FFFFFF;
+    --text-primary: #E6E6E6;
+    --text-secondary: #A0A0A0;
+    --text-dim: #606060;
+    --orange: #FF9E00;
+    --orange-dark: #CC7F00;
+    --yellow: #FFD700;
+    --green: #00FF41;
+    --green-dark: #00AA2B;
+    --red: #FF3131;
+    --red-dark: #CC0000;
+    --blue: #00B4FF;
+    --purple: #B15EFF;
+}
+
+html { direction: rtl; }
+
+body {
+    font-family: 'JetBrains Mono', 'Vazirmatn', 'Consolas', monospace;
+    background: var(--bg-black);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ================================================================
+   🔷 نوار تیکر بالا (Bloomberg Ticker)
+   ================================================================ */
+.ticker-bar {
+    background: var(--bg-black);
+    border-bottom: 1px solid var(--border-color);
+    overflow: hidden;
+    height: 28px;
+    position: relative;
+}
+
+.ticker-content {
+    display: flex;
+    animation: tickerScroll 60s linear infinite;
+    white-space: nowrap;
+    padding: 6px 0;
+    gap: 40px;
+}
+
+.ticker-item {
+    color: var(--orange);
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    direction: ltr;
+}
+
+.ticker-item .up { color: var(--green); }
+.ticker-item .down { color: var(--red); }
+.ticker-item .symbol { color: var(--yellow); font-weight: 700; }
+
+@keyframes tickerScroll {
+    from { transform: translateX(100%); }
+    to { transform: translateX(-100%); }
+}
+
+/* ================================================================
+   🔷 هدر ترمینال
+   ================================================================ */
+.terminal-header {
+    background: var(--bg-dark);
+    border-bottom: 2px solid var(--orange);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.terminal-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-logo {
+    color: var(--orange);
+    font-size: 18px;
+    letter-spacing: -3px;
+}
+
+.brand-name {
+    color: var(--text-white);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.brand-version {
+    color: var(--text-dim);
+    font-size: 10px;
+    padding: 2px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+}
+
+.terminal-nav {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+}
+
+.nav-btn {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 8px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+}
+
+.nav-btn:hover {
+    background: var(--bg-hover);
+    color: var(--orange);
+    border-color: var(--orange-dark);
+}
+
+.nav-btn.active {
+    background: var(--orange);
+    color: var(--bg-black);
+    border-color: var(--orange);
+    font-weight: 700;
+}
+
+.nav-btn.active .hotkey {
+    background: var(--bg-black);
+    color: var(--orange);
+}
+
+.hotkey {
+    background: var(--bg-dark);
+    color: var(--orange);
+    padding: 2px 5px;
+    font-size: 9px;
+    border-radius: 2px;
+    font-weight: 700;
+}
+
+.terminal-widgets {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.live-clock {
+    background: var(--bg-black);
+    color: var(--green);
+    padding: 6px 12px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    border: 1px solid var(--border-color);
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+}
+
+.terminal-btn {
+    background: var(--bg-panel);
+    color: var(--orange);
+    border: 1px solid var(--orange-dark);
+    padding: 6px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 1px;
+}
+
+.terminal-btn:hover {
+    background: var(--orange);
+    color: var(--bg-black);
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--green);
+    animation: pulseLive 1.2s infinite alternate;
+}
+
+@keyframes pulseLive {
+    0% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* ================================================================
+   🔷 نوار هشدار
+   ================================================================ */
+.alert-strip {
+    background: linear-gradient(90deg, rgba(255,158,0,0.15), transparent);
+    border-right: 3px solid var(--orange);
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--orange);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.alert-tag {
+    background: var(--orange);
+    color: var(--bg-black);
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border-radius: 2px;
+}
+
+/* ================================================================
+   🔷 محتوای اصلی
+   ================================================================ */
+.terminal-main {
+    padding: 12px;
+    max-width: 1900px;
+    margin: 0 auto;
+}
+
+.page-section {
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* عنوان بخش */
+.panel-title-bar {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-right: 3px solid var(--orange);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.panel-code {
+    background: var(--orange);
+    color: var(--bg-black);
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 2px;
+    letter-spacing: 1px;
+}
+
+.panel-title-bar h2 {
+    color: var(--text-white);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+.panel-subtitle {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-right: auto;
+}
+
+/* ================================================================
+   🔷 نوار KPI و کارت‌ها
+   ================================================================ */
+.kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.kpi-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    padding: 12px 14px;
+    transition: all 0.15s;
+    position: relative;
+}
+
+.kpi-card:hover {
+    border-color: var(--orange-dark);
+    background: var(--bg-panel-alt);
+}
+
+.kpi-card h4 {
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.kpi-card .value {
+    color: var(--orange);
+    font-size: 20px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    direction: ltr;
+    text-align: right;
+    margin-bottom: 6px;
+}
+
+.kpi-card .value.up { color: var(--green); }
+.kpi-card .value.down { color: var(--red); }
+
+.source-badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 2px 6px;
+    background: var(--bg-black);
+    color: var(--text-dim);
+    border: 1px solid var(--border-color);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* ================================================================
+   🔷 پنل‌های ترمینال
+   ================================================================ */
+.term-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    margin-bottom: 12px;
+}
+
+.panel-head {
+    background: var(--bg-dark);
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--orange);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.panel-icon {
+    color: var(--yellow);
+    font-size: 12px;
+}
+
+.panel-meta {
+    color: var(--text-dim);
+    font-size: 10px;
+    margin-right: auto;
+    letter-spacing: 1px;
+}
+
+.panel-body {
+    padding: 12px;
+}
+
+.grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+@media (max-width: 900px) {
+    .grid-2col { grid-template-columns: 1fr; }
+}
+
+.chart-wrap {
+    padding: 12px;
+    height: 260px;
+}
+
+.chart-wrap.large {
+    height: 380px;
+}
+
+/* ================================================================
+   🔷 نقشه حرارتی
+   ================================================================ */
+.heatmap-grid {
+    padding: 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 6px;
+}
+
+.heatmap-card {
+    background: var(--bg-black);
+    border: 1px solid var(--border-color);
+    padding: 10px 12px;
+}
+
+.heatmap-card h4 {
+    color: var(--text-white);
+    font-size: 12px;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.heatmap-card .row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    padding: 3px 0;
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+}
+
+.heatmap-card .lbl { color: var(--text-dim); }
+.heatmap-card .up { color: var(--green); font-weight: 600; }
+.heatmap-card .down { color: var(--red); font-weight: 600; }
+
+/* ================================================================
+   🔷 رژیم و ستاپ‌ها
+   ================================================================ */
+.regime-widget-inner {
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.regime-widget-inner .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border-color);
+}
+
+.regime-widget-inner .lbl {
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.regime-widget-inner .val {
+    color: var(--orange);
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.signal-item {
+    padding: 6px 10px;
+    background: var(--bg-black);
+    border-right: 2px solid var(--yellow);
+    margin: 4px 0;
+    color: var(--yellow);
+    font-size: 11px;
+}
+
+.setup-row {
+    background: var(--bg-black);
+    border: 1px solid var(--border-color);
+    border-right: 3px solid var(--orange);
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    display: grid;
+    grid-template-columns: 120px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    transition: all 0.15s;
+}
+
+.setup-row:hover {
+    background: var(--bg-hover);
+    border-right-color: var(--yellow);
+}
+
+.setup-row .sym {
+    color: var(--yellow);
+    font-weight: 700;
+    letter-spacing: 1px;
+    direction: ltr;
+}
+
+.setup-row .bias-long { color: var(--green); font-weight: 600; }
+.setup-row .bias-short { color: var(--red); font-weight: 600; }
+
+.setup-row .meta {
+    color: var(--text-secondary);
+    font-size: 11px;
+    direction: ltr;
+}
+
+.setup-row .quality {
+    background: var(--orange);
+    color: var(--bg-black);
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 2px;
+}
+
+/* پیش‌بینی */
+.pred-card {
+    background: var(--bg-panel-alt);
+    border: 1px solid var(--border-color);
+    border-top: 2px solid var(--orange);
+    padding: 12px 14px;
+}
+
+.pred-card h4 {
+    color: var(--yellow);
+    font-size: 11px;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.pred-card .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+}
+
+.pred-card .lbl { color: var(--text-secondary); font-family: 'Vazirmatn', sans-serif; }
+.pred-card .val { color: var(--orange); font-weight: 700; }
+
+/* ================================================================
+   🔷 جدول ترمینال
+   ================================================================ */
+.table-wrap {
+    padding: 12px;
+    overflow-x: auto;
+}
+
+.term-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+
+.term-table th {
+    background: var(--bg-black);
+    color: var(--orange);
+    padding: 8px 12px;
+    text-align: right;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1px;
+    border-bottom: 2px solid var(--orange);
+    text-transform: uppercase;
+}
+
+.term-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.term-table tr:hover {
+    background: var(--bg-hover);
+}
+
+.term-table td.num { direction: ltr; text-align: right; color: var(--yellow); }
+.term-table td.up { color: var(--green); }
+.term-table td.down { color: var(--red); }
+
+/* ================================================================
+   🔷 نوار وضعیت پایین
+   ================================================================ */
+.status-bar {
+    background: var(--bg-black);
+    border-top: 1px solid var(--orange-dark);
+    padding: 6px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+}
+
+.status-left, .status-right {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+}
+
+.status-item .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-item .dot.green { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.status-item .dot.red { background: var(--red); }
+
+/* ================================================================
+   🔷 اسکرول‌بار سبک ترمینال
+   ================================================================ */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-black);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--orange-dark);
+    border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--orange);
+}
+
+/* ================================================================
+   🔷 ریسپانسیو
+   ================================================================ */
+@media (max-width: 1200px) {
+    .terminal-nav { justify-content: center; }
+}
+
+@media (max-width: 768px) {
+    .terminal-header { padding: 8px 12px; }
+    .terminal-main { padding: 8px; }
+    .kpi-strip { grid-template-columns: 1fr 1fr; }
+    .setup-row { grid-template-columns: 1fr; }
+}

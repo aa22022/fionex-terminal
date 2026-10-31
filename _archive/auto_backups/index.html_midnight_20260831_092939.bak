@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GOLD TERMINAL | Professional Trading Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/chart.min.js"></script>
+</head>
+<body>
+
+<!-- 🔷 تیکر بالای صفحه (Ticker Bar) -->
+<div class="ticker-bar">
+    <div class="ticker-content" id="tickerContent">
+        <span class="ticker-item">LOADING MARKET DATA...</span>
+    </div>
+</div>
+
+<!-- 🔷 هدر ترمینال -->
+<header class="terminal-header">
+    <div class="terminal-brand">
+        <span class="brand-logo">◼◼</span>
+        <span class="brand-name">GOLD<span style="color:#FF9E00">TERMINAL</span></span>
+        <span class="brand-version">v5.0</span>
+    </div>
+    
+    <nav class="terminal-nav">
+        <button class="nav-btn active" data-page="page-overview" data-hotkey="F1">
+            <span class="hotkey">F1</span>OVERVIEW
+        </button>
+        <button class="nav-btn" data-page="page-gold" data-hotkey="F2">
+            <span class="hotkey">F2</span>GOLD/FX
+        </button>
+        <button class="nav-btn" data-page="page-fx" data-hotkey="F3">
+            <span class="hotkey">F3</span>SCANNER
+        </button>
+        <button class="nav-btn" data-page="page-relations" data-hotkey="F4">
+            <span class="hotkey">F4</span>RELATIONS
+        </button>
+        <button class="nav-btn" data-page="page-backtest" data-hotkey="F5">
+            <span class="hotkey">F5</span>BACKTEST
+        </button>
+        <button class="nav-btn" data-page="page-reports" data-hotkey="F6">
+            <span class="hotkey">F6</span>REPORTS
+        </button>
+    </nav>
+
+    <div class="terminal-widgets">
+        <div class="live-clock" id="navTime">--:--:--</div>
+        <button class="terminal-btn" id="btnRefresh">
+            <span>⟳</span> REFRESH
+        </button>
+        <div class="status-indicator">
+            <span class="status-dot" id="statusDot"></span>
+            <span>LIVE</span>
+        </div>
+    </div>
+</header>
+
+<!-- 🔷 نوار هشدار -->
+<div class="alert-strip" id="alertBanner">
+    <span class="alert-tag">MKT</span>
+    <span>Initializing market feed...</span>
+</div>
+
+<main class="terminal-main">
+
+    <!-- 📊 صفحه نمای کلی (F1) -->
+    <section class="page-section active" id="page-overview">
+        <div class="panel-title-bar">
+            <span class="panel-code">F1</span>
+            <h2>MARKET OVERVIEW</h2>
+            <span class="panel-subtitle">// خلاصه وضعیت لحظه‌ای بازار</span>
+        </div>
+        
+        <!-- بلوک شاخص‌ها -->
+        <div class="kpi-strip" id="ovKpiGrid"></div>
+        
+        <!-- گرید ۲ ستونه: چارت و رژیم -->
+        <div class="grid-2col">
+            <div class="term-panel">
+                <div class="panel-head">
+                    <span class="panel-icon">▤</span>
+                    <span>GOLD SPOT TREND (XAU/USD)</span>
+                    <span class="panel-meta" id="goldMetaInfo">--</span>
+                </div>
+                <div class="chart-wrap"><canvas id="ovChGoldMini"></canvas></div>
+            </div>
+            <div class="term-panel">
+                <div class="panel-head">
+                    <span class="panel-icon">◈</span>
+                    <span>MARKET REGIME</span>
+                </div>
+                <div class="panel-body" id="ovRegimeInfo"></div>
+            </div>
+        </div>
+        
+        <!-- نقشه حرارتی -->
+        <div class="term-panel">
+            <div class="panel-head">
+                <span class="panel-icon">▦</span>
+                <span>PERFORMANCE HEATMAP</span>
+                <span class="panel-meta">1D / 5D / 20D</span>
+            </div>
+            <div class="heatmap-grid" id="marketHeatmap"></div>
+        </div>
+        
+        <!-- ستاپ‌های برتر -->
+        <div class="term-panel">
+            <div class="panel-head">
+                <span class="panel-icon">▲</span>
+                <span>TOP TRADE SETUPS</span>
+                <span class="panel-meta">// بهترین فرصت‌های ترید</span>
+            </div>
+            <div class="panel-body" id="ovTopSetups"></div>
+        </div>
+    </section>
+
+    <!-- 🥇 صفحه طلا و ارز (F2) -->
+    <section class="page-section" id="page-gold" style="display:none">
+        <div class="panel-title-bar">
+            <span class="panel-code">F2</span>
+            <h2>GOLD & IRAN FOREX</h2>
+            <span class="panel-subtitle">// طلا، دلار و طلای ۱۸ عیار</span>
+        </div>
+        
+        <div class="kpi-strip" id="goldPredGrid"></div>
+        
+        <div class="term-panel">
+            <div class="panel-head">
+                <span class="panel-icon">▤</span>
+                <span>XAU/USD - GOLD SPOT CHART</span>
+            </div>
+            <div class="chart-wrap large"><canvas id="chGold"></canvas></div>
+        </div>
+        
+        <div class="term-panel">
+            <div class="panel-head">
+                <span class="panel-icon">▤</span>
+                <span>USD/IRT - TEHRAN FREE MARKET</span>
+            </div>
+            <div class="chart-wrap large"><canvas id="chUSD"></canvas></div>
+        </div>
+        
+        <div class="term-panel">
+            <div class="panel-head">
+                <span class="panel-icon">▤</span>
+                <span>GOLD 18K - IRAN LOCAL PRICE</span>
+            </div>
+            <div class="chart-wrap large"><canvas id="chIran"></canvas></div>
+        </div>
+    </section>
+
+    <!-- 💱 صفحه اسکنر (F3) -->
+    <section class="page-section" id="page-fx" style="display:none">
+        <div class="panel-title-bar">
+            <span class="panel-code">F3</span>
+            <h2>FOREX & CRYPTO SCANNER</h2>
+            <span class="panel-subtitle">// اسکن ستاپ‌های زنده</span>
+        </div>
+        
+        <div class="term-panel">
+            <div class="panel-head">
+                <span class="panel-icon">◧</span>
+                <span>FOREX SETUPS</span>
+            </div>
+            <div class="panel-body" id="fxSetups"></div>
+        </div>
+        
+        <div class="term-panel">
+            <div class="panel-head">
+                <span class="panel-icon">◪</span>
+                <span>CRYPTO SETUPS</span>
+            </div>
+            <div class="panel-body" id="cryptoSetups"></div>
+        </div>
+    </section>
+
+    <!-- 🔗 صفحه روابط (F4) -->
+    <section class="page-section" id="page-relations" style="display:none">
+        <div class="panel-title-bar">
+            <span class="panel-code">F4</span>
+            <h2>CROSS-ASSET RELATIONS</h2>
+            <span class="panel-subtitle">// همبستگی و روابط بین بازاری</span>
+        </div>
+        
+        <div class="term-panel">
+            <div class="panel-head">
+                <span class="panel-icon">▦</span>
+                <span>CORRELATION MATRIX</span>
+            </div>
+            <div class="table-wrap">
+                <table class="term-table" id="corrTbl"></table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 📉 صفحه بک‌تست (F5) -->
+    <section class="page-section" id="page-backtest" style="display:none">
+        <div class="panel-title-bar">
+            <span class="panel-code">F5</span>
+            <h2>BACKTEST & VALIDATION</h2>
+            <span class="panel-subtitle">// اعتبارسنجی مدل پیش‌بینی</span>
+        </div>
+        
+        <div class="kpi-strip" id="btStats"></div>
+    </section>
+
+    <!-- 📋 صفحه گزارش‌ها (F6) -->
+    <section class="page-section" id="page-reports" style="display:none">
+        <div class="panel-title-bar">
+            <span class="panel-code">F6</span>
+            <h2>ANALYTICS & JOURNAL</h2>
+            <span class="panel-subtitle">// ژورنال معاملات و منحنی رشد</span>
+        </div>
+        
+        <div class="kpi-strip" id="journalStatsWidget"></div>
+    </section>
+
+</main>
+
+<!-- 🔷 نوار وضعیت پایین -->
+<footer class="status-bar">
+    <div class="status-left">
+        <span class="status-item"><span class="dot green"></span>API: CONNECTED</span>
+        <span class="status-item">LATENCY: <span id="pingMs">--</span>ms</span>
+        <span class="status-item">LAST UPDATE: <span id="lastUp">--</span></span>
+    </div>
+    <div class="status-right">
+        <span class="status-item">GOLDTERMINAL PRO v5.0</span>
+        <span class="status-item">© 2025</span>
+    </div>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

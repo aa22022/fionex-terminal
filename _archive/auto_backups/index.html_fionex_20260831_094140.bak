@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>گلد پردیکتور | پلتفرم حرفه‌ای تحلیل بازار</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/chart.min.js"></script>
+</head>
+<body>
+
+<!-- 🔷 نوار بالای سایت -->
+<header class="tv-header">
+    <div class="header-left">
+        <div class="tv-logo">
+            <div class="logo-icon">📊</div>
+            <div class="logo-text">
+                <span class="logo-brand">گلد پردیکتور</span>
+                <span class="logo-tag">PRO</span>
+            </div>
+        </div>
+        <nav class="tv-nav">
+            <button class="tv-nav-btn active" data-page="page-overview">
+                <span>نمای کلی</span>
+            </button>
+            <button class="tv-nav-btn" data-page="page-gold">
+                <span>طلا و ارز</span>
+            </button>
+            <button class="tv-nav-btn" data-page="page-fx">
+                <span>اسکنر بازار</span>
+            </button>
+            <button class="tv-nav-btn" data-page="page-relations">
+                <span>روابط بازارها</span>
+            </button>
+            <button class="tv-nav-btn" data-page="page-backtest">
+                <span>بک‌تست</span>
+            </button>
+            <button class="tv-nav-btn" data-page="page-reports">
+                <span>گزارش‌ها</span>
+            </button>
+        </nav>
+    </div>
+    <div class="header-right">
+        <div class="tv-search">
+            <span class="search-icon">🔍</span>
+            <input type="text" placeholder="جستجوی نماد..." id="symbolSearch">
+        </div>
+        <button class="tv-icon-btn" id="btnRefresh" title="بروزرسانی">
+            <span>🔄</span>
+        </button>
+        <div class="tv-clock" id="navTime">--:--:--</div>
+        <div class="tv-status">
+            <span class="status-pulse" id="statusDot"></span>
+            <span>زنده</span>
+        </div>
+    </div>
+</header>
+
+<!-- 🔷 محتوای اصلی -->
+<div class="tv-workspace">
+
+    <!-- 🔷 پنل چپ (Watchlist) -->
+    <aside class="tv-watchlist">
+        <div class="watchlist-header">
+            <h3>📋 لیست دارایی‌ها</h3>
+            <span class="badge-live">زنده</span>
+        </div>
+        <div class="watchlist-body" id="watchlistBody">
+            <div class="watchlist-item">
+                <div class="wl-symbol">
+                    <span class="wl-icon gold">💰</span>
+                    <div>
+                        <div class="wl-name">انس جهانی</div>
+                        <div class="wl-code">XAU/USD</div>
+                    </div>
+                </div>
+                <div class="wl-price">
+                    <div class="wl-value" id="wlGold">--</div>
+                    <div class="wl-change" id="wlGoldChange">--</div>
+                </div>
+            </div>
+            <div class="watchlist-item">
+                <div class="wl-symbol">
+                    <span class="wl-icon green">💵</span>
+                    <div>
+                        <div class="wl-name">دلار تهران</div>
+                        <div class="wl-code">USD/IRT</div>
+                    </div>
+                </div>
+                <div class="wl-price">
+                    <div class="wl-value" id="wlUsd">--</div>
+                    <div class="wl-change" id="wlUsdChange">--</div>
+                </div>
+            </div>
+            <div class="watchlist-item">
+                <div class="wl-symbol">
+                    <span class="wl-icon orange">🥇</span>
+                    <div>
+                        <div class="wl-name">طلای ۱۸</div>
+                        <div class="wl-code">GOLD-18K</div>
+                    </div>
+                </div>
+                <div class="wl-price">
+                    <div class="wl-value" id="wlIran">--</div>
+                    <div class="wl-change" id="wlIranChange">--</div>
+                </div>
+            </div>
+            <div class="watchlist-item">
+                <div class="wl-symbol">
+                    <span class="wl-icon purple">🪙</span>
+                    <div>
+                        <div class="wl-name">سکه امامی</div>
+                        <div class="wl-code">COIN</div>
+                    </div>
+                </div>
+                <div class="wl-price">
+                    <div class="wl-value" id="wlCoin">--</div>
+                    <div class="wl-change">--</div>
+                </div>
+            </div>
+            <div class="watchlist-item">
+                <div class="wl-symbol">
+                    <span class="wl-icon blue">₿</span>
+                    <div>
+                        <div class="wl-name">بیت‌کوین</div>
+                        <div class="wl-code">BTC/USD</div>
+                    </div>
+                </div>
+                <div class="wl-price">
+                    <div class="wl-value" id="wlBtc">--</div>
+                    <div class="wl-change" id="wlBtcChange">--</div>
+                </div>
+            </div>
+            <div class="watchlist-item">
+                <div class="wl-symbol">
+                    <span class="wl-icon indigo">Ξ</span>
+                    <div>
+                        <div class="wl-name">اتریوم</div>
+                        <div class="wl-code">ETH/USD</div>
+                    </div>
+                </div>
+                <div class="wl-price">
+                    <div class="wl-value" id="wlEth">--</div>
+                    <div class="wl-change" id="wlEthChange">--</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 🔷 محتوای اصلی -->
+    <main class="tv-main">
+
+        <!-- 🔷 نوار خلاصه -->
+        <div class="tv-summary-bar" id="alertBanner">
+            <span class="summary-icon">💡</span>
+            <span>در حال بارگذاری وضعیت بازار...</span>
+        </div>
+
+        <!-- 📊 نمای کلی -->
+        <section class="page-section active" id="page-overview">
+            
+            <!-- کارت‌های اصلی -->
+            <div class="tv-cards-row" id="ovKpiGrid"></div>
+
+            <!-- نمودار اصلی + پنل کناری -->
+            <div class="tv-main-chart-layout">
+                <div class="tv-chart-panel">
+                    <div class="chart-panel-header">
+                        <div class="chart-title">
+                            <span class="chart-symbol">XAU/USD</span>
+                            <span class="chart-name">انس جهانی طلا</span>
+                        </div>
+                        <div class="chart-tools">
+                            <button class="tool-btn active">۱ ماه</button>
+                            <button class="tool-btn">۳ ماه</button>
+                            <button class="tool-btn">۶ ماه</button>
+                        </div>
+                    </div>
+                    <div class="chart-body">
+                        <div class="chart-wrap large">
+                            <canvas id="ovChGoldMini"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="tv-side-panel">
+                    <div class="side-panel-header">
+                        <span class="panel-title-icon">🎯</span>
+                        <h3>وضعیت رژیم بازار</h3>
+                    </div>
+                    <div class="side-panel-body" id="ovRegimeInfo"></div>
+                </div>
+            </div>
+
+            <!-- نقشه حرارتی -->
+            <div class="tv-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon">🔥</span>
+                        <h3>نقشه حرارتی بازار</h3>
+                    </div>
+                    <span class="panel-subtitle">بازدهی دارایی‌ها در بازه‌های زمانی مختلف</span>
+                </div>
+                <div class="panel-body">
+                    <div class="heatmap-grid" id="marketHeatmap"></div>
+                </div>
+            </div>
+
+            <!-- بهترین ستاپ‌ها -->
+            <div class="tv-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon">⚡</span>
+                        <h3>بهترین فرصت‌های معاملاتی</h3>
+                    </div>
+                    <span class="panel-subtitle">ستاپ‌های کیفیت بالا در بازار</span>
+                </div>
+                <div class="panel-body" id="ovTopSetups"></div>
+            </div>
+        </section>
+
+        <!-- 💰 طلا و ارز ایران -->
+        <section class="page-section" id="page-gold" style="display:none">
+            <div class="tv-cards-row" id="goldPredGrid"></div>
+            
+            <div class="tv-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon">💰</span>
+                        <h3>انس جهانی طلا (XAU/USD)</h3>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-wrap large"><canvas id="chGold"></canvas></div>
+                </div>
+            </div>
+            
+            <div class="tv-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon">💵</span>
+                        <h3>دلار آزاد تهران (USD/IRT)</h3>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-wrap large"><canvas id="chUSD"></canvas></div>
+                </div>
+            </div>
+            
+            <div class="tv-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon">🥇</span>
+                        <h3>طلای ۱۸ عیار (هر گرم)</h3>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="chart-wrap large"><canvas id="chIran"></canvas></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 💱 فارکس و کریپتو -->
+        <section class="page-section" id="page-fx" style="display:none">
+            <div class="tv-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon">💱</span>
+                        <h3>ستاپ‌های فارکس</h3>
+                    </div>
+                </div>
+                <div class="panel-body" id="fxSetups"></div>
+            </div>
+            
+            <div class="tv-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon">₿</span>
+                        <h3>ستاپ‌های کریپتو</h3>
+                    </div>
+                </div>
+                <div class="panel-body" id="cryptoSetups"></div>
+            </div>
+        </section>
+
+        <!-- 🔗 روابط -->
+        <section class="page-section" id="page-relations" style="display:none">
+            <div class="tv-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="panel-icon">🔗</span>
+                        <h3>ماتریس همبستگی بازارها</h3>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="table-wrap">
+                        <table class="tv-table" id="corrTbl"></table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 📉 بک‌تست -->
+        <section class="page-section" id="page-backtest" style="display:none">
+            <div class="tv-cards-row" id="btStats"></div>
+        </section>
+
+        <!-- 📋 گزارش‌ها -->
+        <section class="page-section" id="page-reports" style="display:none">
+            <div class="tv-cards-row" id="journalStatsWidget"></div>
+        </section>
+
+    </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

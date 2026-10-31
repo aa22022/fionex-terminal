@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fionex Terminal v5.0 | ترمینال تحلیلی معاملات</title>
+<link rel="stylesheet" href="/static/style.css?v=5">
+<script src="/static/chart.min.js"></script>
+</head>
+<body>
+
+<header class="terminal-header">
+  <div class="brand">
+    <div class="brand-logo">F</div>
+    <div class="brand-text">
+      <h1>FIONEX</h1>
+      <span>ترمینال تحلیلی معاملات</span>
+    </div>
+  </div>
+  <nav class="terminal-nav">
+    <button class="nav-btn active" data-page="page-f1"><span class="hotkey">F1</span><span>نمای کلی</span></button>
+    <button class="nav-btn" data-page="page-f2"><span class="hotkey">F2</span><span>طلا و ارز</span></button>
+    <button class="nav-btn" data-page="page-f3"><span class="hotkey">F3</span><span>اسکنر بازار</span></button>
+    <button class="nav-btn" data-page="page-f4"><span class="hotkey">F4</span><span>روابط بازارها</span></button>
+    <button class="nav-btn" data-page="page-f5"><span class="hotkey">F5</span><span>بک‌تست</span></button>
+    <button class="nav-btn" data-page="page-f6"><span class="hotkey">F6</span><span>گزارش‌ها</span></button>
+  </nav>
+  <div class="header-widgets">
+    <div class="live-clock" id="liveClock">--:--:--</div>
+    <button class="refresh-btn" id="btnRefresh"><span>⟳</span><span>بروزرسانی</span></button>
+    <div class="status-indicator">
+      <span class="status-dot" id="statusDot"></span>
+      <span>زنده</span>
+    </div>
+  </div>
+</header>
+
+<div class="alert-banner" id="alertBanner">در حال اتصال به سرور داده‌ها...</div>
+
+<main class="terminal-main">
+
+<section class="page active" id="page-f1">
+  <div class="page-header">
+    <span class="page-code">F1</span>
+    <h2>نمای کلی بازار</h2>
+    <span class="page-subtitle">// خلاصه لحظه‌ای طلا، ارز و شاخص‌های کلان</span>
+  </div>
+  <div class="kpi-grid" id="f1Kpi"></div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-head"><span>📊 روند انس جهانی طلا (XAU/USD)</span></div>
+      <div class="chart-body"><canvas id="f1GoldChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><span>🎯 وضعیت رژیم بازار</span></div>
+      <div class="panel-body" id="f1Regime"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span>🔥 نقشه حرارتی بازدهی دارایی‌ها</span></div>
+    <div class="panel-body" id="f1Heatmap"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span>🔮 اهداف پیش‌بینی ۷ روزه هوش مصنوعی</span></div>
+    <div class="panel-body" id="f1Targets"></div>
+  </div>
+</section>
+
+<section class="page" id="page-f2">
+  <div class="page-header">
+    <span class="page-code">F2</span>
+    <h2>طلا و ارز ایران</h2>
+    <span class="page-subtitle">// نمودارهای قیمت + پیش‌بینی هوش مصنوعی</span>
+  </div>
+  <div class="grid-3">
+    <div class="panel">
+      <div class="panel-head"><span>💰 انس جهانی طلا (XAU/USD)</span></div>
+      <div class="chart-body"><canvas id="f2GoldChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><span>💵 دلار آزاد تهران</span></div>
+      <div class="chart-body"><canvas id="f2UsdChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><span>🥇 طلای ۱۸ عیار</span></div>
+      <div class="chart-body"><canvas id="f2IranChart"></canvas></div>
+    </div>
+  </div>
+  <div class="kpi-grid" id="f2Predictions"></div>
+</section>
+
+<section class="page" id="page-f3">
+  <div class="page-header">
+    <span class="page-code">F3</span>
+    <h2>اسکنر بازار</h2>
+    <span class="page-subtitle">// ستاپ‌های زنده فارکس و کریپتو</span>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span>⚡ قدرت لحظه‌ای ارزها (Currency Strength Meter)</span></div>
+    <div class="panel-body" id="f3Strengths"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span>💱 ستاپ‌های فارکس</span></div>
+    <div class="panel-body setups-grid" id="f3ForexSetups"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span>₿ ستاپ‌های کریپتوکارنسی</span></div>
+    <div class="panel-body setups-grid" id="f3CryptoSetups"></div>
+  </div>
+</section>
+
+<section class="page" id="page-f4">
+  <div class="page-header">
+    <span class="page-code">F4</span>
+    <h2>روابط بازارها</h2>
+    <span class="page-subtitle">// ماتریس همبستگی بین دارایی‌ها</span>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span>📊 ماتریس همبستگی پیرسون</span></div>
+    <div class="panel-body" id="f4Relations"></div>
+  </div>
+</section>
+
+<section class="page" id="page-f5">
+  <div class="page-header">
+    <span class="page-code">F5</span>
+    <h2>بک‌تست و اعتبارسنجی</h2>
+    <span class="page-subtitle">// ارزیابی دقت مدل‌های پیش‌بینی</span>
+  </div>
+  <div class="kpi-grid" id="f5Stats"></div>
+</section>
+
+<section class="page" id="page-f6">
+  <div class="page-header">
+    <span class="page-code">F6</span>
+    <h2>گزارش‌ها و ژورنال</h2>
+    <span class="page-subtitle">// آمار معاملات و احساسات بازار</span>
+  </div>
+  <div class="kpi-grid" id="f6Reports"></div>
+</section>
+
+</main>
+
+<footer class="terminal-footer">
+  <div class="footer-item">سرور: <span class="green">متصل</span></div>
+  <div class="footer-item">تاخیر: <span class="gold" id="footLatency">--</span> ms</div>
+  <div class="footer-item">آخرین بروزرسانی: <span class="cyan" id="footUpdate">--</span></div>
+  <div class="footer-item copyright">FIONEX نسخه ۵.۰</div>
+</footer>
+
+<script src="/static/app.js?v=5"></script>
+</body>
+</html>

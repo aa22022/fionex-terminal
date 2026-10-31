@@ -1,0 +1,165 @@
+﻿module LevelEngine
+
+using Statistics
+
+export KeyLevels, compute_key_levels
+
+struct KeyLevels
+    symbol::String
+    current::Float64
+    support1::Float64
+    support2::Float64
+    support3::Float64
+    resistance1::Float64
+    resistance2::Float64
+    resistance3::Float64
+    atr_daily::Float64
+    atr_pct::Float64
+    nearest_support::Float64
+    nearest_resistance::Float64
+    dist_to_support::Float64    # %
+    dist_to_resistance::Float64 # %
+    position_in_range::Float64  # 0=bottom, 1=top
+    breakout_level_up::Float64
+    breakout_level_dn::Float64
+    stop_zone_long::Float64     # invalidation for long
+    stop_zone_short::Float64    # invalidation for short
+end
+
+function calc_atr(prices::Vector{Float64}, period::Int=14)
+    n = length(prices)
+    n < period+1 && return std(prices) * 0.01
+    ranges = [abs(prices[i]-prices[i-1]) for i in max(2,n-period):n]
+    isempty(ranges) ? 0.001 : mean(ranges)
+end
+
+function swing_highs(prices::Vector{Float64}, window::Int=3)
+    n = length(prices)
+    highs = Float64[]
+    for i in (window+1):(n-window)
+        if all(prices[i] >= prices[i-j] for j in 1:window) &&
+           all(prices[i] >= prices[i+j] for j in 1:window)
+            push!(highs, prices[i])
+        end
+    end
+    return highs
+end
+
+function swing_lows(prices::Vector{Float64}, window::Int=3)
+    n = length(prices)
+    lows = Float64[]
+    for i in (window+1):(n-window)
+        if all(prices[i] <= prices[i-j] for j in 1:window) &&
+           all(prices[i] <= prices[i+j] for j in 1:window)
+            push!(lows, prices[i])
+        end
+    end
+    return lows
+end
+
+function compute_key_levels(
+    symbol::String,
+    prices::Vector{Float64};
+    lookbacks::Vector{Int} = [10, 20, 50]
+)
+    n = length(prices)
+    cur = last(prices)
+    atr = calc_atr(prices, min(14, n-1))
+    atr_pct = cur > 0 ? atr / cur * 100 : 0.0
+
+    # Rolling max/min for each lookback
+    resistances = Float64[]
+    supports = Float64[]
+
+    for lb in lookbacks
+        lb = min(lb, n)
+        sl = prices[end-lb+1:end]
+        push!(resistances, maximum(sl))
+        push!(supports, minimum(sl))
+    end
+
+    # Swing levels
+    if n >= 10
+        sh = swing_highs(prices[end-min(60,n)+1:end], 3)
+        sl_sw = swing_lows(prices[end-min(60,n)+1:end], 3)
+        for h in sh; push!(resistances, h); end
+        for l in sl_sw; push!(supports, l); end
+    end
+
+    # MA levels
+    for w in [20, 50]
+        if n >= w
+            ma = mean(prices[end-w+1:end])
+            if ma > cur; push!(resistances, ma)
+            else;         push!(supports, ma)
+            end
+        end
+    end
+
+    # ATR bands
+    if n >= 20
+        ma20 = mean(prices[end-19:end])
+        push!(resistances, ma20 + 1.5*atr)
+        push!(resistances, ma20 + 2.5*atr)
+        push!(supports, ma20 - 1.5*atr)
+        push!(supports, ma20 - 2.5*atr)
+    end
+
+    # Filter: resistances > current, supports < current
+    res_clean = filter(r -> r > cur * 1.0001, resistances)
+    sup_clean = filter(s -> s < cur * 0.9999, supports)
+
+    # Sort
+    sort!(res_clean); sort!(sup_clean, rev=true)
+
+    # Deduplicate (merge levels within 0.1% of each other)
+    function dedup(levels::Vector{Float64}, tol::Float64=0.001)
+        isempty(levels) && return levels
+        result = [levels[1]]
+        for l in levels[2:end]
+            if abs(l - result[end]) / max(result[end], 1e-10) > tol
+                push!(result, l)
+            end
+        end
+        return result
+    end
+
+    res_clean = dedup(res_clean)
+    sup_clean = dedup(sup_clean)
+
+    # Fill to 3 levels
+    while length(res_clean) < 3; push!(res_clean, last(res_clean) * 1.005 + atr); end
+    while length(sup_clean) < 3; push!(sup_clean, last(sup_clean) * 0.995 - atr); end
+
+    r1 = res_clean[1]; r2 = res_clean[2]; r3 = res_clean[3]
+    s1 = sup_clean[1]; s2 = sup_clean[2]; s3 = sup_clean[3]
+
+    dist_r = (r1 - cur) / cur * 100
+    dist_s = (cur - s1) / cur * 100
+
+    # Position in range (s1 to r1)
+    range_sz = r1 - s1
+    pos_in_range = range_sz > 0 ? (cur - s1) / range_sz : 0.5
+
+    # Breakout levels
+    bo_up = r1 + atr * 0.3
+    bo_dn = s1 - atr * 0.3
+
+    # Stop zones
+    stop_long  = s1 - atr * 0.5   # invalidation for long
+    stop_short = r1 + atr * 0.5   # invalidation for short
+
+    return KeyLevels(
+        symbol, round(cur,digits=5),
+        round(s1,digits=5), round(s2,digits=5), round(s3,digits=5),
+        round(r1,digits=5), round(r2,digits=5), round(r3,digits=5),
+        round(atr,digits=5), round(atr_pct,digits=3),
+        round(s1,digits=5), round(r1,digits=5),
+        round(dist_s,digits=3), round(dist_r,digits=3),
+        round(pos_in_range,digits=3),
+        round(bo_up,digits=5), round(bo_dn,digits=5),
+        round(stop_long,digits=5), round(stop_short,digits=5)
+    )
+end
+
+end

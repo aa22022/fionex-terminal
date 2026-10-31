@@ -1,0 +1,262 @@
+﻿module TradeJournal
+
+using SQLite, DBInterface, Dates, Statistics
+
+export init_journal_db, record_setups!, evaluate_active_signals!, get_journal_stats, get_symbol_win_rate
+
+const DB_PATH = joinpath(@__DIR__, "..", "data", "forecast.db")
+
+function open_db()
+    mkpath(dirname(DB_PATH))
+    return SQLite.DB(DB_PATH)
+end
+
+# 1. ساخت جدول ژورنال معاملات
+function init_journal_db()
+    db = open_db()
+    
+    DBInterface.execute(db, """
+    CREATE TABLE IF NOT EXISTS trade_journal (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        signal_date TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        bias TEXT NOT NULL,
+        setup_type TEXT NOT NULL,
+        trade_quality TEXT NOT NULL,
+        entry_low REAL NOT NULL,
+        entry_high REAL NOT NULL,
+        entry_mid REAL NOT NULL,
+        target1 REAL NOT NULL,
+        target2 REAL NOT NULL,
+        stop_loss REAL NOT NULL,
+        risk_reward REAL NOT NULL,
+        confluence_score REAL,
+        status TEXT NOT NULL,
+        resolution_date TEXT,
+        pnl_pct REAL,
+        hold_days INTEGER,
+        UNIQUE(signal_date, symbol, bias) ON CONFLICT IGNORE
+    )
+    """)
+    
+    DBInterface.execute(db, "CREATE INDEX IF NOT EXISTS idx_journal_symbol ON trade_journal(symbol)")
+    DBInterface.execute(db, "CREATE INDEX IF NOT EXISTS idx_journal_status ON trade_journal(status)")
+    DBInterface.execute(db, "CREATE INDEX IF NOT EXISTS idx_journal_date ON trade_journal(signal_date)")
+
+    SQLite.close(db)
+end
+
+# 2. ثبت ستاپ‌های معتبر جدید در دیتابیس
+function record_setups!(setups)
+    init_journal_db()
+    db = open_db()
+    
+    today_str = Dates.format(today(), "yyyy-mm-dd")
+    
+    for s in setups
+        # فقط ستاپ‌های باکیفیت A+، A و B ثبت شوند
+        if s.trade_quality in ["A+", "A", "B"] && s.bias in ["long", "short"]
+            entry_mid = (s.entry_zone_low + s.entry_zone_high) / 2.0
+            confluence = s.advanced !== nothing ? s.advanced.confluence_score : 0.0
+            
+            DBInterface.execute(db, """
+            INSERT OR IGNORE INTO trade_journal
+            (signal_date, symbol, bias, setup_type, trade_quality, entry_low, entry_high, entry_mid,
+             target1, target2, stop_loss, risk_reward, confluence_score, status, resolution_date, pnl_pct, hold_days)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', NULL, 0.0, 0)
+            """, (
+                today_str, s.symbol, s.bias, s.setup_type, s.trade_quality,
+                s.entry_zone_low, s.entry_zone_high, entry_mid,
+                s.target1, s.target2, s.stop_loss, s.risk_reward, confluence
+            ))
+        end
+    end
+    
+    SQLite.close(db)
+end
+
+# 3. بررسی زنده و پیگیری سرنوشت سیگنال‌های باز
+function evaluate_active_signals!(rates_dict::Dict{String, Vector{Float64}}, dates_arr::Vector)
+    init_journal_db()
+    db = open_db()
+    
+    rows = [NamedTuple(r) for r in DBInterface.execute(db, "SELECT * FROM trade_journal WHERE status = 'OPEN'")]
+    
+    today_dt = today()
+    
+    for row in rows
+        sym = row[:symbol]
+        !haskey(rates_dict, sym) && continue
+        
+        prices = rates_dict[sym]
+        length(prices) < 2 && continue
+        
+        sig_date = try Date(row[:signal_date], "yyyy-mm-dd") catch; continue end
+        hold_days = Dates.value(today_dt - sig_date)
+        
+        entry = row[:entry_mid]
+        sl = row[:stop_loss]
+        tp1 = row[:target1]
+        tp2 = row[:target2]
+        bias = row[:bias]
+        
+        # پیدا کردن داده‌های قیمت از تاریخ صدور سیگنال به بعد
+        # برای دقت، بازه بعد از تاریخ صدور سیگنال بررسی می‌شود
+        cur_price = last(prices)
+        recent_window = min(hold_days + 1, length(prices))
+        test_prices = prices[end-recent_window+1:end]
+        
+        new_status = "OPEN"
+        pnl = 0.0
+        res_date = Dates.format(today_dt, "yyyy-mm-dd")
+        
+        if bias == "long"
+            hit_sl = any(p <= sl for p in test_prices)
+            hit_tp2 = any(p >= tp2 for p in test_prices)
+            hit_tp1 = any(p >= tp1 for p in test_prices)
+            
+            if hit_sl
+                new_status = "LOSS_SL"
+                pnl = -abs(entry - sl) / entry * 100.0
+            elseif hit_tp2
+                new_status = "WIN_TP2"
+                pnl = abs(tp2 - entry) / entry * 100.0
+            elseif hit_tp1
+                new_status = "WIN_TP1"
+                pnl = abs(tp1 - entry) / entry * 100.0
+            elseif hold_days >= 15
+                new_status = "EXPIRED"
+                pnl = (cur_price - entry) / entry * 100.0
+            end
+        elseif bias == "short"
+            hit_sl = any(p >= sl for p in test_prices)
+            hit_tp2 = any(p <= tp2 for p in test_prices)
+            hit_tp1 = any(p <= tp1 for p in test_prices)
+            
+            if hit_sl
+                new_status = "LOSS_SL"
+                pnl = -abs(sl - entry) / entry * 100.0
+            elseif hit_tp2
+                new_status = "WIN_TP2"
+                pnl = abs(entry - tp2) / entry * 100.0
+            elseif hit_tp1
+                new_status = "WIN_TP1"
+                pnl = abs(entry - tp1) / entry * 100.0
+            elseif hold_days >= 15
+                new_status = "EXPIRED"
+                pnl = (entry - cur_price) / entry * 100.0
+            end
+        end
+        
+        if new_status != "OPEN"
+            DBInterface.execute(db, """
+            UPDATE trade_journal
+            SET status = ?, resolution_date = ?, pnl_pct = ?, hold_days = ?
+            WHERE id = ?
+            """, (new_status, res_date, round(pnl, digits=3), hold_days, row[:id]))
+        else
+            DBInterface.execute(db, "UPDATE trade_journal SET hold_days = ? WHERE id = ?", (hold_days, row[:id]))
+        end
+    end
+    
+    SQLite.close(db)
+end
+
+# 4. دریافت آمار جامع ژورنال و عملکرد
+function get_journal_stats()
+    init_journal_db()
+    db = open_db()
+    
+    all_rows = [NamedTuple(r) for r in DBInterface.execute(db, "SELECT * FROM trade_journal ORDER BY signal_date DESC, id DESC")]
+    SQLite.close(db)
+    
+    total_signals = length(all_rows)
+    resolved = filter(r -> r[:status] in ["WIN_TP1", "WIN_TP2", "LOSS_SL", "EXPIRED"], all_rows)
+    open_trades = filter(r -> r[:status] == "OPEN", all_rows)
+    
+    wins = filter(r -> r[:status] in ["WIN_TP1", "WIN_TP2"] || (r[:status] == "EXPIRED" && r[:pnl_pct] > 0), resolved)
+    losses = filter(r -> r[:status] == "LOSS_SL" || (r[:status] == "EXPIRED" && r[:pnl_pct] <= 0), resolved)
+    
+    win_count = length(wins)
+    loss_count = length(losses)
+    resolved_count = length(resolved)
+    
+    win_rate = resolved_count > 0 ? (win_count / resolved_count) * 100.0 : 0.0
+    
+    win_pnls = [r[:pnl_pct] for r in wins]
+    loss_pnls = [abs(r[:pnl_pct]) for r in losses]
+    
+    avg_win = !isempty(win_pnls) ? mean(win_pnls) : 0.0
+    avg_loss = !isempty(loss_pnls) ? mean(loss_pnls) : 0.0
+    
+    # Profit Factor
+    total_win_pnl = sum(win_pnls; init=0.0)
+    total_loss_pnl = sum(loss_pnls; init=0.0)
+    profit_factor = total_loss_pnl > 0 ? total_win_pnl / total_loss_pnl : (total_win_pnl > 0 ? 99.0 : 0.0)
+    
+    # Expectancy (امید ریاضی به درصد)
+    p_win = resolved_count > 0 ? win_count / resolved_count : 0.55
+    p_loss = 1.0 - p_win
+    expectancy_pct = (p_win * avg_win) - (p_loss * avg_loss)
+    
+    # Performance by Quality Grade
+    grade_stats = Dict{String, Any}()
+    for g in ["A+", "A", "B"]
+        g_resolved = filter(r -> r[:trade_quality] == g, resolved)
+        g_wins = filter(r -> r[:status] in ["WIN_TP1", "WIN_TP2"] || (r[:status] == "EXPIRED" && r[:pnl_pct] > 0), g_resolved)
+        g_wr = length(g_resolved) > 0 ? (length(g_wins) / length(g_resolved)) * 100.0 : 0.0
+        grade_stats[g] = Dict(
+            "total" => length(filter(r -> r[:trade_quality] == g, all_rows)),
+            "resolved" => length(g_resolved),
+            "win_rate" => round(g_wr, digits=1)
+        )
+    end
+    
+    # لیست آخرین معاملات (برای نمایش در جدول)
+    recent_signals = [Dict(
+        "id" => r[:id],
+        "date" => r[:signal_date],
+        "symbol" => r[:symbol],
+        "bias" => r[:bias],
+        "quality" => r[:trade_quality],
+        "setup_type" => r[:setup_type],
+        "entry_mid" => r[:entry_mid],
+        "target1" => r[:target1],
+        "stop_loss" => r[:stop_loss],
+        "rr" => r[:risk_reward],
+        "status" => r[:status],
+        "pnl_pct" => r[:pnl_pct],
+        "hold_days" => r[:hold_days]
+    ) for r in all_rows[1:min(20, length(all_rows))]]
+    
+    return Dict(
+        "total_signals" => total_signals,
+        "resolved_count" => resolved_count,
+        "open_count" => length(open_trades),
+        "win_count" => win_count,
+        "loss_count" => loss_count,
+        "win_rate" => round(win_rate, digits=1),
+        "profit_factor" => round(profit_factor, digits=2),
+        "expectancy_pct" => round(expectancy_pct, digits=2),
+        "avg_win" => round(avg_win, digits=2),
+        "avg_loss" => round(avg_loss, digits=2),
+        "grade_stats" => grade_stats,
+        "recent_signals" => recent_signals
+    )
+end
+
+# 5. دریافت وین‌ریت تاریخی واقعی یک نماد برای محاسبه دقیق کِلی
+function get_symbol_win_rate(sym::String; fallback::Float64=0.55)
+    init_journal_db()
+    db = open_db()
+    
+    rows = [NamedTuple(r) for r in DBInterface.execute(db, "SELECT status, pnl_pct FROM trade_journal WHERE symbol = ? AND status != 'OPEN'", (sym,))]
+    SQLite.close(db)
+    
+    length(rows) < 4 && return fallback
+    
+    wins = count(r -> r[:status] in ["WIN_TP1", "WIN_TP2"] || (r[:status] == "EXPIRED" && r[:pnl_pct] > 0), rows)
+    return clamp(wins / length(rows), 0.35, 0.85)
+end
+
+end

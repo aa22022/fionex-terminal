@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fionex Terminal v5.0 | ترمینال تحلیلی معاملات</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/chart.min.js"></script>
+</head>
+<body class="terminal-body">
+
+    <!-- 🔷 هدر ترمینال -->
+    <header class="terminal-header">
+        <div class="terminal-brand">
+            <span class="terminal-logo">F</span>
+            <div class="brand-text">
+                <h1>FIONEX</h1>
+                <span class="sub">ترمینال تحلیلی معاملات</span>
+            </div>
+        </div>
+
+        <nav class="terminal-nav">
+            <button class="nav-btn active" data-page="page-overview">
+                <span class="hotkey">F1</span>
+                <span>نمای کلی</span>
+            </button>
+            <button class="nav-btn" data-page="page-gold">
+                <span class="hotkey">F2</span>
+                <span>طلا و ارز</span>
+            </button>
+            <button class="nav-btn" data-page="page-relations">
+                <span class="hotkey">F3</span>
+                <span>روابط بازارها</span>
+            </button>
+            <button class="nav-btn" data-page="page-backtest">
+                <span class="hotkey">F4</span>
+                <span>بک‌تست</span>
+            </button>
+        </nav>
+
+        <div class="terminal-widgets">
+            <div class="live-clock" id="navTime">--:--:--</div>
+            <button class="terminal-btn" id="btnRefresh">
+                <span>⟳</span>
+                <span>بروزرسانی</span>
+            </button>
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span>زنده</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 🔷 نوار هشدار وضعیت -->
+    <div class="alert-strip" id="alertBanner">
+        <span>در حال اتصال به سرور داده‌های زنده...</span>
+    </div>
+
+    <!-- 🔷 بدنه اصلی صفحات -->
+    <main class="terminal-main">
+
+        <!-- ======================================================== -->
+        <!-- 📊 F1: نمای کلی بازار -->
+        <!-- ======================================================== -->
+        <section class="page-section active" id="page-overview">
+            <div class="panel-title-bar accent-cyan">
+                <span class="panel-code">F1</span>
+                <h2>نمای کلی بازار</h2>
+                <span class="panel-subtitle">// خلاصه لحظه‌ای وضعیت طلا، ارز و شاخص‌های کلان</span>
+            </div>
+
+            <div class="kpi-grid" id="ovKpiGrid"></div>
+
+            <div class="widgets-row-3">
+                <div class="term-panel">
+                    <div class="panel-head accent-gold">
+                        <span class="panel-icon">🎯</span>
+                        <span>حباب سکه امامی</span>
+                    </div>
+                    <div class="panel-body" id="bubbleIndicator"></div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-orange">
+                        <span class="panel-icon">🌡️</span>
+                        <span>فشار بازار (Market Pressure)</span>
+                    </div>
+                    <div class="panel-body" id="marketPressureGauge"></div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-purple">
+                        <span class="panel-icon">📅</span>
+                        <span>تقویم رویدادهای اقتصادی</span>
+                    </div>
+                    <div class="panel-body" id="economicCalendar"></div>
+                </div>
+            </div>
+
+            <div class="overview-grid">
+                <div class="term-panel chart-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">📊</span>
+                        <span>روند انس جهانی طلا (XAU/USD)</span>
+                        <span class="panel-meta">۱۸۰ روز اخیر</span>
+                    </div>
+                    <div class="panel-body chart-body">
+                        <canvas id="ovChGoldMini"></canvas>
+                    </div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-purple">
+                        <span class="panel-icon">🎯</span>
+                        <span>وضعیت رژیم بازار</span>
+                    </div>
+                    <div class="panel-body" id="ovRegimeInfo"></div>
+                </div>
+            </div>
+
+            <div class="term-panel">
+                <div class="panel-head accent-orange">
+                    <span class="panel-icon">🔥</span>
+                    <span>نقشه حرارتی بازدهی دارایی‌ها</span>
+                    <span class="panel-meta">۱ روزه / ۵ روزه / ۲۰ روزه</span>
+                </div>
+                <div class="heatmap-grid" id="marketHeatmap"></div>
+            </div>
+
+            <div class="term-panel">
+                <div class="panel-head accent-green">
+                    <span class="panel-icon">🔮</span>
+                    <span>اهداف پیش‌بینی ۷ روزه هوش مصنوعی</span>
+                </div>
+                <div class="panel-body" id="ovTargets"></div>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- 💰 F2: طلا و ارز ایران -->
+        <!-- ======================================================== -->
+        <section class="page-section" id="page-gold" style="display:none;">
+            <div class="panel-title-bar accent-gold">
+                <span class="panel-code">F2</span>
+                <h2>طلا و ارز ایران</h2>
+                <span class="panel-subtitle">// نمودارهای تعاملی قیمت + اندیکاتورها + پیش‌بینی چندپله‌ای</span>
+            </div>
+
+            <!-- نوار ابزار کنترل چارت -->
+            <div class="chart-controls-bar">
+                <div class="tf-selector">
+                    <span class="ctrl-label">تایم‌فریم:</span>
+                    <button class="tf-btn active" data-tf="D1">روزانه (D1)</button>
+                    <button class="tf-btn" data-tf="H4">۴ ساعته (H4)</button>
+                    <button class="tf-btn" data-tf="H1">۱ ساعته (H1)</button>
+                </div>
+                <div class="indicator-selector">
+                    <span class="ctrl-label">اندیکاتورها:</span>
+                    <label class="ind-checkbox"><input type="checkbox" id="indEMA20" checked> میانگین EMA 20</label>
+                    <label class="ind-checkbox"><input type="checkbox" id="indEMA50"> میانگین EMA 50</label>
+                    <label class="ind-checkbox"><input type="checkbox" id="indSR" checked> خطوط حمایت/مقاومت</label>
+                </div>
+            </div>
+
+            <!-- ۳ نمودار خطی اصلی طلا، دلار و طلا ۱۸ -->
+            <div class="charts-three-grid">
+                <div class="term-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">💰</span>
+                        <span>نمودار انس جهانی طلا (XAU/USD)</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chartGold_canvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-gold">
+                        <span class="panel-icon">💵</span>
+                        <span>نمودار دلار آزاد تهران (USD/IRR)</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chartUSD_canvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-pink">
+                        <span class="panel-icon">🥇</span>
+                        <span>نمودار طلای ۱۸ عیار</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chartIran_canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- پیش‌بینی چندپله‌ای ۱، ۳، ۷ و ۳۰ روزه -->
+            <div class="term-panel" style="margin-top: 20px;">
+                <div class="panel-head accent-green">
+                    <span class="panel-icon">🎯</span>
+                    <span>پیش‌بینی چندپله‌ای هوش مصنوعی</span>
+                    <span class="panel-meta">۱ روز | ۳ روز | ۷ روز | ۳۰ روز</span>
+                </div>
+                <div class="panel-body" id="multiTargetPrediction"></div>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- 🔗 F3: روابط و همبستگی بازارها -->
+        <!-- ======================================================== -->
+        <section class="page-section" id="page-relations" style="display:none;">
+            <div class="panel-title-bar accent-purple">
+                <span class="panel-code">F3</span>
+                <h2>روابط و همبستگی بازارها</h2>
+                <span class="panel-subtitle">// ماتریس همبستگی، فرصت‌های آربیتراژ و تحلیل عاملی</span>
+            </div>
+
+            <div class="relations-grid-2">
+                <div class="term-panel">
+                    <div class="panel-head accent-pink">
+                        <span class="panel-icon">📊</span>
+                        <span>ماتریس هیت‌مپ همبستگی دارایی‌ها</span>
+                    </div>
+                    <div class="panel-body" id="correlationHeatmap"></div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-gold">
+                        <span class="panel-icon">🎯</span>
+                        <span>رادار فرصت‌های آربیتراژ و حباب</span>
+                    </div>
+                    <div class="panel-body" id="arbitragePairs"></div>
+                </div>
+            </div>
+
+            <div class="relations-grid-2">
+                <div class="term-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">🔮</span>
+                        <span>همبستگی متحرک ۳۰ روزه (Rolling Correlation)</span>
+                    </div>
+                    <div class="panel-body chart-box-tall">
+                        <canvas id="rollingCorrCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-orange">
+                        <span class="panel-icon">📉</span>
+                        <span>تحلیل عاملی نوسانات طلا (Factor Analysis)</span>
+                    </div>
+                    <div class="panel-body" id="factorAnalysis"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- 📅 F4: بک‌تست و هوش مصنوعی -->
+        <!-- ======================================================== -->
+        <section class="page-section" id="page-backtest" style="display:none;">
+            <div class="panel-title-bar accent-blue">
+                <span class="panel-code">F4</span>
+                <h2>بک‌تست و شبیه‌سازی هوش مصنوعی</h2>
+                <span class="panel-subtitle">// اعتبارسنجی مدل پیش‌بینی + شبیه‌سازی مونت‌کارلو</span>
+            </div>
+
+            <div class="backtest-controls">
+                <span class="ctrl-label">بازه بک‌تست تاریخی:</span>
+                <button class="bt-btn" data-days="30">۳۰ روز</button>
+                <button class="bt-btn active" data-days="60">۶۰ روز</button>
+                <button class="bt-btn" data-days="90">۹۰ روز</button>
+                <button class="bt-btn" data-days="180">۱۸۰ روز</button>
+            </div>
+
+            <div class="kpi-grid" id="btStats"></div>
+
+            <div class="backtest-grid-2">
+                <div class="term-panel">
+                    <div class="panel-head accent-cyan">
+                        <span class="panel-icon">📊</span>
+                        <span>مقایسه قیمت واقعی با پیش‌بینی هوش مصنوعی</span>
+                    </div>
+                    <div class="panel-body chart-box-tall">
+                        <canvas id="predVsActualChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="term-panel">
+                    <div class="panel-head accent-orange">
+                        <span class="panel-icon">🎯</span>
+                        <span>توزیع خطای مدل (Error Distribution)</span>
+                    </div>
+                    <div class="panel-body chart-box-tall">
+                        <canvas id="errorDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="term-panel">
+                <div class="panel-head accent-green">
+                    <span class="panel-icon">🎲</span>
+                    <span>شبیه‌سازی مونت‌کارلو (۱۰۰۰ سناریوی محتمل برای ۷ روز آینده)</span>
+                </div>
+                <div class="panel-body chart-box-tall">
+                    <canvas id="monteCarloChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 🔷 فوتر بلومبرگ -->
+    <footer class="terminal-footer">
+        <div class="footer-item">سرور: <span class="up">متصل</span></div>
+        <div class="footer-item">تاخیر: <span class="gold" id="footerLatency">--</span> میلی‌ثانیه</div>
+        <div class="footer-item">آخرین بروزرسانی: <span class="cyan" id="footerLastUpdate">--</span></div>
+        <div class="footer-item copyright">FIONEX نسخه ۵.۰</div>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

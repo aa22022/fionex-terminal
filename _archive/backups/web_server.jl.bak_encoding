@@ -1,0 +1,259 @@
+module WebServer
+
+using HTTP, JSON3, Dates
+
+export start_server
+
+include("data_fetcher.jl")
+include("macro_data.jl")
+include("storage.jl")
+include("math_engine.jl")
+include("predictor.jl")
+include("backtest_engine.jl")
+include("news_sentiment.jl")
+
+using .DataFetcher
+using .MacroData
+using .Storage
+using .MathEngine
+using .Predictor
+using .BacktestEngine
+using .NewsSentiment
+
+mutable struct AppState
+    last_update::DateTime
+    data::Union{Dict,Nothing}
+    analysis::Union{RatioAnalysis,Nothing}
+    prediction::Union{PredictionResult,Nothing}
+    backtest::Union{BacktestResult,Nothing}
+    sentiment::Union{NewsSentimentResult,Nothing}
+    last_backtest::DateTime
+    last_sentiment::DateTime
+end
+
+const STATE = AppState(DateTime(2000,1,1), nothing, nothing, nothing, nothing, nothing, DateTime(2000,1,1), DateTime(2000,1,1))
+
+function update_data!()
+    # [log removed]
+    t = time()
+
+    STATE.data = fetch_all_data(365)
+
+    # [log removed]
+    macrodata = fetch_macro_data(180)
+    STATE.data["macro"] = macrodata
+    println("       DXY=$(round(macrodata["dxy"]["current"],digits=2)) US10Y=$(round(macrodata["us10y"]["current"],digits=2)) VIX=$(round(macrodata["vix"]["current"],digits=2))")
+
+    # [log removed]
+    events = fetch_upcoming_events(14)
+    STATE.data["events"] = events
+    # [log removed]
+
+    # [log removed]
+    try
+        STATE.sentiment = fetch_news_sentiment(24)
+    catch e
+    # [log removed]
+        STATE.sentiment = nothing
+    end
+
+    # [log removed]
+    STATE.analysis = calculate_all_ratios(STATE.data)
+    STATE.prediction = predict_next_week(STATE.data, STATE.analysis)
+
+    # [log removed]
+    try
+        STATE.backtest = run_historical_backtest(
+            STATE.data["gold_oz"]["prices"], STATE.data["gold_oz"]["dates"],
+            STATE.data["usd_irr"]["prices"], STATE.data["usd_irr"]["dates"],
+            STATE.data["iran_gold"]["prices"], STATE.data["iran_gold"]["dates"];
+            test_days=30, min_train=30
+        )
+    catch e
+    # [log removed]
+        STATE.backtest = nothing
+    end
+
+    try
+        save_actual_snapshot!(STATE.data, STATE.analysis)
+        save_prediction_run!(STATE.prediction)
+    # [log removed]
+    catch e
+        println("       SQLite: $e")
+    end
+
+    STATE.last_update = now()
+    # [log removed]
+end
+
+function ensure_data()
+    if STATE.data === nothing || (now() - STATE.last_update) > Dates.Minute(30)
+        update_data!()
+    end
+end
+
+function read_file(path::String)
+    full = joinpath(@__DIR__, "..", path)
+    isfile(full) ? read(full) : UInt8[]
+end
+
+function serialize_sentiment(s::Union{NewsSentimentResult,Nothing})
+    s === nothing && return Dict("available"=>false)
+    Dict(
+        "available"       => true,
+        "overall_score"   => s.overall_score,
+        "gold_score"      => s.gold_score,
+        "usd_score"       => s.usd_score,
+        "iran_score"      => s.iran_score,
+        "alert_level"     => s.alert_level,
+        "summary"         => s.summary,
+        "last_updated"    => Dates.format(s.last_updated,"yyyy-mm-dd HH:MM:SS"),
+        "news_count"      => length(s.news_items),
+        "top_news"        => [Dict(
+            "title"    => item.title,
+            "source"   => item.source,
+            "score"    => item.score,
+            "keywords" => item.keywords[1:min(4,end)]
+        ) for item in s.news_items[1:min(12,end)]]
+    )
+end
+
+function handle_index(req)
+    HTTP.Response(200, ["Content-Type"=>"text/html; charset=utf-8"], body=read_file("templates/index.html"))
+end
+
+function handle_css(req)
+    HTTP.Response(200, ["Content-Type"=>"text/css; charset=utf-8"], body=read_file("static/style.css"))
+end
+
+function handle_api(req)
+    try
+        ensure_data()
+        a = STATE.analysis
+        p = STATE.prediction
+        d = STATE.data
+        bt = STATE.backtest
+
+        hp = d["gold_oz"]["prices"]; hn = min(60, length(hp))
+        hd = [Dates.format(Date(d["gold_oz"]["dates"][end-hn+i]), "yyyy-mm-dd") for i in 1:hn]
+        hs = hp[end-hn+1:end]
+
+        up = d["usd_irr"]["prices"]; un = min(60, length(up))
+        ud2 = [Dates.format(Date(d["usd_irr"]["dates"][end-un+i]), "yyyy-mm-dd") for i in 1:un]
+        us = up[end-un+1:end]
+
+        ip = d["iran_gold"]["prices"]; iin = min(60, length(ip))
+        id2 = [Dates.format(Date(d["iran_gold"]["dates"][end-iin+i]), "yyyy-mm-dd") for i in 1:iin]
+        is_ = ip[end-iin+1:end]
+
+        macrodata = haskey(d, "macro") ? d["macro"] : Dict()
+        events    = haskey(d, "events") ? d["events"] : Dict[]
+        accuracy  = try get_accuracy_summary(30) catch; Dict("count"=>0) end
+
+        bt_gold  = bt !== nothing ? [Dict("date"=>r.date,"actual"=>r.actual,"predicted"=>r.predicted,"error"=>r.error_pct) for r in bt.gold_results]  : []
+        bt_usd   = bt !== nothing ? [Dict("date"=>r.date,"actual"=>r.actual,"predicted"=>r.predicted,"error"=>r.error_pct) for r in bt.usd_results]   : []
+        bt_iran  = bt !== nothing ? [Dict("date"=>r.date,"actual"=>r.actual,"predicted"=>r.predicted,"error"=>r.error_pct) for r in bt.iran_results]  : []
+
+        resp = Dict(
+            "status"        => "success",
+            "last_update"   => Dates.format(STATE.last_update, "yyyy-mm-dd HH:MM:SS"),
+            "current_prices"=> Dict(
+                "gold_oz_usd"       => round(a.gold_oz_stats["current"], digits=2),
+                "gold_oz_ma20"      => round(a.gold_oz_stats["ma_20"], digits=2),
+                "gold_oz_ma50"      => round(a.gold_oz_stats["ma_50"], digits=2),
+                "gold_oz_rsi"       => a.gold_oz_stats["rsi_14"],
+                "gold_oz_volatility"=> a.gold_oz_stats["volatility"],
+                "iran_gold_gram18"  => round(a.iran_gold_stats["current"], digits=0),
+                "usd_irr"           => round(a.iran_gold_stats["usd_irr"], digits=0),
+                "dxy_estimate"      => a.dxy_estimate,
+                "fear_greed"        => a.fear_greed,
+                "dxy_real"  => try round(macrodata["dxy"]["current"], digits=2) catch; nothing end,
+                "us10y"     => try round(macrodata["us10y"]["current"], digits=2) catch; nothing end,
+                "vix"       => try round(macrodata["vix"]["current"], digits=2) catch; nothing end
+            ),
+            "correlations"  => [Dict(
+                "symbol"=>c.currency,"name_fa"=>c.name_fa,
+                "pearson"=>c.pearson,"spearman"=>c.spearman,"beta"=>c.beta,
+                "r_squared"=>c.r_squared,"granger_f"=>c.granger_f,
+                "cointegration"=>c.cointegration,"impact_score"=>c.impact_score,
+                "direction"=>c.direction
+            ) for c in a.correlations],
+            "prediction"    => Dict(
+                "gold_oz"  => Dict("point"=>p.gold_oz_point,"low"=>p.gold_oz_low,"high"=>p.gold_oz_high,"daily"=>p.gold_oz_daily),
+                "iran_gold"=> Dict("point"=>p.iran_gold_point,"low"=>p.iran_gold_low,"high"=>p.iran_gold_high,"daily"=>p.iran_gold_daily),
+                "coin"     => Dict("point"=>p.coin_point,"low"=>p.coin_low,"high"=>p.coin_high),
+                "usd_irr"  => Dict("point"=>p.usd_irr_point,"low"=>p.usd_irr_low,"high"=>p.usd_irr_high,"daily"=>p.usd_irr_daily),
+                "confidence"=>p.confidence,"trend"=>p.trend,"signals"=>p.signals,
+                "method_weights"=>p.method_weights,"target_dates"=>p.target_dates
+            ),
+            "gold_history"      => Dict("prices"=>round.(hs,digits=2),"dates"=>hd),
+            "usd_history"       => Dict("prices"=>round.(us,digits=0),"dates"=>ud2),
+            "iran_gold_history" => Dict("prices"=>round.(is_,digits=0),"dates"=>id2),
+            "backtest"          => Dict(
+                "gold"  => bt_gold,
+                "usd"   => bt_usd,
+                "iran"  => bt_iran,
+                "gold_mape"              => bt !== nothing ? round(bt.gold_mape,digits=2)              : nothing,
+                "usd_mape"               => bt !== nothing ? round(bt.usd_mape,digits=2)               : nothing,
+                "iran_mape"              => bt !== nothing ? round(bt.iran_mape,digits=2)              : nothing,
+                "direction_accuracy"     => bt !== nothing ? round(bt.gold_direction_accuracy,digits=1) : nothing,
+                "usd_direction_accuracy" => bt !== nothing ? round(bt.usd_direction_accuracy,digits=1)  : nothing,
+                "iran_direction_accuracy"=> bt !== nothing ? round(bt.iran_direction_accuracy,digits=1)  : nothing,
+                "total_days"             => bt !== nothing ? bt.total_days : 0,
+                "info"                   => bt !== nothing ? bt.info : ""
+            ),
+            "macro"     => Dict(
+                "dxy"   => try Dict("current"=>round(macrodata["dxy"]["current"],digits=2),"provider"=>macrodata["dxy"]["provider"])   catch; Dict() end,
+                "us10y" => try Dict("current"=>round(macrodata["us10y"]["current"],digits=2),"provider"=>macrodata["us10y"]["provider"]) catch; Dict() end,
+                "vix"   => try Dict("current"=>round(macrodata["vix"]["current"],digits=2),"provider"=>macrodata["vix"]["provider"])    catch; Dict() end
+            ),
+            "sentiment" => serialize_sentiment(STATE.sentiment),
+            "events"    => events,
+            "accuracy"  => accuracy
+        )
+
+        return HTTP.Response(200,
+            ["Content-Type"=>"application/json; charset=utf-8","Access-Control-Allow-Origin"=>"*"],
+            body=JSON3.write(resp))
+    catch e
+        @error "API" exception=(e, catch_backtrace())
+        return HTTP.Response(500,
+            ["Content-Type"=>"application/json"],
+            body=JSON3.write(Dict("status"=>"error","message"=>string(e))))
+    end
+end
+
+function handle_refresh(req)
+    try
+        update_data!()
+        HTTP.Response(200, ["Content-Type"=>"application/json"],
+            body=JSON3.write(Dict("status"=>"success")))
+    catch e
+        HTTP.Response(500, ["Content-Type"=>"application/json"],
+            body=JSON3.write(Dict("status"=>"error","message"=>string(e))))
+    end
+end
+
+function router(req::HTTP.Request)
+    path = HTTP.URI(req.target).path
+    if path in ["/", "/index.html"];    return handle_index(req)
+    elseif path == "/static/style.css"; return handle_css(req)
+    elseif path == "/api/data";         return handle_api(req)
+    elseif path == "/api/refresh";      return handle_refresh(req)
+    else;                               return HTTP.Response(404, "Not Found")
+    end
+end
+
+function start_server(port::Int=8080)
+    init_db()
+    println("\n" * "="^55)
+    # [log removed]
+    println("="^55)
+    # [log removed]
+    # [log removed]
+    println("="^55 * "\n")
+    update_data!()
+    HTTP.serve(router, "0.0.0.0", port)
+end
+
+end

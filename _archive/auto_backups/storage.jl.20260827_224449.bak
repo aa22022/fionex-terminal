@@ -1,0 +1,350 @@
+﻿module Storage
+
+using SQLite, DBInterface, Dates, Statistics
+
+export init_db, save_actual_snapshot!, save_prediction_run!,
+       get_accuracy_summary, get_multi_horizon_accuracy, get_prediction_trails
+
+const DB_PATH = joinpath(@__DIR__, "..", "data", "forecast.db")
+
+function open_db()
+    mkpath(dirname(DB_PATH))
+    return SQLite.DB(DB_PATH)
+end
+
+function init_db()
+    db = open_db()
+
+    DBInterface.execute(db, """
+    CREATE TABLE IF NOT EXISTS actual_snapshots (
+        trade_date   TEXT PRIMARY KEY,
+        captured_at  TEXT NOT NULL,
+        gold_oz      REAL,
+        usd_irr      REAL,
+        iran_gold    REAL,
+        dxy          REAL,
+        vix          REAL,
+        us10y        REAL
+    )
+    """)
+
+    DBInterface.execute(db, """
+    CREATE TABLE IF NOT EXISTS forecast_runs (
+        run_id       TEXT NOT NULL,
+        run_time     TEXT NOT NULL,
+        target_date  TEXT NOT NULL,
+        horizon_day  INTEGER NOT NULL,
+        gold_point   REAL,
+        gold_low     REAL,
+        gold_high    REAL,
+        usd_point    REAL,
+        usd_low      REAL,
+        usd_high     REAL,
+        iran_point   REAL,
+        iran_low     REAL,
+        iran_high    REAL,
+        confidence   REAL,
+        trend        TEXT,
+        PRIMARY KEY (run_id, target_date)
+    )
+    """)
+
+    DBInterface.execute(db, "CREATE INDEX IF NOT EXISTS idx_forecast_target_h ON forecast_runs(target_date, horizon_day)")
+    DBInterface.execute(db, "CREATE INDEX IF NOT EXISTS idx_forecast_run_time ON forecast_runs(run_time)")
+    DBInterface.execute(db, "CREATE INDEX IF NOT EXISTS idx_actual_trade_date ON actual_snapshots(trade_date)")
+
+    SQLite.close(db)
+end
+
+function save_actual_snapshot!(data::Dict, analysis)
+    db = open_db()
+
+    trade_date = Dates.format(today(), "yyyy-mm-dd")
+    captured_at = Dates.format(now(), "yyyy-mm-dd HH:MM:SS")
+
+    gold_oz = last(data["gold_oz"]["prices"])
+    usd_irr = last(data["usd_irr"]["prices"])
+    iran_gold = last(data["iran_gold"]["prices"])
+
+    macrodata = haskey(data, "macro") ? data["macro"] : Dict()
+
+    dxy = try
+        macrodata["dxy"]["current"]
+    catch
+        analysis.dxy_estimate
+    end
+
+    vix = try
+        macrodata["vix"]["current"]
+    catch
+        nothing
+    end
+
+    us10y = try
+        macrodata["us10y"]["current"]
+    catch
+        nothing
+    end
+
+    DBInterface.execute(db, """
+    INSERT INTO actual_snapshots
+    (trade_date, captured_at, gold_oz, usd_irr, iran_gold, dxy, vix, us10y)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(trade_date) DO UPDATE SET
+        captured_at = excluded.captured_at,
+        gold_oz     = excluded.gold_oz,
+        usd_irr     = excluded.usd_irr,
+        iran_gold   = excluded.iran_gold,
+        dxy         = excluded.dxy,
+        vix         = excluded.vix,
+        us10y       = excluded.us10y
+    """, (trade_date, captured_at, gold_oz, usd_irr, iran_gold, dxy, vix, us10y))
+
+    SQLite.close(db)
+end
+
+function save_prediction_run!(prediction)
+    db = open_db()
+
+    run_id = Dates.format(now(), "yyyymmddHHMMSS")
+    run_time = Dates.format(now(), "yyyy-mm-dd HH:MM:SS")
+
+    for (i, target_date) in enumerate(prediction.target_dates)
+        DBInterface.execute(db, """
+        INSERT OR REPLACE INTO forecast_runs
+        (run_id, run_time, target_date, horizon_day,
+         gold_point, gold_low, gold_high,
+         usd_point, usd_low, usd_high,
+         iran_point, iran_low, iran_high,
+         confidence, trend)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            run_id, run_time, target_date, i,
+            prediction.gold_oz_daily[i], prediction.gold_oz_low, prediction.gold_oz_high,
+            prediction.usd_irr_daily[i], prediction.usd_irr_low, prediction.usd_irr_high,
+            prediction.iran_gold_daily[i], prediction.iran_gold_low, prediction.iran_gold_high,
+            prediction.confidence, prediction.trend
+        ))
+    end
+
+    SQLite.close(db)
+    return run_id
+end
+
+function safe_mape(pred, actual)
+    if actual === nothing || pred === nothing
+        return nothing
+    end
+
+    a = try Float64(actual) catch; return nothing end
+    p = try Float64(pred) catch; return nothing end
+
+    if !isfinite(a) || !isfinite(p) || a <= 0
+        return nothing
+    end
+
+    return abs(p - a) / a * 100
+end
+
+function dir_side(x::Float64, ref::Float64)
+    tol = max(abs(ref) * 0.0008, 1e-8)
+    return x > ref + tol ? 1 : x < ref - tol ? -1 : 0
+end
+
+function safe_direction_hit(pred, actual, prev_actual)
+    if pred === nothing || actual === nothing || prev_actual === nothing
+        return nothing
+    end
+
+    p = try Float64(pred) catch; return nothing end
+    a = try Float64(actual) catch; return nothing end
+    pr = try Float64(prev_actual) catch; return nothing end
+
+    if !isfinite(p) || !isfinite(a) || !isfinite(pr)
+        return nothing
+    end
+
+    pred_side = dir_side(p, pr)
+    act_side = dir_side(a, pr)
+
+    if act_side == 0
+        return nothing
+    end
+
+    return pred_side == act_side ? 1.0 : 0.0
+end
+
+function get_accuracy_summary(limit_days::Int=30; horizon_day::Int=1)
+    db = open_db()
+
+    sql = """
+    SELECT
+        f.target_date,
+        f.gold_point,
+        a.gold_oz,
+        f.usd_point,
+        a.usd_irr,
+        f.iran_point,
+        a.iran_gold
+    FROM forecast_runs f
+    JOIN actual_snapshots a
+      ON a.trade_date = f.target_date
+    WHERE f.horizon_day = ?
+      AND f.run_time = (
+        SELECT MAX(f2.run_time)
+        FROM forecast_runs f2
+        WHERE f2.target_date = f.target_date
+          AND f2.horizon_day = f.horizon_day
+      )
+    ORDER BY f.target_date ASC
+    LIMIT ?
+    """
+
+    rows = [NamedTuple(r) for r in DBInterface.execute(db, sql, (horizon_day, limit_days))]
+    SQLite.close(db)
+
+    gold_err = Float64[]
+    usd_err = Float64[]
+    iran_err = Float64[]
+
+    gold_dir = Float64[]
+    usd_dir = Float64[]
+    iran_dir = Float64[]
+
+    prev_gold = nothing
+    prev_usd = nothing
+    prev_iran = nothing
+
+    for row in rows
+        ge = safe_mape(row[:gold_point], row[:gold_oz])
+        ue = safe_mape(row[:usd_point], row[:usd_irr])
+        ie = safe_mape(row[:iran_point], row[:iran_gold])
+
+        if ge !== nothing; push!(gold_err, ge); end
+        if ue !== nothing; push!(usd_err, ue); end
+        if ie !== nothing; push!(iran_err, ie); end
+
+        gd = safe_direction_hit(row[:gold_point], row[:gold_oz], prev_gold)
+        ud = safe_direction_hit(row[:usd_point], row[:usd_irr], prev_usd)
+        id = safe_direction_hit(row[:iran_point], row[:iran_gold], prev_iran)
+
+        if gd !== nothing; push!(gold_dir, gd); end
+        if ud !== nothing; push!(usd_dir, ud); end
+        if id !== nothing; push!(iran_dir, id); end
+
+        prev_gold = row[:gold_oz]
+        prev_usd = row[:usd_irr]
+        prev_iran = row[:iran_gold]
+    end
+
+    return Dict(
+        "horizon_day" => horizon_day,
+        "count" => max(length(gold_err), length(usd_err), length(iran_err)),
+        "gold_mape" => isempty(gold_err) ? nothing : round(mean(gold_err), digits=2),
+        "usd_mape" => isempty(usd_err) ? nothing : round(mean(usd_err), digits=2),
+        "iran_mape" => isempty(iran_err) ? nothing : round(mean(iran_err), digits=2),
+        "gold_direction_accuracy" => isempty(gold_dir) ? nothing : round(mean(gold_dir) * 100, digits=1),
+        "usd_direction_accuracy" => isempty(usd_dir) ? nothing : round(mean(usd_dir) * 100, digits=1),
+        "iran_direction_accuracy" => isempty(iran_dir) ? nothing : round(mean(iran_dir) * 100, digits=1)
+    )
+end
+
+function get_multi_horizon_accuracy(limit_days::Int=60)
+    return Dict(
+        "day_1" => get_accuracy_summary(limit_days; horizon_day=1),
+        "day_3" => get_accuracy_summary(limit_days; horizon_day=3),
+        "day_7" => get_accuracy_summary(limit_days; horizon_day=7)
+    )
+end
+
+function get_prediction_trails(limit_runs::Int=90; horizon_day::Int=1, per_day::Bool=true)
+    db = open_db()
+
+    sql = """
+    SELECT
+        f.run_time,
+        f.target_date,
+        f.horizon_day,
+        f.gold_point,
+        f.gold_low,
+        f.gold_high,
+        f.usd_point,
+        f.usd_low,
+        f.usd_high,
+        f.iran_point,
+        f.iran_low,
+        f.iran_high,
+        f.confidence,
+        f.trend,
+        a.gold_oz,
+        a.usd_irr,
+        a.iran_gold
+    FROM forecast_runs f
+    LEFT JOIN actual_snapshots a
+      ON a.trade_date = f.target_date
+    WHERE f.horizon_day = ?
+    ORDER BY f.run_time DESC
+    LIMIT ?
+    """
+
+    rows = [NamedTuple(r) for r in DBInterface.execute(db, sql, (horizon_day, limit_runs * 5))]
+    SQLite.close(db)
+
+    selected = Vector{NamedTuple}(undef, 0)
+    seen_days = Set{String}()
+
+    for row in rows
+        run_day = String(row[:run_time])[1:10]
+        if per_day
+            if run_day in seen_days
+                continue
+            end
+            push!(seen_days, run_day)
+        end
+        push!(selected, row)
+        if length(selected) >= limit_runs
+            break
+        end
+    end
+
+    selected = reverse(selected)
+
+    return Dict(
+        "horizon_day" => horizon_day,
+
+        "gold" => Dict(
+            "run_dates" => [String(r[:run_time])[1:10] for r in selected],
+            "run_times" => [String(r[:run_time]) for r in selected],
+            "target_dates" => [String(r[:target_date]) for r in selected],
+            "predicted" => [r[:gold_point] for r in selected],
+            "low" => [r[:gold_low] for r in selected],
+            "high" => [r[:gold_high] for r in selected],
+            "actual" => [r[:gold_oz] for r in selected],
+            "confidence" => [r[:confidence] for r in selected]
+        ),
+
+        "usd" => Dict(
+            "run_dates" => [String(r[:run_time])[1:10] for r in selected],
+            "run_times" => [String(r[:run_time]) for r in selected],
+            "target_dates" => [String(r[:target_date]) for r in selected],
+            "predicted" => [r[:usd_point] for r in selected],
+            "low" => [r[:usd_low] for r in selected],
+            "high" => [r[:usd_high] for r in selected],
+            "actual" => [r[:usd_irr] for r in selected],
+            "confidence" => [r[:confidence] for r in selected]
+        ),
+
+        "iran" => Dict(
+            "run_dates" => [String(r[:run_time])[1:10] for r in selected],
+            "run_times" => [String(r[:run_time]) for r in selected],
+            "target_dates" => [String(r[:target_date]) for r in selected],
+            "predicted" => [r[:iran_point] for r in selected],
+            "low" => [r[:iran_low] for r in selected],
+            "high" => [r[:iran_high] for r in selected],
+            "actual" => [r[:iran_gold] for r in selected],
+            "confidence" => [r[:confidence] for r in selected]
+        )
+    )
+end
+
+end

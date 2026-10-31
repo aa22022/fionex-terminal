@@ -1,0 +1,2533 @@
+/* ================================================================
+   💎 FIONEX PROFESSIONAL TRADING TERMINAL
+   Persian Multi-Color Bloomberg-Style
+   ================================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* پس‌زمینه‌ها */
+    --bg-black: #0B0E14;
+    --bg-dark: #131821;
+    --bg-panel: #1A2030;
+    --bg-panel-alt: #212942;
+    --bg-hover: #2A3350;
+    
+    /* بردر */
+    --border-color: #2A3350;
+    --border-light: #364168;
+    
+    /* متن */
+    --text-white: #FFFFFF;
+    --text-primary: #E4E9F5;
+    --text-secondary: #9AA5C4;
+    --text-dim: #6B7699;
+    --text-muted: #4A5578;
+    
+    /* رنگ‌های اصلی (چشم‌نواز و متنوع) */
+    --cyan: #06D6D6;
+    --cyan-light: #4EDBDB;
+    --cyan-dark: #04A5A5;
+    
+    --purple: #A78BFA;
+    --purple-light: #C4B5FD;
+    --purple-dark: #8B5CF6;
+    
+    --pink: #F472B6;
+    --pink-light: #F9A8D4;
+    --pink-dark: #EC4899;
+    
+    --green: #4ADE80;
+    --green-light: #86EFAC;
+    --green-dark: #22C55E;
+    
+    --orange: #FB923C;
+    --orange-light: #FDBA74;
+    --orange-dark: #F97316;
+    
+    --gold: #FDE047;
+    --gold-light: #FEF08A;
+    --gold-dark: #EAB308;
+    
+    --red: #F87171;
+    --red-light: #FCA5A5;
+    --red-dark: #EF4444;
+    
+    --blue: #60A5FA;
+    --blue-dark: #3B82F6;
+    
+    /* سایه و افکت */
+    --glow-cyan: 0 0 20px rgba(6, 214, 214, 0.3);
+    --glow-purple: 0 0 20px rgba(167, 139, 250, 0.3);
+    --glow-pink: 0 0 20px rgba(244, 114, 182, 0.3);
+    --glow-green: 0 0 20px rgba(74, 222, 128, 0.3);
+}
+
+html { direction: rtl; }
+
+body {
+    font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+    background: var(--bg-black);
+    background-image: 
+        radial-gradient(circle at 10% 20%, rgba(6, 214, 214, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 90% 80%, rgba(167, 139, 250, 0.03) 0%, transparent 50%);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ================================================================
+   🔷 تیکر بالای صفحه
+   ================================================================ */
+.ticker-bar {
+    background: var(--bg-black);
+    border-bottom: 1px solid var(--border-color);
+    overflow: hidden;
+    height: 32px;
+    position: relative;
+}
+
+.ticker-content {
+    display: flex;
+    animation: tickerScroll 80s linear infinite;
+    white-space: nowrap;
+    padding: 8px 0;
+    gap: 40px;
+}
+
+.ticker-item {
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+}
+
+.ticker-item .symbol { color: var(--cyan); font-weight: 700; }
+.ticker-item .value { color: var(--text-white); font-weight: 600; direction: ltr; }
+.ticker-item .up { color: var(--green); font-weight: 700; }
+.ticker-item .down { color: var(--red); font-weight: 700; }
+
+@keyframes tickerScroll {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+
+/* ================================================================
+   🔷 هدر ترمینال
+   ================================================================ */
+.terminal-header {
+    background: linear-gradient(90deg, var(--bg-dark) 0%, var(--bg-panel) 100%);
+    border-bottom: 2px solid var(--cyan);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    box-shadow: 0 2px 12px rgba(6, 214, 214, 0.1);
+}
+
+.terminal-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-logo-box {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+    color: var(--bg-black);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 900;
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: var(--glow-cyan);
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.brand-name {
+    color: var(--text-white);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    background: linear-gradient(90deg, var(--cyan) 0%, var(--purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.brand-tag {
+    color: var(--text-dim);
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+/* منوی ناوبری */
+.terminal-nav {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.nav-btn {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+    background: var(--bg-hover);
+    color: var(--cyan);
+    border-color: var(--cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+.nav-btn.active {
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--cyan-dark) 100%);
+    color: var(--bg-black);
+    border-color: var(--cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+.nav-btn.active .hotkey {
+    background: var(--bg-black);
+    color: var(--cyan);
+}
+
+.hotkey {
+    background: var(--bg-dark);
+    color: var(--cyan);
+    padding: 2px 6px;
+    font-size: 9px;
+    border-radius: 3px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ابزارک‌های راست */
+.terminal-widgets {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.live-clock {
+    background: var(--bg-black);
+    color: var(--green);
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    border: 1px solid var(--green);
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+    border-radius: 6px;
+    text-shadow: 0 0 8px var(--green);
+}
+
+.terminal-btn {
+    background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%);
+    color: var(--text-white);
+    border: none;
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    box-shadow: var(--glow-purple);
+}
+
+.terminal-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 24px rgba(167, 139, 250, 0.5);
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 8px 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--green);
+    animation: pulseLive 1.2s infinite alternate;
+}
+
+@keyframes pulseLive {
+    0% { opacity: 0.5; transform: scale(0.85); }
+    100% { opacity: 1; transform: scale(1.1); }
+}
+
+/* ================================================================
+   🔷 نوار هشدار
+   ================================================================ */
+.alert-strip {
+    background: linear-gradient(90deg, rgba(6, 214, 214, 0.15), transparent);
+    border-right: 3px solid var(--cyan);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.alert-tag {
+    background: var(--cyan);
+    color: var(--bg-black);
+    padding: 3px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border-radius: 4px;
+}
+
+/* ================================================================
+   🔷 محتوای اصلی
+   ================================================================ */
+.terminal-main {
+    padding: 16px;
+    max-width: 1920px;
+    margin: 0 auto;
+}
+
+.page-section {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* عنوان بخش (با لهجه رنگی) */
+.panel-title-bar {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    border-radius: 6px;
+}
+
+.panel-title-bar.accent-cyan { border-right: 4px solid var(--cyan); }
+.panel-title-bar.accent-purple { border-right: 4px solid var(--purple); }
+.panel-title-bar.accent-pink { border-right: 4px solid var(--pink); }
+.panel-title-bar.accent-green { border-right: 4px solid var(--green); }
+.panel-title-bar.accent-orange { border-right: 4px solid var(--orange); }
+.panel-title-bar.accent-gold { border-right: 4px solid var(--gold); }
+
+.panel-title-bar.accent-cyan .panel-code { background: var(--cyan); color: var(--bg-black); }
+.panel-title-bar.accent-purple .panel-code { background: var(--purple); color: var(--bg-black); }
+.panel-title-bar.accent-pink .panel-code { background: var(--pink); color: var(--bg-black); }
+.panel-title-bar.accent-green .panel-code { background: var(--green); color: var(--bg-black); }
+.panel-title-bar.accent-orange .panel-code { background: var(--orange); color: var(--bg-black); }
+.panel-title-bar.accent-gold .panel-code { background: var(--gold); color: var(--bg-black); }
+
+.panel-code {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.panel-title-bar h2 {
+    color: var(--text-white);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.panel-subtitle {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-right: auto;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ================================================================
+   🔷 نوار KPI و کارت‌ها
+   ================================================================ */
+.kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.kpi-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    padding: 14px 16px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cyan), var(--purple));
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.kpi-card:hover {
+    border-color: var(--cyan);
+    background: var(--bg-panel-alt);
+    transform: translateY(-2px);
+    box-shadow: var(--glow-cyan);
+}
+
+.kpi-card:hover::before { opacity: 1; }
+
+.kpi-card h4 {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.kpi-card .value {
+    color: var(--cyan);
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    margin-bottom: 6px;
+    direction: ltr;
+    text-align: right;
+}
+
+.kpi-card .value.up { color: var(--green); text-shadow: 0 0 12px rgba(74, 222, 128, 0.4); }
+.kpi-card .value.down { color: var(--red); text-shadow: 0 0 12px rgba(248, 113, 113, 0.4); }
+
+.kpi-card .unit {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 500;
+    margin-right: 4px;
+    font-family: 'Vazirmatn', sans-serif;
+}
+
+.source-badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 2px 8px;
+    background: var(--bg-black);
+    color: var(--purple-light);
+    border: 1px solid var(--purple);
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+/* ================================================================
+   🔷 پنل‌های ترمینال
+   ================================================================ */
+.term-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.term-panel:hover {
+    border-color: var(--border-light);
+}
+
+.panel-head {
+    background: var(--bg-dark);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.panel-head.accent-cyan { color: var(--cyan); border-bottom-color: var(--cyan-dark); }
+.panel-head.accent-purple { color: var(--purple); border-bottom-color: var(--purple-dark); }
+.panel-head.accent-pink { color: var(--pink); border-bottom-color: var(--pink-dark); }
+.panel-head.accent-green { color: var(--green); border-bottom-color: var(--green-dark); }
+.panel-head.accent-orange { color: var(--orange); border-bottom-color: var(--orange-dark); }
+.panel-head.accent-gold { color: var(--gold); border-bottom-color: var(--gold-dark); }
+
+.panel-icon {
+    font-size: 16px;
+}
+
+.panel-meta {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-right: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+}
+
+.panel-body {
+    padding: 14px;
+}
+
+.grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+@media (max-width: 1100px) {
+    .grid-2col { grid-template-columns: 1fr; }
+}
+
+.chart-wrap {
+    padding: 14px;
+    height: 280px;
+}
+
+.chart-wrap.large {
+    height: 400px;
+}
+
+/* ================================================================
+   🔷 نقشه حرارتی
+   ================================================================ */
+.heatmap-grid {
+    padding: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.heatmap-card {
+    background: var(--bg-black);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px 14px;
+    transition: all 0.2s;
+}
+
+.heatmap-card:hover {
+    border-color: var(--orange);
+    transform: translateY(-2px);
+    box-shadow: 0 0 16px rgba(251, 146, 60, 0.2);
+}
+
+.heatmap-card h4 {
+    color: var(--text-white);
+    font-size: 13px;
+    margin-bottom: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.heatmap-card .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    padding: 4px 0;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.heatmap-card .lbl {
+    color: var(--text-dim);
+    font-family: 'Vazirmatn', sans-serif;
+}
+
+.heatmap-card .val {
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 4px;
+    direction: ltr;
+    min-width: 80px;
+    text-align: center;
+}
+
+.heatmap-card .val.up {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--green);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.heatmap-card .val.down {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--red);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+/* ================================================================
+   🔷 رژیم بازار
+   ================================================================ */
+.regime-widget-inner .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--border-color);
+    align-items: center;
+}
+
+.regime-widget-inner .row:last-of-type { border-bottom: none; }
+
+.regime-widget-inner .lbl {
+    color: var(--text-secondary);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.regime-widget-inner .val {
+    color: var(--purple);
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+}
+
+.signal-item {
+    padding: 8px 12px;
+    background: rgba(167, 139, 250, 0.1);
+    border-right: 3px solid var(--purple);
+    border-radius: 4px;
+    margin-top: 6px;
+    color: var(--purple-light);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ================================================================
+   🔷 ستاپ‌ها
+   ================================================================ */
+.setup-row {
+    background: var(--bg-black);
+    border: 1px solid var(--border-color);
+    border-right: 3px solid var(--cyan);
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    display: grid;
+    grid-template-columns: 130px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.setup-row:hover {
+    background: var(--bg-hover);
+    border-right-color: var(--pink);
+    transform: translateX(-3px);
+    box-shadow: 0 0 20px rgba(244, 114, 182, 0.15);
+}
+
+.setup-row .sym-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.setup-row .sym {
+    color: var(--cyan);
+    font-weight: 700;
+    letter-spacing: 1px;
+    direction: ltr;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+}
+
+.setup-row .bias {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-weight: 700;
+    display: inline-block;
+    width: fit-content;
+    letter-spacing: 0.5px;
+}
+
+.bias.long, .bias.buy {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--green);
+    border: 1px solid var(--green-dark);
+}
+
+.bias.short, .bias.sell {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--red);
+    border: 1px solid var(--red-dark);
+}
+
+.setup-row .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+}
+
+.setup-row .meta-item .lbl {
+    color: var(--text-dim);
+    margin-left: 4px;
+    font-family: 'Vazirmatn', sans-serif;
+}
+
+.setup-row .meta-item .val {
+    color: var(--text-white);
+    font-weight: 600;
+}
+
+.setup-row .quality {
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+    color: var(--bg-black);
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: 0 0 12px rgba(253, 224, 71, 0.3);
+}
+
+/* ================================================================
+   🔷 کارت پیش‌بینی
+   ================================================================ */
+.pred-card {
+    background: var(--bg-panel-alt);
+    border: 1px solid var(--border-color);
+    border-top: 3px solid var(--gold);
+    padding: 14px 16px;
+    border-radius: 6px;
+}
+
+.pred-card h4 {
+    color: var(--gold);
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.pred-card .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+    border-bottom: 1px dashed var(--border-color);
+}
+
+.pred-card .row:last-child { border-bottom: none; }
+.pred-card .row .lbl { color: var(--text-secondary); font-family: 'Vazirmatn', sans-serif; }
+.pred-card .row .val { color: var(--gold-light); font-weight: 700; }
+
+/* ================================================================
+   🔷 جدول
+   ================================================================ */
+.table-wrap {
+    padding: 14px;
+    overflow-x: auto;
+}
+
+.term-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+
+.term-table th {
+    background: var(--bg-black);
+    color: var(--purple);
+    padding: 10px 14px;
+    text-align: right;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--purple);
+    text-transform: uppercase;
+    font-family: 'Vazirmatn', sans-serif;
+}
+
+.term-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.term-table tr:hover {
+    background: var(--bg-hover);
+}
+
+.term-table td.num { direction: ltr; text-align: right; color: var(--cyan); font-weight: 600; }
+.term-table td.up { color: var(--green); font-weight: 700; }
+.term-table td.down { color: var(--red); font-weight: 700; }
+
+/* ================================================================
+   🔷 نوار وضعیت پایین
+   ================================================================ */
+.status-bar {
+    background: var(--bg-black);
+    border-top: 1px solid var(--cyan-dark);
+    padding: 8px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    margin-top: 20px;
+    box-shadow: 0 -2px 12px rgba(6, 214, 214, 0.1);
+}
+
+.status-left, .status-right {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+}
+
+.status-item .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-item .dot.green {
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+}
+
+/* ================================================================
+   🔷 اسکرول‌بار
+   ================================================================ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-black); }
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--cyan-dark), var(--purple-dark));
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, var(--cyan), var(--purple));
+}
+
+/* ================================================================
+   🔷 ریسپانسیو
+   ================================================================ */
+@media (max-width: 1024px) {
+    .terminal-header { padding: 10px 12px; }
+    .terminal-nav { justify-content: center; width: 100%; order: 3; }
+    .terminal-widgets { order: 2; }
+}
+
+@media (max-width: 640px) {
+    .terminal-main { padding: 10px; }
+    .kpi-strip { grid-template-columns: 1fr 1fr; }
+    .setup-row { grid-template-columns: 1fr; text-align: center; }
+    .setup-row .meta { justify-content: center; }
+    .brand-tag { display: none; }
+    .status-bar { flex-direction: column; gap: 4px; }
+}
+
+/* ================================================================
+   💎 استایل‌های حرفه‌ای اسکنر Pro
+   ================================================================ */
+
+.strength-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.strength-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--cyan);
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.strength-legend {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.strength-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.strength-card {
+    background: var(--bg-black);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.strength-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--cyan);
+}
+
+.strength-card.rank-1 { border-color: var(--green); box-shadow: 0 0 10px rgba(74, 222, 128, 0.2); }
+.strength-card.rank-2 { border-color: var(--cyan); }
+
+.strength-rank {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.strength-symbol {
+    color: var(--cyan);
+    font-size: 20px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.strength-name {
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.strength-stars {
+    text-align: center;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.strength-score-bar {
+    height: 6px;
+    background: var(--bg-hover);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.score-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.strength-score-num {
+    text-align: center;
+    color: var(--text-white);
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 6px;
+}
+
+.strength-bias {
+    text-align: center;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.bias-bull { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.bias-bear { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+.bias-neutral { background: rgba(154, 165, 196, 0.15); color: var(--text-secondary); }
+
+.strength-momentum {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.strength-momentum .up { color: var(--green); font-weight: 700; }
+.strength-momentum .down { color: var(--red); font-weight: 700; }
+
+.best-pair-panel {
+    background: linear-gradient(90deg, rgba(6, 214, 214, 0.1), rgba(167, 139, 250, 0.1));
+    border: 1px solid var(--cyan);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.best-pair-label { color: var(--gold); font-weight: 700; font-size: 13px; }
+.best-pair-value {
+    color: var(--cyan);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+.best-pair-hint { color: var(--text-dim); font-size: 11px; }
+
+/* کارت‌های ستاپ حرفه‌ای */
+.pro-setup-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+
+.pro-setup-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.pro-setup-card.buy { border-right: 4px solid var(--green); }
+.pro-setup-card.sell { border-right: 4px solid var(--red); }
+.pro-setup-card.neutral { border-right: 4px solid var(--text-dim); }
+
+.pro-setup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pro-symbol-block {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pro-symbol {
+    color: var(--text-white);
+    font-size: 16px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+}
+
+.pro-bias-badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.pro-bias-badge.buy { background: rgba(74, 222, 128, 0.15); color: var(--green); border: 1px solid var(--green); }
+.pro-bias-badge.sell { background: rgba(248, 113, 113, 0.15); color: var(--red); border: 1px solid var(--red); }
+.pro-bias-badge.neutral { background: rgba(154, 165, 196, 0.15); color: var(--text-secondary); }
+
+.pro-grade {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 900;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.pro-confidence {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: var(--bg-black);
+    border-radius: 6px;
+}
+
+.confidence-label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.confidence-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-hover);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.confidence-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.confidence-value {
+    color: var(--text-white);
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    min-width: 55px;
+    text-align: left;
+}
+
+.pro-setup-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.pro-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: var(--bg-black);
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.pro-metric .lbl { color: var(--text-secondary); }
+.pro-metric .val {
+    color: var(--text-white);
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    direction: ltr;
+}
+.pro-metric .val.up { color: var(--green); }
+.pro-metric .val.down { color: var(--red); }
+.pro-metric .val.gold { color: var(--gold); }
+
+.pro-reasons {
+    background: var(--bg-black);
+    border-right: 3px solid var(--cyan);
+    padding: 10px 12px;
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+.reasons-title {
+    color: var(--cyan);
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.reason-item {
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 2px 0;
+    line-height: 1.6;
+}
+
+.no-setup-msg {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 30px;
+    font-size: 13px;
+    background: var(--bg-black);
+    border-radius: 6px;
+    border: 1px dashed var(--border-color);
+}
+/* ================================================================
+   🎨 Fionex F3 Scanner & Strength Meter Styles
+   ================================================================ */
+.setups-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-top: 15px;
+}
+
+.pro-setup-card {
+    background: #121722;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    padding: 16px;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.pro-setup-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.pro-setup-card.buy {
+    border-top: 3px solid #22C55E;
+}
+
+.pro-setup-card.sell {
+    border-top: 3px solid #EF4444;
+}
+
+.pro-setup-card.neutral {
+    border-top: 3px solid #64748B;
+}
+
+.pro-setup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.pro-symbol-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pro-symbol {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #F8FAFC;
+}
+
+.pro-bias-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.pro-bias-badge.buy {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ADE80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.pro-bias-badge.sell {
+    background: rgba(239, 68, 68, 0.15);
+    color: #F87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pro-grade {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 0.85rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.pro-confidence {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    font-size: 0.75rem;
+    color: #94A3B8;
+}
+
+.confidence-bar {
+    flex: 1;
+    height: 6px;
+    background: #1E293B;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.confidence-fill {
+    height: 100%;
+    border-radius: 3px;
+}
+
+.confidence-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #F8FAFC;
+}
+
+.pro-setup-body {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    background: #0B0E14;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #1E293B;
+    margin-bottom: 12px;
+}
+
+.pro-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pro-metric .lbl {
+    font-size: 0.75rem;
+    color: #64748B;
+}
+
+.pro-metric .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #E2E8F0;
+}
+
+.pro-metric .val.up { color: #4ADE80; }
+.pro-metric .val.down { color: #F87171; }
+.pro-metric .val.gold { color: #FACC15; }
+
+.pro-reasons {
+    font-size: 0.75rem;
+    color: #94A3B8;
+    background: rgba(6, 214, 214, 0.03);
+    border: 1px dashed rgba(6, 214, 214, 0.2);
+    padding: 8px 10px;
+    border-radius: 6px;
+}
+
+.reasons-title {
+    font-weight: 700;
+    color: #06D6D6;
+    margin-bottom: 4px;
+}
+
+.reason-item {
+    margin-bottom: 2px;
+}
+
+/* پنل قدرت ارزها */
+.strength-panel {
+    background: #121722;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.strength-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    color: #06D6D6;
+    margin-bottom: 14px;
+}
+
+.strength-legend {
+    font-size: 0.75rem;
+    color: #64748B;
+}
+
+.strength-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+}
+
+.strength-card {
+    background: #0B0E14;
+    border: 1px solid #1E293B;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+    position: relative;
+}
+
+.strength-rank {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-size: 0.7rem;
+    color: #64748B;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.strength-symbol {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: #F8FAFC;
+    margin-top: 4px;
+}
+
+.strength-name {
+    font-size: 0.75rem;
+    color: #94A3B8;
+    margin-bottom: 6px;
+}
+
+.strength-score-bar {
+    height: 4px;
+    background: #1E293B;
+    border-radius: 2px;
+    margin: 6px 0;
+    overflow: hidden;
+}
+
+.strength-score-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #E2E8F0;
+}
+
+.best-pair-panel {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #1E293B;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+}
+
+.best-pair-label { color: #94A3B8; }
+.best-pair-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    color: #FACC15;
+    background: rgba(250, 204, 21, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(250, 204, 21, 0.3);
+}
+.best-pair-hint { color: #64748B; font-size: 0.75rem; }
+.no-setup-msg {
+    text-align: center;
+    color: #64748B;
+    padding: 30px;
+    font-size: 0.9rem;
+}
+/* 🧪 استایل پنل پیشرفته کوانت Fionex */
+.quant-extra-panel {
+    background: #090c12;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 12px 0;
+}
+
+.quant-panel-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #06d6d6;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 4px;
+}
+
+.quant-metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+}
+
+.q-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72rem;
+    border-bottom: 1px dashed rgba(30, 41, 59, 0.5);
+    padding-bottom: 4px;
+}
+
+.q-metric:last-child {
+    border-bottom: none;
+}
+
+.q-lbl {
+    color: #64748b;
+}
+
+.q-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+.text-gold { color: #facc15 !important; }
+.text-green { color: #4ade80 !important; }
+.text-cyan { color: #06d6d6 !important; }
+
+.badge {
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-right: 4px;
+}
+
+.badge.buy {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.badge.sell {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge.neutral {
+    background: rgba(100, 116, 139, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(100, 116, 139, 0.3);
+}
+/* 🔄 استایل بخش همگرایی چندتایم فریمی (MTF) */
+.mtf-alignment-panel {
+    background: #090c12;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+
+.mtf-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #06d6d6;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 4px;
+}
+
+.mtf-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    text-align: center;
+}
+
+.mtf-col {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border-radius: 4px;
+    background: #111622;
+    border: 1px solid #1e293b;
+}
+
+.mtf-col .tf-name {
+    font-size: 0.65rem;
+    color: #64748b;
+    margin-bottom: 2px;
+}
+
+.mtf-col .tf-val {
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.mtf-col .tf-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: #94a3b8;
+}
+
+.mtf-col.buy {
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    background: rgba(34, 197, 94, 0.05);
+}
+.mtf-col.buy .tf-val { color: #4ade80; }
+
+.mtf-col.sell {
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.05);
+}
+.mtf-col.sell .tf-val { color: #f87171; }
+
+.mtf-col.neutral {
+    border: 1px solid #1e293b;
+    background: #0d111a;
+}
+.mtf-col.neutral .tf-val { color: #94a3b8; }
+/* ناوبری ایمن Fionex */
+.page-section {
+    display: none !important;
+}
+.page-section.active {
+    display: block !important;
+}
+/* 🔴 برچسب نرخ لحظه‌ای زنده Fionex */
+.live-price-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 4px;
+}
+
+.live-pulse-dot {
+    color: #22c55e;
+    font-size: 0.75rem;
+    animation: livePulse 1.5s infinite;
+}
+
+@keyframes livePulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.85); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.live-price-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #06d6d6;
+    letter-spacing: 0.5px;
+}
+
+.strength-live-rate {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #06d6d6;
+    background: rgba(6, 214, 214, 0.08);
+    padding: 2px 4px;
+    border-radius: 3px;
+    margin: 3px 0;
+}
+/* 📊 استایل نقشه حرارتی بلومبرگ Fionex */
+.heatmap-table-container {
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 10px;
+    overflow-x: auto;
+}
+
+.heatmap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    text-align: right;
+}
+
+.heatmap-table th, .heatmap-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #1e293b;
+}
+
+.heatmap-table th {
+    color: #64748b;
+    font-weight: 700;
+}
+
+.heatmap-table td.asset-name {
+    color: #f8fafc;
+    font-weight: 600;
+}
+
+.heatmap-table td.num {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+
+.heatmap-table tr:hover {
+    background: rgba(30, 41, 59, 0.3);
+}
+
+/* کارت رژیم بازار */
+.regime-card {
+    background: #121722;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.regime-metric {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+}
+
+.regime-metric .lbl {
+    color: #94a3b8;
+}
+
+.regime-metric .val {
+    font-weight: 700;
+}
+
+.regime-signals-list {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #1e293b;
+    font-size: 0.78rem;
+    color: #4ade80;
+}
+
+.sig-item {
+    margin-bottom: 4px;
+}
+/* ⚡ دکمه‌های سوییچ دی‌تریدینگ Fionex */
+.trade-style-selector {
+    display: flex;
+    gap: 12px;
+    background: #111622;
+    border: 1px solid #1e293b;
+    padding: 8px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.style-btn {
+    flex: 1;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #64748b;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s;
+    font-family: var(--font-fa);
+}
+
+.style-btn:hover {
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.style-btn.active {
+    background: #0b0e14;
+    color: #06d6d6;
+    border: 1px solid #06d6d6;
+    box-shadow: 0 0 12px rgba(6, 214, 214, 0.2);
+}
+
+/* اصلاحات تکمیلی ستون‌های ۳گانه برای هماهنگی با تایم‌فریم اسکالپ */
+.pro-setup-card.buy {
+    border-top: 3px solid #4ade80 !important;
+}
+.pro-setup-card.sell {
+    border-top: 3px solid #f87171 !important;
+}
+/* ================================================================
+   🎨 استایل‌های پایه ویجت‌های جدید Fionex v5.1
+   ================================================================ */
+
+/* گرید ۳ ستونی برای ویجت‌های ردیف بالای F1 */
+.widgets-row-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin: 15px 0;
+}
+
+/* گرید ۳ ستونی برای نمودارهای TradingView در F2 */
+.charts-tv-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.tv-chart-container {
+    width: 100%;
+    height: 350px;
+    background: #0b0e14;
+    border-radius: 4px;
+    position: relative;
+}
+
+/* نوار کنترل چارت (تایم‌فریم و اندیکاتور) */
+.chart-controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    background: #111622;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.tf-selector, .indicator-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ctrl-label {
+    color: #64748b;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.tf-btn, .bt-btn {
+    background: transparent;
+    border: 1px solid #1e293b;
+    color: #94a3b8;
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.tf-btn:hover, .bt-btn:hover {
+    color: #cbd5e1;
+    border-color: #06d6d6;
+}
+
+.tf-btn.active, .bt-btn.active {
+    background: rgba(6, 214, 214, 0.15);
+    color: #06d6d6;
+    border-color: #06d6d6;
+}
+
+.ind-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #cbd5e1;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.ind-checkbox input[type="checkbox"] {
+    accent-color: #06d6d6;
+    cursor: pointer;
+}
+
+/* گرید ۲ ستونی برای صفحه F3 (روابط) */
+.relations-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.network-container {
+    height: 400px;
+    background: #0b0e14;
+    border-radius: 4px;
+}
+
+.heatmap-matrix-container {
+    height: 400px;
+    overflow: auto;
+    background: #0b0e14;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+/* گرید ۲ ستونی برای صفحه F4 (بک‌تست) */
+.backtest-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #111622;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.backtest-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin: 15px 0;
+}
+
+.chart-body-tall {
+    height: 350px;
+    padding: 10px;
+    position: relative;
+}
+
+/* حالت واکنش‌گرا (Responsive) */
+@media (max-width: 1200px) {
+    .widgets-row-3,
+    .charts-tv-grid {
+        grid-template-columns: 1fr;
+    }
+    .relations-grid-2,
+    .backtest-grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+/* ================================================================
+   📊 استایل‌های فاز ۲: ویجت‌های حرفه‌ای F1 (بلومبرگ نئونی)
+   ================================================================ */
+
+/* برچسب‌های نوار تغییرات لحظه‌ای KPI */
+.kpi-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.kpi-head h4 {
+    margin: 0;
+}
+.kpi-tickers {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+.kpi-ticker-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.kpi-ticker-tag.up {
+    color: #4ade80;
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.25);
+}
+.kpi-ticker-tag.down {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.25);
+}
+.kpi-ticker-tag.neutral {
+    color: #94a3b8;
+}
+
+/* ویجت حباب سکه */
+.bubble-widget {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.bubble-main-stat {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+.bubble-pct-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+    border-radius: 8px;
+    min-width: 90px;
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+}
+.bubble-pct-box.down {
+    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
+}
+.bubble-pct-box.up {
+    border-color: rgba(34, 197, 94, 0.4);
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.15);
+}
+.bubble-pct-box .pct-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #f8fafc;
+}
+.bubble-pct-box .pct-lbl {
+    font-size: 0.7rem;
+    color: #94a3b8;
+}
+.bubble-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.bubble-details .b-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    border-bottom: 1px dashed rgba(30, 41, 59, 0.5);
+    padding-bottom: 3px;
+}
+.bubble-details .b-row .lbl {
+    color: #94a3b8;
+}
+.bubble-details .b-row .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+.bubble-status-badge {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+    gap: 2px;
+}
+.bubble-status-badge .status-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+.bubble-status-badge.down .status-title { color: #f87171; }
+.bubble-status-badge.up .status-title { color: #4ade80; }
+.bubble-status-badge.neutral .status-title { color: #06d6d6; }
+.bubble-status-badge .status-desc {
+    font-size: 0.72rem;
+    color: #64748b;
+}
+
+/* ویجت گیج فشار بازار */
+.gauge-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+.gauge-meter-wrapper {
+    position: relative;
+    width: 140px;
+    height: 70px;
+    overflow: hidden;
+}
+.gauge-meter {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: conic-gradient(from 180deg at 50% 50%, #f87171 0deg, #facc15 90deg, #4ade80 180deg);
+}
+.gauge-arc {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    width: 112px;
+    height: 112px;
+    background: #111622;
+    border-radius: 50%;
+}
+.gauge-needle {
+    position: absolute;
+    bottom: 50%;
+    left: 50%;
+    width: 3px;
+    height: 52px;
+    background: #ffffff;
+    transform-origin: bottom center;
+    border-radius: 2px;
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+}
+.gauge-center-cap {
+    position: absolute;
+    top: calc(50% - 7px);
+    left: calc(50% - 7px);
+    width: 14px;
+    height: 14px;
+    background: #06d6d6;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+}
+.gauge-info {
+    width: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.gauge-score-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 800;
+}
+.gauge-status-text {
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.gauge-bars-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.68rem;
+    color: #64748b;
+    margin-top: 4px;
+}
+.pressure-bar-fill-box {
+    flex: 1;
+    height: 5px;
+    background: #1e293b;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.pressure-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s;
+}
+
+/* تقویم رویدادهای اقتصادی */
+.calendar-events-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.event-item-card {
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color 0.2s;
+}
+.event-item-card:hover {
+    border-color: #06d6d6;
+}
+.event-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.event-curr-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    background: #1e293b;
+    color: #06d6d6;
+    border-radius: 3px;
+}
+.event-title {
+    flex: 1;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.event-impact-tag {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 700;
+}
+.event-impact-tag.high {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.event-impact-tag.medium {
+    background: rgba(250, 204, 21, 0.15);
+    color: #facc15;
+    border: 1px solid rgba(250, 204, 21, 0.3);
+}
+.event-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    color: #64748b;
+    border-top: 1px dashed rgba(30, 41, 59, 0.5);
+    padding-top: 4px;
+}
+.countdown-timer {
+    color: #06d6d6;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+}
+.forecast-nums b {
+    color: #cbd5e1;
+    font-family: 'JetBrains Mono', monospace;
+}
+/* ================================================================
+   💰 استایل‌های فاز ۳: چارت‌های TradingView و پیش‌بینی چندپله‌ای F2
+   ================================================================ */
+
+.multi-target-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+}
+
+.target-horizon-card {
+    background: #0B0E14;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.target-horizon-card:hover {
+    transform: translateY(-2px);
+    border-color: #06D6D6;
+}
+
+.target-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.horizon-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #F8FAFC;
+}
+
+.horizon-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+}
+.horizon-badge.cyan { background: rgba(6, 214, 214, 0.15); color: #06D6D6; border: 1px solid rgba(6, 214, 214, 0.3); }
+.horizon-badge.green { background: rgba(34, 197, 94, 0.15); color: #4ADE80; border: 1px solid rgba(34, 197, 94, 0.3); }
+.horizon-badge.gold { background: rgba(250, 204, 21, 0.15); color: #FACC15; border: 1px solid rgba(250, 204, 21, 0.3); }
+.horizon-badge.purple { background: rgba(168, 85, 247, 0.15); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.3); }
+
+.target-confidence-bar {
+    position: relative;
+    height: 14px;
+    background: #1E293B;
+    border-radius: 7px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.conf-fill {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #06D6D6, #22C55E);
+    border-radius: 7px;
+}
+
+.conf-label {
+    position: relative;
+    z-index: 2;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.target-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px dashed rgba(30, 41, 59, 0.6);
+    padding-top: 8px;
+}
+
+.t-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+}
+
+.t-item .lbl {
+    color: #94A3B8;
+}
+
+.t-item .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+
+.t-item .ret {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+.t-item .ret.up { color: #4ADE80; background: rgba(34, 197, 94, 0.1); }
+.t-item .ret.down { color: #F87171; background: rgba(239, 68, 68, 0.1); }
+
+@media (max-width: 1200px) {
+    .multi-target-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 650px) {
+    .multi-target-grid {
+        grid-template-columns: 1fr;
+    }
+}
+/* ================================================================
+   🌐 فاز ۴: استایل‌های اختصاصی روابط (F3) و بک‌تست (F4)
+   ================================================================ */
+
+/* ماتریس هیت‌مپ همبستگی */
+.matrix-heatmap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    text-align: center;
+}
+.matrix-heatmap-table th, .matrix-heatmap-table td {
+    padding: 8px 6px;
+    border: 1px solid #1E293B;
+}
+.matrix-heatmap-table th {
+    color: #64748B;
+    font-weight: 700;
+}
+.matrix-heatmap-table td.row-header {
+    font-weight: 700;
+    color: #F8FAFC;
+    background: #111622;
+    text-align: right;
+    padding-right: 10px;
+}
+.matrix-heatmap-table td {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+
+/* کارت‌های آربیتراژ */
+.arbitrage-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.arb-card {
+    background: #0B0E14;
+    border: 1px solid #1E293B;
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.2s;
+}
+.arb-card.arbitrage_active {
+    border-color: rgba(34, 197, 94, 0.4);
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.08);
+}
+.arb-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.arb-pair-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #F8FAFC;
+}
+.arb-badge {
+    font-size: 0.68rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(6, 214, 214, 0.1);
+    color: #06D6D6;
+    border: 1px solid rgba(6, 214, 214, 0.25);
+    font-weight: 700;
+}
+.arb-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.arb-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+}
+.arb-row .lbl { color: #94A3B8; }
+.arb-row .val { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+
+/* پنل تحلیل عاملی */
+.factor-analysis-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.factor-stacked-bar {
+    display: flex;
+    height: 24px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #1E293B;
+}
+.factor-bar-segment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #0B0E14;
+    transition: width 0.4s;
+}
+.factor-legend-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+.factor-legend-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    background: #0B0E14;
+    border: 1px solid #1E293B;
+    border-radius: 4px;
+    padding: 8px;
+}
+.factor-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+.factor-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.factor-info .f-title {
+    font-size: 0.8rem;
+    color: #F8FAFC;
+}
+.factor-info .f-desc {
+    font-size: 0.7rem;
+    color: #64748B;
+}
+
+/* کارت گرید مدل در بک‌تست */
+.model-grade-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.grade-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 3px solid #4ADE80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 900;
+    flex-shrink: 0;
+    box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+}
+.grade-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.grade-meta h4 { margin: 0; font-size: 0.85rem; }
+.grade-desc { font-size: 0.72rem; color: #94A3B8; }

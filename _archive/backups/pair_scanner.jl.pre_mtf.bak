@@ -1,0 +1,400 @@
+﻿module PairScanner
+
+using Statistics, Dates
+using ..StrengthEngine
+using ..LevelEngine
+
+export TradeSetup, scan_all_pairs, generate_daily_report
+
+struct TradeSetup
+    symbol::String
+    base::String
+    quote_ccy::String
+    # Direction
+    bias::String            # long/short/no_trade
+    setup_type::String      # trend/pullback/breakout/range/no_trade
+    # Scoring
+    total_score::Float64    # 0-100
+    strength_score::Float64
+    trend_score::Float64
+    momentum_score::Float64
+    volatility_score::Float64
+    sr_score::Float64
+    # Levels
+    levels::Union{KeyLevels,Nothing}
+    # Risk
+    entry_zone_low::Float64
+    entry_zone_high::Float64
+    target1::Float64
+    target2::Float64
+    stop_loss::Float64
+    risk_reward::Float64
+    # Analysis
+    reasons_for::Vector{String}
+    reasons_against::Vector{String}
+    trade_quality::String   # A/B/C/D/No Trade
+    timeframe_align::String
+    # Meta
+    analyzed_at::String
+end
+
+function calc_trend_score(prices::Vector{Float64})
+    n = length(prices)
+    score = 0.0
+    reasons = String[]
+
+    # MA alignment
+    if n >= 50
+        ma20 = mean(prices[end-19:end])
+        ma50 = mean(prices[end-49:end])
+        cur  = last(prices)
+        if cur > ma20 > ma50
+            score += 30; push!(reasons, "قیمت بالای MA20 و MA50 - روند صعودی")
+        elseif cur < ma20 < ma50
+            score -= 30; push!(reasons, "قیمت زیر MA20 و MA50 - روند نزولی")
+        elseif cur > ma20
+            score += 15; push!(reasons, "قیمت بالای MA20")
+        elseif cur < ma20
+            score -= 15; push!(reasons, "قیمت زیر MA20")
+        end
+    elseif n >= 20
+        ma20 = mean(prices[end-19:end])
+        cur  = last(prices)
+        if cur > ma20; score += 15; push!(reasons, "قیمت بالای MA20")
+        else;           score -= 15; push!(reasons, "قیمت زیر MA20")
+        end
+    end
+
+    return score, reasons
+end
+
+function calc_momentum_score(prices::Vector{Float64})
+    n = length(prices)
+    n < 6 && return 0.0, String[]
+
+    score = 0.0; reasons = String[]
+
+    r5  = n > 5  ? (prices[end]-prices[end-5])/prices[end-5]*100  : 0.0
+    r10 = n > 10 ? (prices[end]-prices[end-10])/prices[end-10]*100 : r5
+    r20 = n > 20 ? (prices[end]-prices[end-20])/prices[end-20]*100 : r10
+
+    # Momentum direction
+    if r5 > 0.5 && r10 > 0; score += 20; push!(reasons, "مومنتوم صعودی $(round(r5,digits=2))%")
+    elseif r5 < -0.5 && r10 < 0; score -= 20; push!(reasons, "مومنتوم نزولی $(round(r5,digits=2))%")
+    end
+
+    # Momentum acceleration
+    if r5 > r10 > 0; score += 10; push!(reasons, "شتاب مومنتوم صعودی")
+    elseif r5 < r10 < 0; score -= 10; push!(reasons, "شتاب مومنتوم نزولی")
+    end
+
+    return score, reasons
+end
+
+function calc_volatility_score(prices::Vector{Float64}, pair_avg_atr::Float64)
+    n = length(prices); n < 5 && return 0.0, "unknown", String[]
+
+    atr_price = mean([abs(prices[i]-prices[i-1]) for i in max(2,n-13):n])
+    cur = last(prices)
+    atr_pct = cur > 0 ? atr_price / cur * 100 : 1.0
+
+    reasons = String[]
+    score = 0.0
+
+    if atr_pct < pair_avg_atr * 0.5
+        score -= 10
+        push!(reasons, "نوسان خیلی کم - محیط رنج یا بی‌روند")
+        return score, "low", reasons
+    elseif atr_pct > pair_avg_atr * 2.5
+        score -= 20
+        push!(reasons, "نوسان خطرناک - ریسک بالا")
+        return score, "extreme", reasons
+    elseif atr_pct > pair_avg_atr * 1.5
+        score += 5
+        push!(reasons, "نوسان بالا - فرصت مناسب با احتیاط")
+        return score, "high", reasons
+    else
+        score += 15
+        push!(reasons, "نوسان در محدوده مناسب ترید")
+        return score, "normal", reasons
+    end
+end
+
+function calc_sr_score(levels::KeyLevels, bias::String)
+    score = 0.0; reasons = String[]
+
+    if bias == "long"
+        # نزدیک به حمایت برای لانگ بهتره
+        if levels.dist_to_support < 0.3
+            score += 25; push!(reasons, "قیمت نزدیک حمایت S1 ($(levels.support1)) - ورود مناسب")
+        elseif levels.dist_to_support < 0.8
+            score += 15; push!(reasons, "فاصله معقول از حمایت")
+        elseif levels.dist_to_resistance < 0.3
+            score -= 25; push!(reasons, "قیمت نزدیک مقاومت R1 ($(levels.resistance1)) - ریسک بالا برای لانگ")
+        end
+
+        if levels.position_in_range < 0.3
+            score += 15; push!(reasons, "قیمت در یک‌سوم پایینی رنج - اولویت خرید")
+        elseif levels.position_in_range > 0.7
+            score -= 15; push!(reasons, "قیمت در یک‌سوم بالایی رنج - اولویت فروش")
+        end
+
+    elseif bias == "short"
+        if levels.dist_to_resistance < 0.3
+            score += 25; push!(reasons, "قیمت نزدیک مقاومت R1 ($(levels.resistance1)) - ورود شورت مناسب")
+        elseif levels.dist_to_resistance < 0.8
+            score += 15; push!(reasons, "فاصله معقول از مقاومت")
+        elseif levels.dist_to_support < 0.3
+            score -= 25; push!(reasons, "قیمت نزدیک حمایت S1 ($(levels.support1)) - ریسک بالا برای شورت")
+        end
+
+        if levels.position_in_range > 0.7
+            score += 15; push!(reasons, "قیمت در یک‌سوم بالایی رنج - اولویت فروش")
+        elseif levels.position_in_range < 0.3
+            score -= 15; push!(reasons, "قیمت در یک‌سوم پایینی رنج - اولویت خرید")
+        end
+    end
+
+    return score, reasons
+end
+
+function determine_setup_type(
+    total_score::Float64, bias::String,
+    trend_score::Float64, mom_score::Float64,
+    levels::Union{KeyLevels,Nothing}
+)
+    abs(total_score) < 20 && return "no_trade"
+    bias == "neutral" && return "no_trade"
+
+    if abs(trend_score) > 20 && abs(mom_score) > 10
+        if levels !== nothing && (
+            (bias=="long"  && levels.dist_to_support < 1.0) ||
+            (bias=="short" && levels.dist_to_resistance < 1.0)
+        )
+            return "pullback"
+        end
+        return "trend"
+    elseif levels !== nothing && (
+        (bias=="long"  && levels.dist_to_support < 0.3) ||
+        (bias=="short" && levels.dist_to_resistance < 0.3)
+    )
+        return "pullback"
+    else
+        return "range"
+    end
+end
+
+function grade_setup(score::Float64, bias::String)
+    bias == "neutral" && return "No Trade"
+    abs_score = abs(score)
+    if abs_score >= 70; return "A"
+    elseif abs_score >= 55; return "B"
+    elseif abs_score >= 40; return "C"
+    elseif abs_score >= 25; return "D"
+    else; return "No Trade"
+    end
+end
+
+function compute_entry_targets(levels::Union{KeyLevels,Nothing}, bias::String, cur::Float64)
+    levels === nothing && return cur, cur, cur*1.005, cur*1.01, cur*0.997, 1.5
+
+    if bias == "long"
+        entry_lo = levels.nearest_support * 0.9997
+        entry_hi = levels.nearest_support * 1.002
+        t1 = cur + (cur - levels.nearest_support) * 1.5
+        t2 = levels.resistance2
+        sl = levels.stop_zone_long
+        rr = sl < cur ? abs(t1 - cur) / max(abs(cur - sl), 1e-10) : 0.0
+    elseif bias == "short"
+        entry_lo = levels.nearest_resistance * 0.998
+        entry_hi = levels.nearest_resistance * 1.0003
+        t1 = cur - (levels.nearest_resistance - cur) * 1.5
+        t2 = levels.support2
+        sl = levels.stop_zone_short
+        rr = sl > cur ? abs(cur - t1) / max(abs(sl - cur), 1e-10) : 0.0
+    else
+        return cur, cur, cur, cur, cur, 0.0
+    end
+
+    return round(entry_lo,digits=5), round(entry_hi,digits=5),
+           round(t1,digits=5), round(t2,digits=5),
+           round(sl,digits=5), round(min(rr,10.0),digits=2)
+end
+
+function scan_pair(
+    pair,
+    rates::Dict{String, Vector{Float64}},
+    strengths::Vector{CurrencyStrength};
+    lookbacks::Vector{Int} = [10,20,50]
+)
+    prices = get(rates, pair.symbol, get(rates, lowercase(pair.symbol), Float64[]))
+    length(prices) < 10 && return nothing
+
+    cur = last(prices)
+
+    # Strength gap
+    base_str = 0.0; quote_str = 0.0
+    for s in strengths
+        if s.currency == pair.base;  base_str  = s.score; end
+        if s.currency == pair.quote_; quote_str = s.score; end
+    end
+    gap = base_str - quote_str
+
+    bias = abs(gap) < 0.3 ? "neutral" : gap > 0 ? "long" : "short"
+    str_score = clamp(gap * 20, -40.0, 40.0)
+
+    # Sub-scores
+    trend_score, trend_reasons = calc_trend_score(prices)
+    mom_score, mom_reasons     = calc_momentum_score(prices)
+    vol_score, vol_label, vol_reasons = calc_volatility_score(prices, pair.avg_daily_range)
+
+    # Key levels
+    levels = try compute_key_levels(pair.symbol, prices; lookbacks=lookbacks)
+             catch; nothing end
+
+    sr_score, sr_reasons = calc_sr_score(levels !== nothing ? levels : KeyLevels(
+        pair.symbol, cur, cur*0.99, cur*0.98, cur*0.97,
+        cur*1.01, cur*1.02, cur*1.03, cur*0.005, 0.5,
+        cur*0.99, cur*1.01, 1.0, 1.0, 0.5,
+        cur*1.012, cur*0.988, cur*0.985, cur*1.015
+    ), bias)
+
+    total = str_score + trend_score * 0.6 + mom_score * 0.5 + vol_score + sr_score * 0.7
+
+    if bias == "neutral"; total = clamp(abs(total), -15, 15) * sign(total)
+    elseif bias == "short"; total = -abs(total)
+    end
+
+    setup_type = determine_setup_type(total, bias, trend_score, mom_score, levels)
+
+    entry_lo, entry_hi, t1, t2, sl, rr = compute_entry_targets(levels, bias, cur)
+
+    reasons_for = String[]
+    reasons_against = String[]
+
+    if bias == "long" || bias == "neutral"
+        for r in trend_reasons; trend_score > 0 ? push!(reasons_for, r) : push!(reasons_against, r); end
+        for r in mom_reasons;   mom_score   > 0 ? push!(reasons_for, r) : push!(reasons_against, r); end
+        for r in sr_reasons;    sr_score    > 0 ? push!(reasons_for, r) : push!(reasons_against, r); end
+    else
+        for r in trend_reasons; trend_score < 0 ? push!(reasons_for, r) : push!(reasons_against, r); end
+        for r in mom_reasons;   mom_score   < 0 ? push!(reasons_for, r) : push!(reasons_against, r); end
+        for r in sr_reasons;    sr_score    > 0 ? push!(reasons_for, r) : push!(reasons_against, r); end
+    end
+
+    for r in vol_reasons; push!(reasons_against, r); end
+
+    if gap > 0.5;  push!(reasons_for, "$(pair.base) قوی‌تر از $(pair.quote_) - شکاف قدرت $(round(gap,digits=2))") end
+    if gap < -0.5; push!(reasons_for, "$(pair.quote_) قوی‌تر از $(pair.base) - شکاف قدرت $(round(-gap,digits=2))") end
+
+    grade = grade_setup(total, bias)
+    tf_align = if abs(trend_score) > 20 && abs(mom_score) > 10
+        "D1 + H4 هم‌جهت"
+    elseif abs(trend_score) > 10
+        "D1 هم‌جهت - H4 مختلط"
+    else
+        "تایم‌فریم‌ها هم‌جهت نیستند"
+    end
+
+    return TradeSetup(
+        pair.symbol, pair.base, pair.quote_,
+        grade == "No Trade" ? "no_trade" : bias,
+        grade == "No Trade" ? "no_trade" : setup_type,
+        round(abs(total), digits=1),
+        round(str_score, digits=1), round(trend_score, digits=1),
+        round(mom_score, digits=1), round(vol_score, digits=1),
+        round(sr_score, digits=1),
+        levels,
+        entry_lo, entry_hi, t1, t2, sl, rr,
+        reasons_for, reasons_against,
+        grade, tf_align,
+        string(Dates.now())[1:19]
+    )
+end
+
+function scan_all_pairs(
+    pairs::Vector,
+    rates::Dict{String, Vector{Float64}},
+    strengths::Vector{CurrencyStrength}
+)
+    results = TradeSetup[]
+    for pair in pairs
+        setup = scan_pair(pair, rates, strengths)
+        setup !== nothing && push!(results, setup)
+    end
+    # Sort: grade A first, then B, C, D, No Trade
+    grade_order = Dict("A"=>1,"B"=>2,"C"=>3,"D"=>4,"No Trade"=>5)
+    sort!(results, by=r -> (get(grade_order, r.trade_quality, 5), -r.total_score))
+    return results
+end
+
+function generate_daily_report(
+    setups::Vector{TradeSetup},
+    strengths::Vector{CurrencyStrength};
+    max_pairs::Int=10
+)
+    lines = String[]
+
+    push!(lines, "=" ^ 60)
+    push!(lines, "  گزارش روزانه اسکنر جفت‌ارزها")
+    push!(lines, "  تاریخ: $(string(Dates.now())[1:19])")
+    push!(lines, "=" ^ 60)
+    push!(lines, "")
+
+    # Currency strength ranking
+    push!(lines, "── قدرت ارزها ──")
+    for s in sort(strengths, by=x->-x.score)
+        bar_len = round(Int, (s.score + 3) * 5)
+        bar_len = clamp(bar_len, 0, 30)
+        bar = "█" ^ bar_len
+        bias_fa = s.trend_bias == "bullish" ? "صعودی" :
+                  s.trend_bias == "bearish" ? "نزولی" : "خنثی"
+        push!(lines, "  $(rpad(s.currency, 5)) [$(lpad(string(round(s.score,digits=2)),6))] $bar ($bias_fa)")
+    end
+    push!(lines, "")
+
+    # Top Long candidates
+    long_setups = filter(s -> s.bias == "long" && s.trade_quality in ["A","B","C"], setups)
+    push!(lines, "── بهترین فرصت‌های خرید ──")
+    for (i,s) in enumerate(long_setups[1:min(5,length(long_setups))])
+        push!(lines, "  $(i). $(s.symbol) [$(s.trade_quality)] امتیاز=$(s.total_score)")
+        push!(lines, "     Setup: $(s.setup_type) | RR=$(s.risk_reward)")
+        push!(lines, "     ورود: $(s.entry_zone_low)-$(s.entry_zone_high)")
+        push!(lines, "     هدف: $(s.target1) | استاپ: $(s.stop_loss)")
+        for r in s.reasons_for[1:min(3,length(s.reasons_for))]
+            push!(lines, "     ✓ $r")
+        end
+        for r in s.reasons_against[1:min(2,length(s.reasons_against))]
+            push!(lines, "     ✗ $r")
+        end
+        push!(lines, "")
+    end
+
+    # Top Short candidates
+    short_setups = filter(s -> s.bias == "short" && s.trade_quality in ["A","B","C"], setups)
+    push!(lines, "── بهترین فرصت‌های فروش ──")
+    for (i,s) in enumerate(short_setups[1:min(5,length(short_setups))])
+        push!(lines, "  $(i). $(s.symbol) [$(s.trade_quality)] امتیاز=$(s.total_score)")
+        push!(lines, "     Setup: $(s.setup_type) | RR=$(s.risk_reward)")
+        push!(lines, "     ورود: $(s.entry_zone_low)-$(s.entry_zone_high)")
+        push!(lines, "     هدف: $(s.target1) | استاپ: $(s.stop_loss)")
+        for r in s.reasons_for[1:min(3,length(s.reasons_for))]
+            push!(lines, "     ✓ $r")
+        end
+        push!(lines, "")
+    end
+
+    # No Trade
+    notrade = filter(s -> s.trade_quality == "No Trade", setups)
+    push!(lines, "── جفت‌ارزهای نامناسب امروز ──")
+    for s in notrade[1:min(5,length(notrade))]
+        push!(lines, "  ✗ $(s.symbol): $(isempty(s.reasons_against) ? "بدون روند مشخص" : s.reasons_against[1])")
+    end
+
+    push!(lines, "")
+    push!(lines, "=" ^ 60)
+
+    return join(lines, "\n")
+end
+
+end

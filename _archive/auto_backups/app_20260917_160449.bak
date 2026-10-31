@@ -1,0 +1,536 @@
+// ================================================================
+// FIONEX TERMINAL v5.0 - FRONTEND CORE
+// ================================================================
+
+var State = {
+    data: null,
+    charts: {},
+    activePage: 'page-f1'
+};
+
+// ---------------------------------------------------------------
+// Utility formatters
+// ---------------------------------------------------------------
+function fmtNum(n) {
+    if (n === null || n === undefined || isNaN(n)) return '--';
+    return Number(n).toLocaleString('en-US');
+}
+
+function fmtDec(n, d) {
+    d = d || 2;
+    if (n === null || n === undefined || isNaN(n)) return '--';
+    return Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+
+function fmtSmart(n) {
+    if (n === null || n === undefined || isNaN(n) || n === 0) return '--';
+    var a = Math.abs(n);
+    if (a < 10) return fmtDec(n, 4);
+    if (a < 1000) return fmtDec(n, 2);
+    return fmtNum(Math.round(n));
+}
+
+function sign(n) {
+    if (n === null || n === undefined || isNaN(n)) return '';
+    return n > 0 ? '+' : '';
+}
+
+function calcReturn(prices, days) {
+    if (!prices || prices.length < days + 1) return 0;
+    var cur = prices[prices.length - 1];
+    var prev = prices[prices.length - 1 - days];
+    if (!prev || prev === 0) return 0;
+    return ((cur - prev) / prev) * 100;
+}
+
+function biasClass(b) {
+    if (!b) return 'neutral';
+    var s = String(b);
+    if (s.indexOf('صعودی') >= 0 || s.indexOf('BUY') >= 0) return 'buy';
+    if (s.indexOf('نزولی') >= 0 || s.indexOf('SELL') >= 0) return 'sell';
+    return 'neutral';
+}
+
+function biasTextFa(b) {
+    if (!b) return 'خنثی';
+    var s = String(b).toUpperCase();
+    if (s.indexOf('BUY') >= 0) return 'خرید';
+    if (s.indexOf('SELL') >= 0) return 'فروش';
+    return 'خنثی';
+}
+
+function gradeColor(q) {
+    if (q === 'A+') return '#4ade80';
+    if (q === 'A') return '#06d6d6';
+    if (q === 'B') return '#facc15';
+    if (q === 'C') return '#fb923c';
+    return '#f87171';
+}
+
+// ---------------------------------------------------------------
+// Navigation
+// ---------------------------------------------------------------
+function switchPage(pageId) {
+    var pages = document.querySelectorAll('.page');
+    for (var i = 0; i < pages.length; i++) pages[i].classList.remove('active');
+
+    var btns = document.querySelectorAll('.nav-btn');
+    for (var j = 0; j < btns.length; j++) btns[j].classList.remove('active');
+
+    var page = document.getElementById(pageId);
+    if (page) page.classList.add('active');
+
+    var btn = document.querySelector('.nav-btn[data-page="' + pageId + '"]');
+    if (btn) btn.classList.add('active');
+
+    State.activePage = pageId;
+    renderActivePage();
+}
+
+function renderActivePage() {
+    if (!State.data) return;
+    var map = {
+        'page-f1': renderF1,
+        'page-f2': renderF2,
+        'page-f3': renderF3,
+        'page-f4': renderF4,
+        'page-f5': renderF5,
+        'page-f6': renderF6
+    };
+    var fn = map[State.activePage];
+    if (fn) {
+        try { fn(); } catch (e) { console.error('Render error ' + State.activePage, e); }
+    }
+}
+
+function initNavigation() {
+    var btns = document.querySelectorAll('.nav-btn');
+    for (var i = 0; i < btns.length; i++) {
+        btns[i].addEventListener('click', function() {
+            switchPage(this.getAttribute('data-page'));
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        var keys = {
+            'F1': 'page-f1', 'F2': 'page-f2', 'F3': 'page-f3',
+            'F4': 'page-f4', 'F5': 'page-f5', 'F6': 'page-f6'
+        };
+        if (keys[e.key]) {
+            e.preventDefault();
+            switchPage(keys[e.key]);
+        }
+    });
+}
+
+// ---------------------------------------------------------------
+// Data loading
+// ---------------------------------------------------------------
+function loadData() {
+    var t0 = performance.now();
+    fetch('/api/data')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status !== 'success') {
+                setBanner('در حال بارگذاری داده‌های اولیه...', 'warn');
+                return;
+            }
+            State.data = data;
+            var latency = Math.round(performance.now() - t0);
+
+            var dot = document.getElementById('statusDot');
+            if (dot) dot.classList.add('online');
+
+            var clock = document.getElementById('liveClock');
+            if (clock) clock.textContent = new Date().toLocaleTimeString('fa-IR');
+
+            var footLat = document.getElementById('footLatency');
+            if (footLat) footLat.textContent = latency;
+
+            var footUpd = document.getElementById('footUpdate');
+            if (footUpd) footUpd.textContent = data.last_update || '--';
+
+            if (data.market_alert) {
+                var ma = data.market_alert;
+                setBanner('⚡ اتصال زنده | تاخیر: ' + latency + 'ms | نوسان: ' + ma.level +
+                          ' | انس: ' + ma.gold_move + '% | دلار: ' + ma.usd_move + '%', 'ok');
+            }
+            renderActivePage();
+        })
+        .catch(function(err) {
+            console.error('Fetch error', err);
+            setBanner('❌ خطا در ارتباط با سرور بک‌اند Fionex', 'error');
+            var dot = document.getElementById('statusDot');
+            if (dot) dot.classList.remove('online');
+        });
+}
+
+function setBanner(text, type) {
+    var el = document.getElementById('alertBanner');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'alert-banner';
+    if (type === 'ok') el.classList.add('alert-ok');
+    if (type === 'warn') el.classList.add('alert-warn');
+    if (type === 'error') el.classList.add('alert-error');
+}
+
+// ---------------------------------------------------------------
+// Chart helper
+// ---------------------------------------------------------------
+function drawLineChart(canvasId, labels, data, color) {
+    var el = document.getElementById(canvasId);
+    if (!el) return;
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js not loaded');
+        return;
+    }
+    if (State.charts[canvasId]) {
+        try { State.charts[canvasId].destroy(); } catch (e) {}
+    }
+    State.charts[canvasId] = new Chart(el, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                borderColor: color,
+                backgroundColor: color + '15',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: {
+                    ticks: { color: '#64748b', maxTicksLimit: 6, font: { size: 10 } },
+                    grid: { color: 'rgba(30,41,59,0.5)' }
+                },
+                y: {
+                    ticks: { color: '#94a3b8', font: { size: 10 } },
+                    grid: { color: 'rgba(30,41,59,0.5)' }
+                }
+            }
+        }
+    });
+}
+
+// ---------------------------------------------------------------
+// F1
+// ---------------------------------------------------------------
+function renderF1() {
+    var d = State.data;
+    if (!d) return;
+    var cp = d.current_prices || {};
+
+    var el = document.getElementById('f1Kpi');
+    if (el) {
+        el.innerHTML =
+            '<div class="kpi-card"><div class="kpi-head"><h4>💰 انس جهانی طلا</h4><span class="badge">' + ((cp.providers && cp.providers.gold) || 'زنده') + '</span></div><div class="kpi-value">' + fmtNum(cp.gold_oz_usd) + '<span class="unit">USD</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-head"><h4>💵 دلار آزاد تهران</h4><span class="badge">' + ((cp.providers && cp.providers.usd) || 'زنده') + '</span></div><div class="kpi-value">' + fmtNum(cp.usd_irr) + '<span class="unit">تومان</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-head"><h4>🥇 طلای ۱۸ عیار</h4><span class="badge">' + ((cp.providers && cp.providers.iran) || 'فرمول') + '</span></div><div class="kpi-value">' + fmtNum(cp.iran_gold_gram18) + '<span class="unit">تومان</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-head"><h4>🪙 سکه امامی</h4><span class="badge">فرمول</span></div><div class="kpi-value">' + fmtNum(cp.coin_emami) + '<span class="unit">تومان</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-head"><h4>📈 شاخص دلار (DXY)</h4><span class="badge">Stooq</span></div><div class="kpi-value">' + fmtDec(cp.dxy_real, 2) + '</div></div>' +
+            '<div class="kpi-card"><div class="kpi-head"><h4>🏛️ اوراق ۱۰ ساله</h4><span class="badge">Stooq</span></div><div class="kpi-value">' + fmtDec(cp.us10y, 2) + '<span class="unit">%</span></div></div>' +
+            '<div class="kpi-card"><div class="kpi-head"><h4>⚠️ شاخص ترس (VIX)</h4><span class="badge">CBOE</span></div><div class="kpi-value">' + fmtDec(cp.vix, 2) + '</div></div>';
+    }
+
+    if (d.gold_history && d.gold_history.prices) {
+        var n = d.gold_history.prices.length;
+        var start = Math.max(0, n - 90);
+        drawLineChart('f1GoldChart',
+            d.gold_history.dates.slice(start),
+            d.gold_history.prices.slice(start),
+            '#06d6d6');
+    }
+
+    renderRegime();
+    renderHeatmap();
+    renderTargets();
+}
+
+function renderRegime() {
+    var el = document.getElementById('f1Regime');
+    if (!el) return;
+    var p = (State.data && State.data.prediction) || {};
+    var trend = p.trend || 'صعودی نوسانی';
+    var conf = p.confidence || 82.5;
+    var signals = p.signals || ['سیگنال خرید پله‌ای', 'سطح حمایتی حفظ شده'];
+
+    var html = '';
+    html += '<div class="regime-row"><span>🎯 روند کلی بازار:</span><b class="gold">' + trend + '</b></div>';
+    html += '<div class="regime-row"><span>✨ اطمینان مدل:</span><b class="cyan">' + fmtDec(conf, 1) + '%</b></div>';
+    html += '<div class="regime-signals">';
+    for (var i = 0; i < Math.min(signals.length, 4); i++) {
+        html += '<div class="signal-item">✓ ' + signals[i] + '</div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+function renderHeatmap() {
+    var el = document.getElementById('f1Heatmap');
+    if (!el) return;
+    var d = State.data;
+
+    var assets = [
+        { name: '💰 انس طلا', prices: (d.gold_history || {}).prices || [] },
+        { name: '💵 دلار تهران', prices: (d.usd_history || {}).prices || [] },
+        { name: '🥇 طلای ۱۸', prices: (d.iran_gold_history || {}).prices || [] },
+        { name: '₿ بیت‌کوین', prices: (d.btc_history || {}).prices || [] },
+        { name: 'Ξ اتریوم', prices: (d.eth_history || {}).prices || [] },
+        { name: '☀️ سولانا', prices: (d.sol_history || {}).prices || [] }
+    ];
+
+    var html = '<div class="heatmap-grid">';
+    html += '<div class="heatmap-header"><span>دارایی</span><span>۱ روزه</span><span>۵ روزه</span><span>۲۰ روزه</span></div>';
+    for (var i = 0; i < assets.length; i++) {
+        var a = assets[i];
+        var r1 = calcReturn(a.prices, 1);
+        var r5 = calcReturn(a.prices, 5);
+        var r20 = calcReturn(a.prices, 20);
+        html += '<div class="heatmap-row">';
+        html += '<div class="hm-name">' + a.name + '</div>';
+        html += '<div class="hm-val ' + (r1 >= 0 ? 'up' : 'down') + '">' + sign(r1) + fmtDec(r1, 2) + '%</div>';
+        html += '<div class="hm-val ' + (r5 >= 0 ? 'up' : 'down') + '">' + sign(r5) + fmtDec(r5, 2) + '%</div>';
+        html += '<div class="hm-val ' + (r20 >= 0 ? 'up' : 'down') + '">' + sign(r20) + fmtDec(r20, 2) + '%</div>';
+        html += '</div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+function renderTargets() {
+    var el = document.getElementById('f1Targets');
+    if (!el) return;
+    var p = (State.data && State.data.prediction) || {};
+    var go = p.gold_oz || {};
+    var ui = p.usd_irr || {};
+    var ig = p.iran_gold || {};
+    var co = p.coin || {};
+
+    el.innerHTML =
+        '<div class="target-grid">' +
+        '<div class="target-card"><h4>💰 انس طلا</h4><div class="target-val">' + fmtDec(go.point, 2) + ' USD</div><div class="target-range"><span class="down">' + fmtDec(go.low, 2) + '</span> — <span class="up">' + fmtDec(go.high, 2) + '</span></div></div>' +
+        '<div class="target-card"><h4>💵 دلار تهران</h4><div class="target-val">' + fmtNum(ui.point) + ' ت</div><div class="target-range"><span class="down">' + fmtNum(ui.low) + '</span> — <span class="up">' + fmtNum(ui.high) + '</span></div></div>' +
+        '<div class="target-card"><h4>🥇 طلای ۱۸</h4><div class="target-val">' + fmtNum(ig.point) + ' ت</div><div class="target-range"><span class="down">' + fmtNum(ig.low) + '</span> — <span class="up">' + fmtNum(ig.high) + '</span></div></div>' +
+        '<div class="target-card"><h4>🪙 سکه امامی</h4><div class="target-val">' + fmtNum(co.point) + ' ت</div></div>' +
+        '</div>';
+}
+
+// ---------------------------------------------------------------
+// F2
+// ---------------------------------------------------------------
+function renderF2() {
+    var d = State.data;
+    if (!d) return;
+
+    if (d.gold_history && d.gold_history.prices) {
+        drawLineChart('f2GoldChart', d.gold_history.dates, d.gold_history.prices, '#06d6d6');
+    }
+    if (d.usd_history && d.usd_history.prices) {
+        drawLineChart('f2UsdChart', d.usd_history.dates, d.usd_history.prices, '#facc15');
+    }
+    if (d.iran_gold_history && d.iran_gold_history.prices) {
+        drawLineChart('f2IranChart', d.iran_gold_history.dates, d.iran_gold_history.prices, '#f87171');
+    }
+
+    var el = document.getElementById('f2Predictions');
+    if (!el) return;
+    var p = d.prediction || {};
+    var go = p.gold_oz || {};
+    var ui = p.usd_irr || {};
+    var ig = p.iran_gold || {};
+    var co = p.coin || {};
+
+    el.innerHTML =
+        '<div class="kpi-card"><div class="kpi-head"><h4>💰 پیش‌بینی انس طلا (۷ روز)</h4></div><div class="kpi-value">' + fmtDec(go.point, 2) + '<span class="unit">USD</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>💵 پیش‌بینی دلار تهران</h4></div><div class="kpi-value">' + fmtNum(ui.point) + '<span class="unit">تومان</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>🥇 پیش‌بینی طلای ۱۸</h4></div><div class="kpi-value">' + fmtNum(ig.point) + '<span class="unit">تومان</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>🪙 پیش‌بینی سکه امامی</h4></div><div class="kpi-value">' + fmtNum(co.point) + '<span class="unit">تومان</span></div></div>';
+}
+
+// ---------------------------------------------------------------
+// F3
+// ---------------------------------------------------------------
+function renderF3() {
+    var d = State.data;
+    if (!d) return;
+    var scan = d.fx_scan || {};
+    var strengths = scan.strengths || [];
+    var setups = scan.setups || [];
+
+    var sEl = document.getElementById('f3Strengths');
+    if (sEl) {
+        if (strengths.length === 0) {
+            sEl.innerHTML = '<div class="empty">داده‌ای برای قدرت ارزها موجود نیست</div>';
+        } else {
+            var html = '<div class="strength-grid">';
+            for (var i = 0; i < strengths.length; i++) {
+                var s = strengths[i];
+                var sc = s.score || 0;
+                html +=
+                    '<div class="strength-card">' +
+                    '<div class="rank">#' + (i + 1) + '</div>' +
+                    '<div class="ccy">' + (s.currency || '?') + '</div>' +
+                    '<div class="name">' + (s.name_fa || '') + '</div>' +
+                    '<div class="score">' + fmtDec(sc, 1) + '%</div>' +
+                    '<div class="bar"><div class="fill" style="width:' + sc + '%"></div></div>' +
+                    '<div class="bias ' + biasClass(s.trend_bias) + '">' + (s.trend_bias || 'خنثی') + '</div>' +
+                    '</div>';
+            }
+            html += '</div>';
+            sEl.innerHTML = html;
+        }
+    }
+
+    var forex = [], crypto = [];
+    for (var k = 0; k < setups.length; k++) {
+        if (setups[k].category === 'crypto') crypto.push(setups[k]);
+        else forex.push(setups[k]);
+    }
+
+    renderSetupList('f3ForexSetups', forex);
+    renderSetupList('f3CryptoSetups', crypto);
+}
+
+function renderSetupList(containerId, setups) {
+    var el = document.getElementById(containerId);
+    if (!el) return;
+    if (!setups || setups.length === 0) {
+        el.innerHTML = '<div class="empty">در حال حاضر ستاپ فعالی موجود نیست</div>';
+        return;
+    }
+
+    var html = '';
+    for (var i = 0; i < setups.length; i++) {
+        var s = setups[i];
+        var biasU = (s.bias || '').toUpperCase();
+        var biasCls = biasU === 'BUY' ? 'buy' : (biasU === 'SELL' ? 'sell' : 'neutral');
+        var icon = biasU === 'BUY' ? '📈' : (biasU === 'SELL' ? '📉' : '➖');
+        var gradeCol = gradeColor(s.trade_quality || 'C');
+        var conf = s.confidence || 50;
+
+        var reasons = '';
+        if (s.reasons_for && s.reasons_for.length > 0) {
+            reasons = '<div class="setup-reasons">';
+            for (var r = 0; r < Math.min(s.reasons_for.length, 2); r++) {
+                reasons += '<div>• ' + s.reasons_for[r] + '</div>';
+            }
+            reasons += '</div>';
+        }
+
+        html +=
+            '<div class="setup-card ' + biasCls + '">' +
+                '<div class="setup-head">' +
+                    '<div class="setup-symbol">' +
+                        '<span class="sym">' + (s.symbol || '?') + '</span>' +
+                        '<span class="bias-badge ' + biasCls + '">' + icon + ' ' + biasTextFa(s.bias) + '</span>' +
+                    '</div>' +
+                    '<div class="setup-grade" style="background:' + gradeCol + ';color:#0b0e14">' + (s.trade_quality || 'C') + '</div>' +
+                '</div>' +
+                '<div class="conf-bar"><div class="conf-fill" style="width:' + conf + '%;background:' + gradeCol + '"></div></div>' +
+                '<div class="conf-label">اطمینان: ' + fmtDec(conf, 1) + '%</div>' +
+                '<div class="setup-body">' +
+                    '<div class="row"><span>💵 ورود:</span><b>' + fmtSmart(s.entry_low) + ' - ' + fmtSmart(s.entry_high) + '</b></div>' +
+                    '<div class="row"><span>🎯 تارگت ۱:</span><b class="up">' + fmtSmart(s.target1) + '</b></div>' +
+                    '<div class="row"><span>🎯 تارگت ۲:</span><b class="up">' + fmtSmart(s.target2) + '</b></div>' +
+                    '<div class="row"><span>🛑 حد ضرر:</span><b class="down">' + fmtSmart(s.stop_loss) + '</b></div>' +
+                    '<div class="row"><span>⚖️ R/R:</span><b class="gold">' + fmtDec(s.risk_reward, 2) + '</b></div>' +
+                '</div>' +
+                reasons +
+            '</div>';
+    }
+    el.innerHTML = html;
+}
+
+// ---------------------------------------------------------------
+// F4
+// ---------------------------------------------------------------
+function renderF4() {
+    var el = document.getElementById('f4Relations');
+    if (!el) return;
+    var d = State.data;
+    if (!d || !d.relationships || !d.relationships.relations) {
+        el.innerHTML = '<div class="empty">داده روابط موجود نیست</div>';
+        return;
+    }
+    var rels = d.relationships.relations;
+
+    var html = '<table class="data-table">';
+    html += '<thead><tr><th>دارایی</th><th>همبستگی ۲۰ روزه</th><th>همبستگی ۶۰ روزه</th><th>بتا</th><th>قدرت</th></tr></thead><tbody>';
+    for (var i = 0; i < rels.length; i++) {
+        var r = rels[i];
+        html +=
+            '<tr>' +
+            '<td>' + (r.asset_b || '?') + '</td>' +
+            '<td class="' + (r.pearson_20d >= 0 ? 'up' : 'down') + '">' + fmtDec(r.pearson_20d, 3) + '</td>' +
+            '<td class="' + (r.pearson_60d >= 0 ? 'up' : 'down') + '">' + fmtDec(r.pearson_60d, 3) + '</td>' +
+            '<td>' + fmtDec(r.beta_30d, 3) + '</td>' +
+            '<td>' + (r.strength || '--') + '</td>' +
+            '</tr>';
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+}
+
+// ---------------------------------------------------------------
+// F5
+// ---------------------------------------------------------------
+function renderF5() {
+    var el = document.getElementById('f5Stats');
+    if (!el) return;
+    var bt = (State.data && State.data.backtest) || {};
+
+    el.innerHTML =
+        '<div class="kpi-card"><div class="kpi-head"><h4>📅 دوره بک‌تست</h4></div><div class="kpi-value">' + (bt.total_days || bt.days_used || '--') + '<span class="unit">روز</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>🎯 MAPE انس طلا</h4></div><div class="kpi-value">' + fmtDec(bt.gold_mape, 2) + '<span class="unit">%</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>🎯 MAPE دلار</h4></div><div class="kpi-value">' + fmtDec(bt.usd_mape, 2) + '<span class="unit">%</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>🎯 MAPE طلای ۱۸</h4></div><div class="kpi-value">' + fmtDec(bt.iran_mape, 2) + '<span class="unit">%</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>📈 دقت جهت انس</h4></div><div class="kpi-value">' + fmtDec(bt.gold_direction_accuracy || bt.direction_accuracy, 1) + '<span class="unit">%</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>📈 دقت جهت دلار</h4></div><div class="kpi-value">' + fmtDec(bt.usd_direction_accuracy, 1) + '<span class="unit">%</span></div></div>';
+}
+
+// ---------------------------------------------------------------
+// F6
+// ---------------------------------------------------------------
+function renderF6() {
+    var el = document.getElementById('f6Reports');
+    if (!el) return;
+    var d = State.data;
+    if (!d) return;
+    var j = d.trade_journal || {};
+    var senti = d.sentiment || {};
+    var alert = d.market_alert || {};
+
+    el.innerHTML =
+        '<div class="kpi-card"><div class="kpi-head"><h4>📊 کل ستاپ‌ها</h4></div><div class="kpi-value">' + fmtNum(j.total_setups || 0) + '<span class="unit">مورد</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>📈 نرخ برد</h4></div><div class="kpi-value">' + fmtDec(j.win_rate, 1) + '<span class="unit">%</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>📰 احساس بازار</h4></div><div class="kpi-value">' + fmtDec(senti.overall_score || 50, 1) + '<span class="unit">/100</span></div></div>' +
+        '<div class="kpi-card"><div class="kpi-head"><h4>⚠️ سطح آلارم</h4></div><div class="kpi-value">' + (alert.level || 'LOW') + '</div></div>';
+}
+
+// ---------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', function() {
+    initNavigation();
+    loadData();
+    setInterval(loadData, 60000);
+
+    var btn = document.getElementById('btnRefresh');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            btn.disabled = true;
+            fetch('/api/refresh')
+                .then(function(r) { return r.json(); })
+                .then(function() { return loadData(); })
+                .then(function() { btn.disabled = false; })
+                .catch(function() { btn.disabled = false; });
+        });
+    }
+});

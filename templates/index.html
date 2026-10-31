@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIONEX | ترمینال طلا و ارز</title>
+<link rel="stylesheet" href="/static/style.css?v=8">
+<script src="/static/chart.min.js"></script>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="hdr-logo">F</div>
+    <div class="hdr-title">
+      <h1>FIONEX</h1>
+      <span>ترمینال طلا و ارز</span>
+    </div>
+  </div>
+
+  <nav class="hdr-nav">
+    <button class="nav-item active" data-page="p-home">میز کار <span class="k">F1</span></button>
+    <button class="nav-item" data-page="p-coins">سکه و طلا <span class="k">F2</span></button>
+    <button class="nav-item" data-page="p-currencies">ارز <span class="k">F3</span></button>
+    <button class="nav-item" data-page="p-charts">نمودارها <span class="k">F4</span></button>
+    <button class="nav-item" data-page="p-alerts">هشدارها <span class="k">F5</span></button>
+    <button class="nav-item" data-page="p-predict">پیش‌بینی <span class="k">F6</span></button>
+  </nav>
+
+  <div class="hdr-info">
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="btn-refresh" id="btnRefresh">بروزرسانی</button>
+    <div class="conn"><span class="conn-dot" id="dot"></span><span id="connText">در حال اتصال</span></div>
+  </div>
+</header>
+
+<div class="status-bar" id="statusBar">
+  <span id="statusText">در حال بارگذاری اطلاعات بازار...</span>
+</div>
+
+<main class="main">
+
+<!-- ═══ F1: میز کار ═══ -->
+<section class="page active" id="p-home">
+  <div class="sect-hdr">
+    <span class="sect-code">F1</span>
+    <h2>داشبورد جامع</h2>
+    <span class="sect-sub">پایش لحظه‌ای، پیش‌بینی و تحلیل بازار</span>
+  </div>
+
+  <!-- هشدار ریسک و سلب مسئولیت -->
+  <div class="risk-banner">
+    <div class="risk-head">هشدار ریسک و سلب مسئولیت</div>
+    <div class="risk-body">
+      این ترمینال صرفاً یک ابزار اطلاع‌رسانی و تحلیل داده است و به هیچ عنوان توصیه خرید، فروش یا سرمایه‌گذاری محسوب نمی‌شود.
+      پیش‌بینی‌های ارائه‌شده بر پایه مدل‌های آماری و داده‌های تاریخی گذشته است و تضمینی برای نتایج آینده ندارد.
+      بازار طلا و ارز تحت تأثیر عوامل متعدد اقتصادی و سیاسی قرار دارد. مسئولیت هرگونه تصمیم معاملاتی صرفاً بر عهده کاربر است.
+      پیش از انجام هر معامله، تحقیقات شخصی خود را انجام دهید و در صورت نیاز با مشاور مالی مجاز مشورت کنید.
+    </div>
+  </div>
+
+  <!-- 1. تابلوی قیمت لحظه‌ای -->
+  <div class="panel">
+    <div class="panel-hdr">تابلوی قیمت لحظه‌ای</div>
+    <div class="panel-body" id="masterPrices"></div>
+  </div>
+
+  <!-- 2. تابلوی پیش‌بینی دقیق -->
+  <div class="panel">
+    <div class="panel-hdr">تابلوی پیش‌بینی</div>
+    <div class="panel-body" id="masterPredictions"></div>
+  </div>
+
+  <!-- 3. نمودار جامع -->
+  <div class="panel">
+    <div class="panel-hdr">نمودار جامع — قیمت واقعی، پیش‌بینی ۷ روزه، ابر عدم قطعیت و بک‌تست</div>
+    <div class="chart-body master">
+      <canvas id="masterChart"></canvas>
+    </div>
+    <div class="chart-legend-bar" id="masterLegend"></div>
+  </div>
+
+  <!-- 4. اخبار و تحلیل احساسات -->
+  <div class="panel">
+    <div class="panel-hdr">اخبار و تحلیل احساسات بازار</div>
+    <div class="panel-body" id="masterNews"></div>
+  </div>
+</section>
+
+<!-- ═══ F2: سکه و طلا ═══ -->
+<section class="page" id="p-coins">
+  <div class="sect-hdr">
+    <span class="sect-code">F2</span>
+    <h2>سکه و طلا</h2>
+    <span class="sect-sub">قیمت لحظه‌ای و حباب</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">سکه‌ها</div>
+    <div class="panel-body" id="coinsTable"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">طلا و فلزات</div>
+    <div class="panel-body" id="metalsTable"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">محاسبه حباب سکه امامی</div>
+    <div class="panel-body" id="bubbleBox"></div>
+  </div>
+</section>
+
+<!-- ═══ F3: ارز ═══ -->
+<section class="page" id="p-currencies">
+  <div class="sect-hdr">
+    <span class="sect-code">F3</span>
+    <h2>ارز</h2>
+    <span class="sect-sub">نرخ لحظه‌ای ارزهای اصلی</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">جدول نرخ ارز</div>
+    <div class="panel-body" id="currenciesTable"></div>
+  </div>
+</section>
+
+<!-- ═══ F4: نمودارها ═══ -->
+<section class="page" id="p-charts">
+  <div class="sect-hdr">
+    <span class="sect-code">F4</span>
+    <h2>نمودارها</h2>
+    <span class="sect-sub">روند تاریخی</span>
+  </div>
+
+  <div class="grid-charts">
+    <div class="panel">
+      <div class="panel-hdr">انس جهانی - دلار</div>
+      <div class="chart-body"><canvas id="cGoldOz"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr">دلار آزاد - تومان</div>
+      <div class="chart-body"><canvas id="cUsd"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr">طلای ۱۸ عیار - تومان</div>
+      <div class="chart-body"><canvas id="cGold18"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ F5: هشدارها ═══ -->
+<section class="page" id="p-alerts">
+  <div class="sect-hdr">
+    <span class="sect-code">F5</span>
+    <h2>هشدارهای قیمتی</h2>
+    <span class="sect-sub">تعیین آستانه و اعلان</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">افزودن هشدار جدید</div>
+    <div class="panel-body">
+      <div class="form-row">
+        <select id="alertItem" class="form-input"></select>
+        <select id="alertOp" class="form-input">
+          <option value=">">بالاتر از</option>
+          <option value="<">پایین‌تر از</option>
+        </select>
+        <input type="number" id="alertPrice" step="any" class="form-input" placeholder="قیمت">
+        <button class="btn-primary" id="btnAddAlert">افزودن هشدار</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">هشدارهای فعال</div>
+    <div class="panel-body" id="alertsList"></div>
+  </div>
+</section>
+
+<!-- ═══ F6: پیش‌بینی ═══ -->
+<section class="page" id="p-predict">
+  <div class="sect-hdr">
+    <span class="sect-code">F6</span>
+    <h2>پیش‌بینی</h2>
+    <span class="sect-sub">کوتاه‌مدت (۱س / ۴س / ۲۴س) و میان‌مدت (۷ روز)</span>
+  </div>
+
+  <div class="signal-bar" id="overallSignal"></div>
+
+  <div class="tabs-bar">
+    <button class="tab-btn active" data-tab="short">کوتاه‌مدت</button>
+    <button class="tab-btn" data-tab="weekly">میان‌مدت</button>
+  </div>
+
+  <div class="tab-content" id="tabShort">
+    <div class="pred-grid" id="shortGrid"></div>
+  </div>
+
+  <div class="tab-content" id="tabWeekly" style="display:none">
+    <div class="pred-grid" id="weeklyGrid"></div>
+    <div class="panel">
+      <div class="panel-hdr">پیش‌بینی روزانه</div>
+      <div class="panel-body" id="weeklyDaily"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">روند پیش‌بینی انس طلا</div>
+    <div class="chart-body tall"><canvas id="predChart"></canvas></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-hdr">سیگنال‌های تحلیلی</div>
+      <div class="panel-body" id="predSignals"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr">سهم روش‌ها در پیش‌بینی</div>
+      <div class="panel-body" id="predWeights"></div>
+    </div>
+  </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-hdr">وضعیت بازار</div>
+          <div class="panel-body" id="marketRegimeBox"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-hdr">رویدادهای اقتصادی مهم</div>
+          <div class="panel-body" id="upcomingEvents"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hdr">دقت پیش‌بینی (۳۰ روز گذشته)</div>
+        <div class="panel-body" id="predAccuracy"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hdr">تاریخچه پیش‌بینی انس طلا</div>
+        <div class="panel-body" id="predHistory"></div>
+      </div>
+</section>
+
+</main>
+
+<footer class="ftr">
+  <span>سرور: <span class="up">متصل</span></span>
+  <span>تاخیر: <span class="mono" id="latency">--</span> ms</span>
+  <span>آخرین بروزرسانی: <span class="mono" id="lastUpdate">--</span></span>
+  <span class="ftr-brand">FIONEX v8.0</span>
+</footer>
+
+<script src="/static/app.js?v=8"></script>
+</body>
+</html>

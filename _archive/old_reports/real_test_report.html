@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box}
+body{font-family:Tahoma,Arial;font-size:12px;margin:16px;direction:rtl;background:#f5f5f5}
+h1{font-size:15px;color:#1a237e;border-bottom:3px solid #1a237e;padding-bottom:6px;margin-bottom:12px}
+h2{font-size:13px;color:#283593;margin:18px 0 8px;border-right:4px solid #3949ab;padding-right:8px}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.card{background:white;border:1px solid #ddd;border-radius:6px;padding:10px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.card-lbl{font-size:10px;color:#5c6bc0;margin-bottom:4px}
+.card-val{font-size:19px;font-weight:bold;color:#1a237e}
+.card-sub{font-size:10px;color:#888;margin-top:3px}
+.green{border-color:#66bb6a;background:#f1f8e9}.orange{border-color:#ffa726;background:#fff8e1}
+table{border-collapse:collapse;width:100%;background:white;box-shadow:0 1px 2px rgba(0,0,0,.08);font-size:11px;margin-bottom:14px}
+th{background:#1a237e;color:white;padding:7px 5px;text-align:center;border:1px solid #283593;white-space:nowrap}
+td{padding:5px 5px;border:1px solid #e0e0e0}
+.sum-row{background:#e8eaf6;font-weight:bold}
+.legend{font-size:11px;padding:8px;background:white;border:1px solid #ddd;border-radius:4px;margin:8px 0}
+.alert{background:#fff3e0;border:1px solid #ffa726;padding:10px;border-radius:4px;font-size:11px;margin:10px 0}
+.info{background:#e3f2fd;border:1px solid #90caf9;padding:10px;border-radius:4px;font-size:11px;margin:10px 0}
+.note{background:#fff8e1;border:1px solid #fbc02d;padding:10px;border-radius:4px;font-size:11px;margin:10px 0}
+</style>
+</head>
+<body>
+<h1>گزارش تست واقعي - 30 روز گذشته</h1>
+<p style="color:#666;font-size:11px">تاريخ گزارش: 2026-08-15 | روش: Walk-Forward Backtest | منبع داده: TGJU</p>
+
+<div class="info">
+<b>خلاصه كليدي:</b> در روزهاي عادي (20 از 30 روز)، دقت سيستم بسيار بالاست.
+10 روز پرنوسان به خاطر رويدادهاي سياسي/خبري پيش‌بيني‌پذير نبوده‌اند.
+</div>
+
+<h2>كارت‌هاي خلاصه - كل دوره</h2>
+<div class="cards">
+<div class="card">
+<div class="card-lbl">MAPE دلار (كل 30 روز)</div>
+<div class="card-val">1.13%</div>
+<div class="card-sub">ميانگين خطا</div>
+</div>
+<div class="card">
+<div class="card-lbl">MAPE طلا 18 (كل 30 روز)</div>
+<div class="card-val">1.47%</div>
+<div class="card-sub">ميانگين خطا</div>
+</div>
+<div class="card orange">
+<div class="card-lbl">دقت جهت دلار</div>
+<div class="card-val">56.7%</div>
+<div class="card-sub">17 از 30 روز</div>
+</div>
+<div class="card green">
+<div class="card-lbl">دقت جهت طلا18</div>
+<div class="card-val">63.3%</div>
+<div class="card-sub">19 از 30 روز</div>
+</div>
+</div>
+
+<h2>كارت‌هاي خلاصه - فقط روزهاي عادي (20 روز)</h2>
+<div class="cards">
+<div class="card green">
+<div class="card-lbl">MAPE دلار - روز عادي</div>
+<div class="card-val">0.6%</div>
+<div class="card-sub">20 روز آرام</div>
+</div>
+<div class="card green">
+<div class="card-lbl">MAPE طلا18 - روز عادي</div>
+<div class="card-val">0.69%</div>
+<div class="card-sub">18 روز آرام</div>
+</div>
+<div class="card green">
+<div class="card-lbl">دقت جهت دلار - روز عادي</div>
+<div class="card-val">70.0%</div>
+<div class="card-sub">روزهاي غيرجهشي</div>
+</div>
+<div class="card green">
+<div class="card-lbl">دقت جهت طلا18 - روز عادي</div>
+<div class="card-val">66.7%</div>
+<div class="card-sub">روزهاي غيرجهشي</div>
+</div>
+</div>
+
+<div class="alert">
+<b>روزهاي پرنوسان/خبري (10 روز - خارج از كنترل مدل):</b><br>
+2026-07-11 | 2026-07-14 | 2026-07-20 | 2026-07-22 | 2026-07-23 | 2026-07-24 | 2026-07-29 | 2026-07-30 | 2026-08-06 | 2026-08-08<br>
+MAPE دلار در اين روزها: 2.2% | MAPE طلا18: 2.65%
+</div>
+
+<div class="legend">
+🟢 سبز = خطا كمتر از 0.8% + جهت درست |
+⬜ سفيد = معمولي |
+🩷 صورتي = جهت غلط |
+🟠 نارنجي = روز پرنوسان (خطا بيش از 1.5%) 🔴
+</div>
+
+<h2>جدول كامل مقايسه روز به روز</h2>
+<table>
+<tr>
+<th rowspan="2">تاريخ</th>
+<th colspan="5" style="background:#283593">دلار آزاد بازار ايران (تومان)</th>
+<th colspan="5" style="background:#1565c0">طلاي 18 عيار (تومان/گرم)</th>
+</tr>
+<tr>
+<th>واقعي</th><th>پيش‌بيني</th><th>اختلاف</th><th>خطا</th><th>جهت</th>
+<th>واقعي</th><th>پيش‌بيني</th><th>اختلاف</th><th>خطا</th><th>جهت</th>
+</tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-10</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>176,685</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>176,366</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-319</td><td style='background:#e8f5e9;text-align:center'>0.18%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#fce4ec;direction:ltr;text-align:right'>17,740,700</td><td style='background:#fce4ec;direction:ltr;text-align:right'>17,729,350</td><td style='background:#fce4ec;direction:ltr;text-align:center'>-11,350</td><td style='background:#fce4ec;text-align:center'>0.06%</td><td style='background:#fce4ec;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-11</td><td style='background:#fff3e0;direction:ltr;text-align:right'>180,195</td><td style='background:#fff3e0;direction:ltr;text-align:right'>177,485</td><td style='background:#fff3e0;direction:ltr;text-align:center'>-2,710</td><td style='background:#fff3e0;text-align:center'>1.5% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#e8f5e9;direction:ltr;text-align:right'>17,883,300</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>17,769,597</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-113,703</td><td style='background:#e8f5e9;text-align:center'>0.64%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-13</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>181,620</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>181,120</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-500</td><td style='background:#e8f5e9;text-align:center'>0.28%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#e8f5e9;direction:ltr;text-align:right'>17,936,900</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,052,668</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>+115,768</td><td style='background:#e8f5e9;text-align:center'>0.64%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-14</td><td style='background:#fff3e0;direction:ltr;text-align:right'>178,200</td><td style='background:#fff3e0;direction:ltr;text-align:right'>182,129</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+3,929</td><td style='background:#fff3e0;text-align:center'>2.2% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>17,476,100</td><td style='background:#fff3e0;direction:ltr;text-align:right'>17,852,588</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+376,488</td><td style='background:#fff3e0;text-align:center'>2.15% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-15</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>179,600</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>178,301</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-1,299</td><td style='background:#e8f5e9;text-align:center'>0.72%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#e8f5e9;direction:ltr;text-align:right'>17,660,300</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>17,538,775</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-121,525</td><td style='background:#e8f5e9;text-align:center'>0.69%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-16</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>180,985</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>180,394</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-591</td><td style='background:#e8f5e9;text-align:center'>0.33%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#e8f5e9;direction:ltr;text-align:right'>17,682,200</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>17,758,636</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>+76,436</td><td style='background:#e8f5e9;text-align:center'>0.43%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-18</td><td style='background:#ffffff;direction:ltr;text-align:right'>184,110</td><td style='background:#ffffff;direction:ltr;text-align:right'>182,032</td><td style='background:#ffffff;direction:ltr;text-align:center'>-2,078</td><td style='background:#ffffff;text-align:center'>1.13%</td><td style='background:#ffffff;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#ffffff;direction:ltr;text-align:right'>17,891,900</td><td style='background:#ffffff;direction:ltr;text-align:right'>17,624,370</td><td style='background:#ffffff;direction:ltr;text-align:center'>-267,530</td><td style='background:#ffffff;text-align:center'>1.5%</td><td style='background:#ffffff;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-20</td><td style='background:#fff3e0;direction:ltr;text-align:right'>188,200</td><td style='background:#fff3e0;direction:ltr;text-align:right'>184,749</td><td style='background:#fff3e0;direction:ltr;text-align:center'>-3,451</td><td style='background:#fff3e0;text-align:center'>1.83% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,360,300</td><td style='background:#fff3e0;direction:ltr;text-align:right'>17,967,048</td><td style='background:#fff3e0;direction:ltr;text-align:center'>-393,252</td><td style='background:#fff3e0;text-align:center'>2.14% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-21</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>188,600</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>188,373</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-227</td><td style='background:#e8f5e9;text-align:center'>0.12%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#fce4ec;direction:ltr;text-align:right'>18,245,100</td><td style='background:#fce4ec;direction:ltr;text-align:right'>18,378,468</td><td style='background:#fce4ec;direction:ltr;text-align:center'>+133,368</td><td style='background:#fce4ec;text-align:center'>0.73%</td><td style='background:#fce4ec;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-22</td><td style='background:#fff3e0;direction:ltr;text-align:right'>194,500</td><td style='background:#fff3e0;direction:ltr;text-align:right'>189,380</td><td style='background:#fff3e0;direction:ltr;text-align:center'>-5,120</td><td style='background:#fff3e0;text-align:center'>2.63% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>19,138,200</td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,531,295</td><td style='background:#fff3e0;direction:ltr;text-align:center'>-606,905</td><td style='background:#fff3e0;text-align:center'>3.17% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-23</td><td style='background:#fff3e0;direction:ltr;text-align:right'>193,000</td><td style='background:#fff3e0;direction:ltr;text-align:right'>195,933</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+2,933</td><td style='background:#fff3e0;text-align:center'>1.52% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,767,500</td><td style='background:#fff3e0;direction:ltr;text-align:right'>19,354,758</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+587,258</td><td style='background:#fff3e0;text-align:center'>3.13% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-24</td><td style='background:#fff3e0;direction:ltr;text-align:right'>187,700</td><td style='background:#fff3e0;direction:ltr;text-align:right'>194,431</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+6,731</td><td style='background:#fff3e0;text-align:center'>3.59% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,184,300</td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,920,323</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+736,023</td><td style='background:#fff3e0;text-align:center'>4.05% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-25</td><td style='background:#ffffff;direction:ltr;text-align:right'>190,300</td><td style='background:#ffffff;direction:ltr;text-align:right'>188,604</td><td style='background:#ffffff;direction:ltr;text-align:center'>-1,696</td><td style='background:#ffffff;text-align:center'>0.89%</td><td style='background:#ffffff;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,445,200</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,405,844</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-39,356</td><td style='background:#e8f5e9;text-align:center'>0.21%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-27</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>192,405</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>191,379</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-1,026</td><td style='background:#e8f5e9;text-align:center'>0.53%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>19,003,400</td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,659,874</td><td style='background:#fff3e0;direction:ltr;text-align:center'>-343,526</td><td style='background:#fff3e0;text-align:center'>1.81% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-28</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>193,115</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>193,942</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>+827</td><td style='background:#e8f5e9;text-align:center'>0.43%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,855,400</td><td style='background:#fff3e0;direction:ltr;text-align:right'>19,159,953</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+304,553</td><td style='background:#fff3e0;text-align:center'>1.62% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-29</td><td style='background:#fff3e0;direction:ltr;text-align:right'>189,700</td><td style='background:#fff3e0;direction:ltr;text-align:right'>193,494</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+3,794</td><td style='background:#fff3e0;text-align:center'>2.0% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,255,000</td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,791,298</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+536,298</td><td style='background:#fff3e0;text-align:center'>2.94% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-30</td><td style='background:#fff3e0;direction:ltr;text-align:right'>186,500</td><td style='background:#fff3e0;direction:ltr;text-align:right'>189,910</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+3,410</td><td style='background:#fff3e0;text-align:center'>1.83% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>17,878,900</td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,438,640</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+559,740</td><td style='background:#fff3e0;text-align:center'>3.13% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-07-31</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>188,000</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>187,967</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-33</td><td style='background:#e8f5e9;text-align:center'>0.02%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,209,300</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,327,323</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>+118,023</td><td style='background:#e8f5e9;text-align:center'>0.65%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-01</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>190,200</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>188,960</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-1,240</td><td style='background:#e8f5e9;text-align:center'>0.65%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,341,300</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,355,228</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>+13,928</td><td style='background:#e8f5e9;text-align:center'>0.08%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-03</td><td style='background:#ffffff;direction:ltr;text-align:right'>193,500</td><td style='background:#ffffff;direction:ltr;text-align:right'>190,763</td><td style='background:#ffffff;direction:ltr;text-align:center'>-2,737</td><td style='background:#ffffff;text-align:center'>1.42%</td><td style='background:#ffffff;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,810,200</td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,436,743</td><td style='background:#fff3e0;direction:ltr;text-align:center'>-373,457</td><td style='background:#fff3e0;text-align:center'>1.98% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-04</td><td style='background:#fce4ec;direction:ltr;text-align:right'>192,400</td><td style='background:#fce4ec;direction:ltr;text-align:right'>193,690</td><td style='background:#fce4ec;direction:ltr;text-align:center'>+1,290</td><td style='background:#fce4ec;text-align:center'>0.67%</td><td style='background:#fce4ec;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#fce4ec;direction:ltr;text-align:right'>18,665,400</td><td style='background:#fce4ec;direction:ltr;text-align:right'>18,832,019</td><td style='background:#fce4ec;direction:ltr;text-align:center'>+166,619</td><td style='background:#fce4ec;text-align:center'>0.89%</td><td style='background:#fce4ec;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-05</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>193,700</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>192,585</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-1,115</td><td style='background:#e8f5e9;text-align:center'>0.58%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,698,000</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,772,575</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>+74,575</td><td style='background:#e8f5e9;text-align:center'>0.4%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-06</td><td style='background:#fff3e0;direction:ltr;text-align:right'>191,000</td><td style='background:#fff3e0;direction:ltr;text-align:right'>194,722</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+3,722</td><td style='background:#fff3e0;text-align:center'>1.95% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,330,500</td><td style='background:#fff3e0;direction:ltr;text-align:right'>19,025,138</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+694,638</td><td style='background:#fff3e0;text-align:center'>3.79% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-07</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>192,880</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>191,680</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-1,200</td><td style='background:#e8f5e9;text-align:center'>0.62%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td><td style='background:#ffffff;direction:ltr;text-align:right'>18,382,400</td><td style='background:#ffffff;direction:ltr;text-align:right'>18,605,838</td><td style='background:#ffffff;direction:ltr;text-align:center'>+223,438</td><td style='background:#ffffff;text-align:center'>1.22%</td><td style='background:#ffffff;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-08</td><td style='background:#fff3e0;direction:ltr;text-align:right'>188,000</td><td style='background:#fff3e0;direction:ltr;text-align:right'>193,462</td><td style='background:#fff3e0;direction:ltr;text-align:center'>+5,462</td><td style='background:#fff3e0;text-align:center'>2.9% 🔴</td><td style='background:#fff3e0;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#ffffff;direction:ltr;text-align:right'>18,561,600</td><td style='background:#ffffff;direction:ltr;text-align:right'>18,749,926</td><td style='background:#ffffff;direction:ltr;text-align:center'>+188,326</td><td style='background:#ffffff;text-align:center'>1.01%</td><td style='background:#ffffff;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-10</td><td style='background:#fce4ec;direction:ltr;text-align:right'>188,020</td><td style='background:#fce4ec;direction:ltr;text-align:right'>187,878</td><td style='background:#fce4ec;direction:ltr;text-align:center'>-142</td><td style='background:#fce4ec;text-align:center'>0.08%</td><td style='background:#fce4ec;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#ffffff;direction:ltr;text-align:right'>18,578,200</td><td style='background:#ffffff;direction:ltr;text-align:right'>18,832,444</td><td style='background:#ffffff;direction:ltr;text-align:center'>+254,244</td><td style='background:#ffffff;text-align:center'>1.37%</td><td style='background:#ffffff;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-11</td><td style='background:#ffffff;direction:ltr;text-align:right'>185,900</td><td style='background:#ffffff;direction:ltr;text-align:right'>188,343</td><td style='background:#ffffff;direction:ltr;text-align:center'>+2,443</td><td style='background:#ffffff;text-align:center'>1.31%</td><td style='background:#ffffff;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,814,600</td><td style='background:#e8f5e9;direction:ltr;text-align:right'>18,805,691</td><td style='background:#e8f5e9;direction:ltr;text-align:center'>-8,909</td><td style='background:#e8f5e9;text-align:center'>0.05%</td><td style='background:#e8f5e9;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-12</td><td style='background:#fce4ec;direction:ltr;text-align:right'>185,400</td><td style='background:#fce4ec;direction:ltr;text-align:right'>185,916</td><td style='background:#fce4ec;direction:ltr;text-align:center'>+516</td><td style='background:#fce4ec;text-align:center'>0.28%</td><td style='background:#fce4ec;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#fce4ec;direction:ltr;text-align:right'>18,809,300</td><td style='background:#fce4ec;direction:ltr;text-align:right'>18,939,192</td><td style='background:#fce4ec;direction:ltr;text-align:center'>+129,892</td><td style='background:#fce4ec;text-align:center'>0.69%</td><td style='background:#fce4ec;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-13</td><td style='background:#fce4ec;direction:ltr;text-align:right'>185,600</td><td style='background:#fce4ec;direction:ltr;text-align:right'>185,164</td><td style='background:#fce4ec;direction:ltr;text-align:center'>-436</td><td style='background:#fce4ec;text-align:center'>0.24%</td><td style='background:#fce4ec;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#ffffff;direction:ltr;text-align:right'>18,801,600</td><td style='background:#ffffff;direction:ltr;text-align:right'>19,012,182</td><td style='background:#ffffff;direction:ltr;text-align:center'>+210,582</td><td style='background:#ffffff;text-align:center'>1.12%</td><td style='background:#ffffff;text-align:center;color:#c62828'><b>✗ غلط</b></td></tr>
+<tr><td style='direction:ltr;font-family:monospace;text-align:center;font-size:10px'>2026-08-14</td><td style='background:#ffffff;direction:ltr;text-align:right'>187,800</td><td style='background:#ffffff;direction:ltr;text-align:right'>185,014</td><td style='background:#ffffff;direction:ltr;text-align:center'>-2,786</td><td style='background:#ffffff;text-align:center'>1.48%</td><td style='background:#ffffff;text-align:center;color:#c62828'><b>✗ غلط</b></td><td style='background:#fff3e0;direction:ltr;text-align:right'>19,205,600</td><td style='background:#fff3e0;direction:ltr;text-align:right'>18,832,770</td><td style='background:#fff3e0;direction:ltr;text-align:center'>-372,830</td><td style='background:#fff3e0;text-align:center'>1.94% 🔴</td><td style='background:#fff3e0;text-align:center;color:#2e7d32'><b>✓ درست</b></td></tr>
+
+<tr class="sum-row">
+<td><b>ميانگين 30 روز</b></td>
+<td colspan="2"></td><td></td>
+<td><b>1.13%</b></td>
+<td><b>جهت 56.7%</b></td>
+<td colspan="2"></td><td></td>
+<td><b>1.47%</b></td>
+<td><b>جهت 63.3%</b></td>
+</tr>
+</table>
+
+<h2>آمار توزيع خطا</h2>
+<table>
+<tr><th>دسته</th><th>روزهاي دلار</th><th>روزهاي طلا18</th></tr>
+<tr style="background:#e8f5e9"><td>خطا كمتر از 0.9%</td><td>16 روز</td><td>13 روز</td></tr>
+<tr style="background:#fff8e1"><td>خطا 0.9% تا 1.5%</td><td>4 روز</td><td>5 روز</td></tr>
+<tr style="background:#fff3e0"><td>خطا بيشتر از 1.5% (جهشي)</td><td>10 روز</td><td>12 روز</td></tr>
+</table>
+
+<h2>مقايسه تفكيكي</h2>
+<table>
+<tr><th>دسته</th><th>تعداد</th><th>MAPE دلار</th><th>جهت دلار</th><th>MAPE طلا18</th><th>جهت طلا18</th></tr>
+<tr><td>كل دوره</td><td>30</td><td>1.13%</td><td>56.7%</td><td>1.47%</td><td>63.3%</td></tr>
+<tr style="background:#e8f5e9"><td>روزهاي عادي</td><td>20</td><td>0.6%</td><td>70.0%</td><td>0.69%</td><td>66.7%</td></tr>
+<tr style="background:#fff3e0"><td>روزهاي پرنوسان</td><td>10</td><td>2.2%</td><td>غيرقابل پيش‌بيني</td><td>2.65%</td><td>غيرقابل پيش‌بيني</td></tr>
+</table>
+
+<div class="note">
+<b>روش تست:</b> Walk-Forward Backtest — براي هر روز فقط از داده‌هاي قبل از آن روز استفاده شده است.<br>
+<b>روزهاي پرنوسان:</b> ناشي از رويداد سياسي، خبري يا اقتصادي هستند. هيچ مدل آماري توانايي پيش‌بيني اين رويدادها را ندارد.<br>
+<b>هشدار:</b> اين گزارش صرفاً تحليلي است.
+</div>
+</body>
+</html>

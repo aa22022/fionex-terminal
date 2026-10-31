@@ -1,0 +1,112 @@
+module MacroData
+
+using Downloads, Dates, JSON3
+
+export fetch_macro_data, fetch_upcoming_events
+
+function fetch_text_safe(url::String)
+    path, io = mktemp()
+    close(io)
+    try
+        Downloads.download(url, path, headers=Dict("User-Agent" => "Mozilla/5.0"))
+        return read(path, String)
+    catch e
+        @warn "MacroData: Failed to download $url" exception=e
+        return ""
+    finally
+        isfile(path) && rm(path, force=true)
+    end
+end
+
+function parse_fred_csv(txt::String)
+    values = Float64[]
+    dates  = DateTime[]
+    isempty(txt) && return values, dates
+
+    lines = split(replace(txt, "\r" => ""), "\n")
+    length(lines) <= 1 && return values, dates
+
+    for line in @view lines[2:end]
+        isempty(strip(line)) && continue
+        parts = split(line, ",")
+        length(parts) < 2 && continue
+        
+        ds = strip(parts[1])
+        vs = strip(parts[2])
+        
+        (isempty(ds) || isempty(vs) || vs == ".") && continue
+        
+        dt = try DateTime(Date(ds)) catch; continue end
+        val = try parse(Float64, vs) catch; continue end
+        
+        if isfinite(val)
+            push!(dates, dt)
+            push!(values, val)
+        end
+    end
+    return values, dates
+end
+
+function fetch_fred_series_safe(series_id::String, days::Int, fallback_val::Float64)
+    url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=$series_id"
+    txt = fetch_text_safe(url)
+    
+    if !isempty(txt)
+        values, dates = parse_fred_csv(txt)
+        if !isempty(values)
+            n = min(days, length(values))
+            return collect(@view values[end-n+1:end]), collect(@view dates[end-n+1:end]), "FRED:$series_id"
+        end
+    end
+    
+    @warn "FRED: $series_id is offline. Initializing fallback dataset ($fallback_val)"
+    dates  = [DateTime(today() - Day(days - i)) for i in 1:days]
+    values = fill(fallback_val, days)
+    return values, dates, "FALLBACK:$series_id"
+end
+
+function fetch_macro_data(days::Int=180)
+    dxy_prices,   dxy_dates,   dxy_provider   = fetch_fred_series_safe("DTWEXBGS", days, 103.5)
+    us10y_prices, us10y_dates, us10y_provider = fetch_fred_series_safe("DGS10",    days, 4.5)
+    vix_prices,   vix_dates,   vix_provider   = fetch_fred_series_safe("VIXCLS",   days, 18.0)
+
+    return Dict(
+        "dxy"   => Dict("prices" => dxy_prices,   "dates" => dxy_dates,   "provider" => dxy_provider,   "current" => last(dxy_prices)),
+        "us10y" => Dict("prices" => us10y_prices, "dates" => us10y_dates, "provider" => us10y_provider, "current" => last(us10y_prices)),
+        "vix"   => Dict("prices" => vix_prices,   "dates" => vix_dates,   "provider" => vix_provider,   "current" => last(vix_prices))
+    )
+end
+
+function fetch_upcoming_events(days::Int=14)
+    path = joinpath(@__DIR__, "..", "config", "events.json")
+    !isfile(path) && return Dict{String,Any}[]
+    
+    raw = strip(replace(read(path, String), "\ufeff" => ""))
+    isempty(raw) && return Dict{String,Any}[]
+    
+    try
+        arr = JSON3.read(raw)
+        events = Dict{String,Any}[]
+        for ev in arr
+            date_str = try string(ev[:date]) catch; continue end
+            dt = try Date(date_str) catch; continue end
+            
+            if dt >= today() && dt <= today() + Day(days)
+                push!(events, Dict{String,Any}(
+                    "date"   => string(dt),
+                    "title"  => try string(ev[:title])  catch; "" end,
+                    "impact" => try string(ev[:impact]) catch; "" end,
+                    "asset"  => try string(ev[:asset])  catch; "" end,
+                    "note"   => try string(ev[:note])   catch; "" end
+                ))
+            end
+        end
+        sort!(events, by = x -> x["date"])
+        return events
+    catch e
+        @warn "MacroData: Failed to parse events.json: $e"
+        return Dict{String,Any}[]
+    end
+end
+
+end

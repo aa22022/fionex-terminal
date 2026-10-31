@@ -1,0 +1,83 @@
+﻿==========================================
+GOLD PREDICTOR - ARCHIVE LOG
+==========================================
+Date: 2026-08-24 17:00:29
+Total files moved: 64
+==========================================
+
+Structure:
+  _archive/
+    ├── backups/              (backup files .bak)
+    ├── patches_and_fixes/    (patch/fix/add scripts)
+    ├── old_reports/          (HTML/CSV reports)
+    └── temp_scripts/         (debug/check/find/scan scripts)
+
+To restore any file, simply move it back to its original location.
+
+==========================================
+DETAILED FILE LIST:
+==========================================
+MOVED [BACKUP]: src\backtest_engine.jl.bak_encoding -> _archive\backups\
+MOVED [BACKUP]: src\data_fetcher.jl.bak_encoding -> _archive\backups\
+MOVED [BACKUP]: src\ensemble_ml.jl.bak -> _archive\backups\
+MOVED [BACKUP]: src\level_engine.jl.v1.bak -> _archive\backups\
+MOVED [BACKUP]: src\macro_data.jl.bak_encoding -> _archive\backups\
+MOVED [BACKUP]: src\main.jl.bak_encoding -> _archive\backups\
+MOVED [BACKUP]: src\news_sentiment.jl.bak_encoding -> _archive\backups\
+MOVED [BACKUP]: src\pair_scanner.jl.pre_mtf.bak -> _archive\backups\
+MOVED [BACKUP]: src\predictor.jl.bak_encoding -> _archive\backups\
+MOVED [BACKUP]: src\predictor.jl.pre_ml_integration.bak -> _archive\backups\
+MOVED [BACKUP]: src\strength_engine.jl.v1.bak -> _archive\backups\
+MOVED [BACKUP]: src\trade_journal.jl.v2.bak -> _archive\backups\
+MOVED [BACKUP]: src\web_server.jl.bak_encoding -> _archive\backups\
+MOVED [BACKUP]: src\web_server.jl.pre_phase7.bak -> _archive\backups\
+MOVED [BACKUP FOLDER]: backup_before_multipage_20260820_1439 -> _archive\backups\
+MOVED [BACKUP]: templates\index.html.bak_encoding -> _archive\backups\
+MOVED [BACKUP]: templates\index.html.v2.bak -> _archive\backups\
+MOVED [BACKUP]: templates\index_backup_mojibake.html -> _archive\backups\
+MOVED [BACKUP]: static\app.js.v2.bak -> _archive\backups\
+MOVED [BACKUP]: static\style.css.bak_encoding -> _archive\backups\
+MOVED [PATCH]: add_candlestick.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: add_candle_fallback.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: add_candle_fallback_fixed.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: add_renderUI.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: add_appjs_route.py -> _archive\patches_and_fixes\
+MOVED [PATCH]: add_rel_ui.py -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_all_mojibake.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_cdn_candle.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_encoding.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_encoding_final.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_encoding_real.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_encoding_second_pass.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_nan_predictor.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_predictor_dates.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_predictor_logs.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_renderUI.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: fix_signals.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: patch_predictor.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: patch_predictor_nan_safe.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: clean_predictor_logs.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: inject_deepfix.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: integrate_relationship.py -> _archive\patches_and_fixes\
+MOVED [PATCH]: restore_charts_final.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: restore_line_chart.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: mute_logs.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: mute_remaining_logs.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: remove_bad_println.jl -> _archive\patches_and_fixes\
+MOVED [PATCH]: write_full_js.py -> _archive\patches_and_fixes\
+MOVED [PATCH]: make_doc.py -> _archive\patches_and_fixes\
+MOVED [REPORT]: compact_report_20260817_1322.html -> _archive\old_reports\
+MOVED [REPORT]: compact_report_20260820_1526.html -> _archive\old_reports\
+MOVED [REPORT]: real_test_report.html -> _archive\old_reports\
+MOVED [REPORT]: report_20260817_1307.html -> _archive\old_reports\
+MOVED [REPORT]: report_20260817_1315.csv -> _archive\old_reports\
+MOVED [REPORT]: real_test_result.csv -> _archive\old_reports\
+MOVED [TEMP]: debug_events.jl -> _archive\temp_scripts\
+MOVED [TEMP]: debug_events2.jl -> _archive\temp_scripts\
+MOVED [TEMP]: check_pairs.py -> _archive\temp_scripts\
+MOVED [TEMP]: check_scanner.py -> _archive\temp_scripts\
+MOVED [TEMP]: find_backtest.jl -> _archive\temp_scripts\
+MOVED [TEMP]: find_bad_news.jl -> _archive\temp_scripts\
+MOVED [TEMP]: scan_all.jl -> _archive\temp_scripts\
+MOVED [TEMP]: scan_all_safe.jl -> _archive\temp_scripts\
+MOVED [TEMP]: utf8_test.jl -> _archive\temp_scripts\

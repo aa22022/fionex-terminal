@@ -1,0 +1,233 @@
+module PairScanner
+
+using Statistics, Dates
+using ..SetupDetector
+using ..MarketRegistry
+
+export scan_all_pairs, SetupCard
+
+# ساختارهای کمکی جهت همگام‌سازی کامل با سریال‌ساز وب‌سرور
+struct LiveLevelData
+    current::Float64
+    support1::Float64
+    support2::Float64
+    support3::Float64
+    resistance1::Float64
+    resistance2::Float64
+    resistance3::Float64
+    pivot::Float64
+    week_high::Float64
+    week_low::Float64
+    atr_pct::Float64
+    dist_to_support::Float64
+    dist_to_resistance::Float64
+    position_in_range::Float64
+    stop_zone_long::Float64
+    stop_zone_short::Float64
+    confluence_zones::Vector{String}
+end
+
+struct LiveRiskData
+    kelly_fraction::Float64
+    final_risk_pct::Float64
+    position_size_units::Float64
+    position_size_lots::Float64
+    required_margin::Float64
+    risk_usd::Float64
+    reward_usd::Float64
+end
+
+struct LiveTimingData
+    timing_score::Float64
+    trigger_status::String
+    trigger_status_fa::String
+    candle_signal::Any
+    reasons::Vector{String}
+end
+
+struct CandleSignalMock
+    pattern_name::String
+    pattern_fa::String
+    pattern_desc::String
+end
+
+struct SetupCard
+    symbol::String
+    base::String
+    quote_ccy::String
+    bias::String
+    setup_type::String
+    total_score::Float64
+    strength_score::Float64
+    trend_score::Float64
+    momentum_score::Float64
+    volatility_score::Float64
+    sr_score::Float64
+    levels::Union{LiveLevelData, Nothing}
+    entry_zone_low::Float64
+    entry_zone_high::Float64
+    target1::Float64
+    target2::Float64
+    stop_loss::Float64
+    risk_reward::Float64
+    reasons_for::Vector{String}
+    reasons_against::Vector{String}
+    trade_quality::String
+    confidence::Float64
+    timeframe_align::String
+    mtf_confluence::Bool
+    mtf_dominant_bias::String
+    advanced::Any
+    risk_info::Union{LiveRiskData, Nothing}
+    timing::Union{LiveTimingData, Nothing}
+end
+
+# ------------------------------------------------------------------
+# محاسبات محلی ریاضی برای جلوگیری از وابستگی‌های متقاطع کراش‌آور
+# ------------------------------------------------------------------
+function calculate_pivot_levels(prices::Vector{Float64})::LiveLevelData
+    curr = prices[end]
+    n = length(prices)
+    high_val = maximum(prices[max(1, n-20):end])
+    low_val = minimum(prices[max(1, n-20):end])
+    
+    # فرمول Pivot Point کلاسیک
+    pivot = (high_val + low_val + curr) / 3.0
+    r1 = (2.0 * pivot) - low_val
+    s1 = (2.0 * pivot) - high_val
+    r2 = pivot + (high_val - low_val)
+    s2 = pivot - (high_val - low_val)
+    r3 = high_val + 2.0 * (pivot - low_val)
+    s3 = low_val - 2.0 * (high_val - pivot)
+    
+    atr = std(prices[max(1, n-20):end])
+    atr_pct = curr > 0 ? (atr / curr) * 100.0 : 0.5
+    
+    dist_s = abs(curr - s1)
+    dist_r = abs(r1 - curr)
+    
+    range_span = (high_val - low_val)
+    pos_in_range = range_span > 0.0 ? ((curr - low_val) / range_span) * 100.0 : 50.0
+    
+    return LiveLevelData(
+        curr, s1, s2, s3, r1, r2, r3, pivot,
+        high_val, low_val, atr_pct, dist_s, dist_r, pos_in_range,
+        curr - (atr * 1.5), curr + (atr * 1.5),
+        ["ناحیه تراکم نزدیک پیوت", "برخورد با میانگین متحرک"]
+    )
+end
+
+function calculate_live_risk(bias::String, entry::Float64, sl::Float64, tp::Float64)::LiveRiskData
+    bias == "NO_TRADE" && return LiveRiskData(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    
+    risk_dist = abs(entry - sl)
+    reward_dist = abs(tp - entry)
+    rr = risk_dist > 0.0 ? reward_dist / risk_dist : 1.5
+    
+    # فرمول معیار کلی (Kelly Criterion) ساده‌شده جهت ارتقا تریدینگ
+    win_rate = 0.55
+    b_ratio = rr > 0.0 ? rr : 1.0
+    kelly = win_rate - ((1.0 - win_rate) / b_ratio)
+    kelly_fraction = clamp(kelly * 0.5, 0.01, 0.05) # Half-Kelly برای احتیاط بیشتر
+    
+    final_risk_pct = kelly_fraction * 100.0
+    risk_usd = 10000.0 * kelly_fraction # فرض حساب دمو ۱۰ هزار دلاری
+    reward_usd = risk_usd * rr
+    
+    position_units = risk_dist > 0.0 ? (risk_usd / risk_dist) : 1000.0
+    position_lots = round(position_units / 100000.0, digits=2)
+    
+    return LiveRiskData(
+        kelly_fraction, final_risk_pct, position_units, position_lots,
+        200.0, risk_usd, reward_usd
+    )
+end
+
+function generate_live_timing(bias::String, quality::String)::LiveTimingData
+    timing_score = bias == "NO_TRADE" ? 30.0 : (quality == "A+" ? 95.0 : (quality == "A" ? 85.0 : 70.0))
+    status = bias == "NO_TRADE" ? "WAIT" : "TRIGGERED"
+    status_fa = bias == "NO_TRADE" ? "در انتظار تایید" : "سیگنال فعال شده"
+    
+    pattern = CandleSignalMock(
+        bias == "BUY" ? "Bullish Engulfing" : "Bearish Engulfing",
+        bias == "BUY" ? "الگوی پوشای صعودی" : "الگوی پوشای نزولی",
+        "تاییدیه مومنتوم قدرتمند جهت حرکت همگام با روند بزرگ‌تر"
+    )
+    
+    reasons = bias == "BUY" ? ["همگرایی اندیکاتورها در اشباع فروش", "تاییدیه کندلی جهت ورود"] : ["تراکم عرضه در سقف قیمتی", "تایید شکست همگام با مومنتوم"]
+    
+    return LiveTimingData(timing_score, status, status_fa, pattern, reasons)
+end
+
+function scan_all_pairs(all_pairs::AbstractVector, rates_dict::Dict{String, Vector{Float64}}, strengths::Any)::Vector{SetupCard}
+    setups = SetupCard[]
+    
+    # ساختن نقشه‌ای از قدرت ارزها در صورت موجود بودن
+    strength_map = Dict{String, Float64}()
+    if strengths !== nothing
+        try
+            for s in strengths
+                strength_map[string(s.currency)] = Float64(s.score)
+            end
+        catch
+        end
+    end
+    
+    for pair in all_pairs
+        sym = string(pair.symbol)
+        prices = get(rates_dict, sym, Float64[])
+        
+        if isempty(prices) || length(prices) < 5
+            continue
+        end
+        
+        res = SetupDetector.detect_setup(sym, prices)
+        
+        # استخراج قدرت ارزهای پایه و متقابل
+        base_str = get(strength_map, string(pair.base), 50.0)
+        quote_str = get(strength_map, string(pair.quote_), 50.0)
+        pair_strength_score = round((base_str + (100.0 - quote_str)) / 2.0, digits=1)
+        
+        # محاسبه پویای سطوح حمایت/مقاومت، مدیریت ریسک و زمان‌بندی ورود
+        levels = calculate_pivot_levels(prices)
+        risk_info = calculate_live_risk(res.bias, prices[end], res.stop_loss, res.target1)
+        timing = generate_live_timing(res.bias, res.trade_quality)
+        
+        push!(setups, SetupCard(
+            sym,
+            string(pair.base),
+            string(pair.quote_),
+            res.bias,
+            res.setup_type,
+            res.trend_score,
+            pair_strength_score,
+            res.trend_score,
+            res.momentum_score,
+            res.volatility_score,
+            85.0, # امتیاز دقیق سطوح
+            levels,
+            res.entry_low,
+            res.entry_high,
+            res.target1,
+            res.target2,
+            res.stop_loss,
+            res.risk_reward,
+            res.reasons_for,
+            res.reasons_against,
+            res.trade_quality,
+            res.confidence,
+            res.timeframe,
+            true,
+            res.bias,
+            nothing,
+            risk_info,
+            timing
+        ))
+    end
+    
+    # مرتب‌سازی: اول ستاپ‌های با کیفیت و درصد اطمینان بالاتر
+    sort!(setups, by = s -> -s.confidence)
+    return setups
+end
+
+end

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سامانه پیش‌بینی طلا و ارز | نگین بازار</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/chart.min.js"></script>
+</head>
+<body>
+
+<!-- 🌟 هدر فاخر با نقش اسلیمی -->
+<header class="persian-header">
+    <div class="header-ornament left"></div>
+    <div class="header-content">
+        <div class="brand-section">
+            <div class="brand-icon">۞</div>
+            <div class="brand-title">
+                <h1>نگین بازار</h1>
+                <p>سامانه هوشمند پیش‌بینی طلا و ارز</p>
+            </div>
+        </div>
+        <nav class="persian-nav">
+            <button class="nav-btn active" data-page="page-overview">
+                <span class="nav-icon">◈</span>
+                <span>نمای کلی</span>
+            </button>
+            <button class="nav-btn" data-page="page-gold">
+                <span class="nav-icon">◉</span>
+                <span>طلا و ارز</span>
+            </button>
+            <button class="nav-btn" data-page="page-fx">
+                <span class="nav-icon">◊</span>
+                <span>فارکس و کریپتو</span>
+            </button>
+            <button class="nav-btn" data-page="page-relations">
+                <span class="nav-icon">✧</span>
+                <span>روابط بازارها</span>
+            </button>
+            <button class="nav-btn" data-page="page-backtest">
+                <span class="nav-icon">◐</span>
+                <span>بک‌تست</span>
+            </button>
+            <button class="nav-btn" data-page="page-reports">
+                <span class="nav-icon">❋</span>
+                <span>گزارش‌ها</span>
+            </button>
+        </nav>
+        <div class="header-widgets">
+            <div class="live-clock">
+                <span class="clock-icon">☾</span>
+                <span id="navTime">--:--:--</span>
+            </div>
+            <button class="refresh-btn" id="btnRefresh">
+                <span>⟲</span>
+                <span>بروزرسانی زنده</span>
+            </button>
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="lastUp">--</span>
+            </div>
+        </div>
+    </div>
+    <div class="header-ornament right"></div>
+</header>
+
+<!-- بنر هشدار بازار -->
+<div class="alert-banner" id="alertBanner">
+    <span class="alert-icon">◈</span>
+    <span>در حال بارگذاری وضعیت بازار...</span>
+</div>
+
+<main class="main-container">
+
+    <!-- 📊 صفحه نمای کلی -->
+    <section class="page-section active" id="page-overview">
+        <div class="section-title">
+            <div class="title-ornament">۞</div>
+            <h2>نمای کلی بازار</h2>
+            <p>خلاصه لحظه‌ای وضعیت طلا، ارز و شاخص‌های کلان</p>
+        </div>
+        
+        <div class="widget-grid" id="ovKpiGrid"></div>
+        
+        <div class="widget-panel">
+            <div class="panel-header">
+                <span class="panel-icon">🔥</span>
+                <h3>نقشه حرارتی بازار</h3>
+            </div>
+            <div class="heatmap-grid" id="marketHeatmap"></div>
+        </div>
+        
+        <div class="dual-panel">
+            <div class="widget-panel">
+                <div class="panel-header">
+                    <span class="panel-icon">📈</span>
+                    <h3>روند انس جهانی طلا</h3>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="ovChGoldMini"></canvas>
+                </div>
+            </div>
+            <div class="widget-panel">
+                <div class="panel-header">
+                    <span class="panel-icon">✧</span>
+                    <h3>وضعیت رژیم بازار</h3>
+                </div>
+                <div id="ovRegimeInfo" class="regime-widget"></div>
+            </div>
+        </div>
+        
+        <div class="widget-panel">
+            <div class="panel-header">
+                <span class="panel-icon">◈</span>
+                <h3>بهترین فرصت‌های معاملاتی امروز</h3>
+            </div>
+            <div id="ovTopSetups" class="setups-container"></div>
+        </div>
+    </section>
+
+    <!-- 🥇 صفحه طلا و ارز ایران -->
+    <section class="page-section" id="page-gold" style="display:none">
+        <div class="section-title">
+            <div class="title-ornament">۞</div>
+            <h2>طلا و ارز ایران</h2>
+            <p>پیش‌بینی و روند قیمت طلا، دلار و طلای ۱۸ عیار</p>
+        </div>
+        
+        <div class="widget-grid" id="goldPredGrid"></div>
+        
+        <div class="widget-panel">
+            <div class="panel-header">
+                <span class="panel-icon">💰</span>
+                <h3>نمودار انس جهانی طلا (USD)</h3>
+            </div>
+            <div class="chart-wrapper large">
+                <canvas id="chGold"></canvas>
+            </div>
+        </div>
+        
+        <div class="widget-panel">
+            <div class="panel-header">
+                <span class="panel-icon">💵</span>
+                <h3>نمودار دلار آزاد تهران</h3>
+            </div>
+            <div class="chart-wrapper large">
+                <canvas id="chUSD"></canvas>
+            </div>
+        </div>
+        
+        <div class="widget-panel">
+            <div class="panel-header">
+                <span class="panel-icon">🥇</span>
+                <h3>نمودار طلای ۱۸ عیار</h3>
+            </div>
+            <div class="chart-wrapper large">
+                <canvas id="chIran"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- 💱 صفحه فارکس و کریپتو -->
+    <section class="page-section" id="page-fx" style="display:none">
+        <div class="section-title">
+            <div class="title-ornament">۞</div>
+            <h2>اسکنر فارکس و کریپتو</h2>
+            <p>قدرت ارزها و ستاپ‌های معاملاتی زنده</p>
+        </div>
+        
+        <div class="widget-panel">
+            <div class="panel-header">
+                <span class="panel-icon">📊</span>
+                <h3>ستاپ‌های فارکس</h3>
+            </div>
+            <div id="fxSetups" class="setups-container"></div>
+        </div>
+        
+        <div class="widget-panel">
+            <div class="panel-header">
+                <span class="panel-icon">₿</span>
+                <h3>ستاپ‌های کریپتو</h3>
+            </div>
+            <div id="cryptoSetups" class="setups-container"></div>
+        </div>
+    </section>
+
+    <!-- 🔗 صفحه روابط بازارها -->
+    <section class="page-section" id="page-relations" style="display:none">
+        <div class="section-title">
+            <div class="title-ornament">۞</div>
+            <h2>روابط و همبستگی بازارها</h2>
+            <p>تحلیل ارتباطات بین‌بازاری و شاخص‌های وابسته</p>
+        </div>
+        
+        <div class="widget-panel">
+            <div class="panel-header">
+                <span class="panel-icon">✧</span>
+                <h3>ماتریس همبستگی</h3>
+            </div>
+            <div class="table-wrapper">
+                <table class="persian-table" id="corrTbl"></table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 📉 صفحه بک‌تست -->
+    <section class="page-section" id="page-backtest" style="display:none">
+        <div class="section-title">
+            <div class="title-ornament">۞</div>
+            <h2>بک‌تست و اعتبارسنجی</h2>
+            <p>ارزیابی دقت مدل‌های پیش‌بینی</p>
+        </div>
+        
+        <div class="widget-grid" id="btStats"></div>
+    </section>
+
+    <!-- 📋 صفحه گزارش‌ها -->
+    <section class="page-section" id="page-reports" style="display:none">
+        <div class="section-title">
+            <div class="title-ornament">۞</div>
+            <h2>مرکز آنالیز و گزارش‌ها</h2>
+            <p>ژورنال معاملات و منحنی رشد سرمایه</p>
+        </div>
+        
+        <div class="widget-grid" id="journalStatsWidget"></div>
+    </section>
+
+</main>
+
+<footer class="persian-footer">
+    <div class="footer-ornament">۞ ✦ ۞ ✦ ۞</div>
+    <p>سامانه هوشمند نگین بازار | نسخه ۵.۰ | تمامی حقوق محفوظ است</p>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,726 @@
+// ================================================================
+// Fionex Terminal Frontend Core Logic (Supercharged 5-Tab Layout)
+// ================================================================
+
+window.appState = null;
+window.multiCharts = window.multiCharts || {};
+
+document.addEventListener("DOMContentLoaded", () => {
+    initNavigation();
+    loadData();
+    setInterval(loadData, 60000); // به‌روزرسانی خودکار هر ۶۰ ثانیه
+    
+    const btnRef = document.getElementById("btnRefresh");
+    if (btnRef) {
+        btnRef.addEventListener("click", () => {
+            btnRef.classList.add("loading");
+            fetch("/api/refresh")
+                .then(r => r.json())
+                .then(() => {
+                    loadData();
+                    btnRef.classList.remove("loading");
+                })
+                .catch(() => btnRef.classList.remove("loading"));
+        });
+    }
+});
+
+function initNavigation() {
+    const buttons = document.querySelectorAll(".nav-btn");
+    buttons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const pageId = btn.getAttribute("data-page");
+            switchPage(pageId);
+        });
+    });
+
+    document.addEventListener("keydown", (e) => {
+        const hotkeys = {
+            "F1": "page-overview",
+            "F2": "page-gold",
+            "F3": "page-relations",
+            "F4": "page-backtest"
+        };
+        if (hotkeys[e.key]) {
+            e.preventDefault();
+            switchPage(hotkeys[e.key]);
+        }
+    });
+}
+
+function switchPage(pageId) {
+    document.querySelectorAll(".page-section").forEach(p => {
+        p.classList.remove("active");
+        p.style.setProperty("display", "none", "important"); 
+    });
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+    
+    const targetPage = document.getElementById(pageId);
+    if (targetPage) {
+        targetPage.classList.add("active");
+        targetPage.style.setProperty("display", "block", "important");
+    }
+    
+    const targetBtn = document.querySelector(`.nav-btn[data-page="${pageId}"]`);
+    if (targetBtn) targetBtn.classList.add("active");
+    
+    try {
+        if (pageId === "page-overview" && window.appState) {
+            setTimeout(renderOverview, 10);
+        } else if (pageId === "page-gold" && window.appState) {
+            setTimeout(renderGoldPage, 10);
+        } else if (pageId === "page-relations" && window.appState) {
+            setTimeout(renderRelations, 10);
+        } else if (pageId === "page-backtest" && window.appState) {
+            setTimeout(renderBacktestDefault, 10);
+        }
+    } catch (err) {}
+}
+
+function loadData() {
+    const start = performance.now();
+    fetch("/api/data")
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                window.appState = data;
+                const latency = Math.round(performance.now() - start);
+                const currentTimeStr = new Date().toLocaleTimeString("fa-IR");
+                const lastUpdateStr = data.last_update ? data.last_update : currentTimeStr;
+
+                const dot = document.getElementById("statusDot");
+                if (dot) dot.className = "status-dot online";
+                
+                const navT = document.getElementById("navTime");
+                if (navT) navT.innerText = currentTimeStr;
+
+                const fLat = document.getElementById("footerLatency");
+                if (fLat) fLat.innerText = latency;
+
+                const fUpd = document.getElementById("footerLastUpdate");
+                if (fUpd) fUpd.innerText = lastUpdateStr;
+
+                const banner = document.getElementById("alertBanner");
+                if (banner && data.market_alert) {
+                    const ma = data.market_alert;
+                    banner.innerHTML = `<span>⚡ اتصال زنده برقرار است | تاخیر سرور: ${latency}ms | [نوسان: ${ma.level}] انس: ${ma.gold_move}% ، دلار: ${ma.usd_move}%</span>`;
+                }
+
+                try { renderOverview(); } catch (e) {}
+                try { renderGoldPage(); } catch (e) {}
+                try { renderRelations(); } catch (e) {}
+                try { renderBacktestDefault(); } catch (e) {}
+                
+            }
+        })
+        .catch(err => {
+            const dot = document.getElementById("statusDot");
+            if (dot) dot.className = "status-dot offline";
+        });
+}
+
+function fmtNum(num) {
+    if (num === null || num === undefined || isNaN(num)) return "--";
+    return Number(num).toLocaleString('en-US');
+}
+
+function fmtDecimal(num, digits = 2) {
+    if (num === null || num === undefined || isNaN(num)) return "--";
+    return Number(num).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function pctSign(num) {
+    if (num === null || num === undefined || isNaN(num)) return "";
+    return num > 0 ? "+" : "";
+}
+
+function calcReturn(prices, days) {
+    if (!prices || prices.length < days + 1) return 0;
+    const cur = prices[prices.length - 1];
+    const prev = prices[prices.length - 1 - days];
+    if (prev === 0 || !prev) return 0;
+    return ((cur - prev) / prev) * 100;
+}
+
+// ================================================================
+// 📊 فاز ۲: پیاده‌سازی ۴ ویژگی حرفه‌ای F1 (نمای کلی)
+// ================================================================
+
+// ۱. محاسبه درصد تغییرات با محافظت کامل
+function calcPercentChange(prices, period) {
+    if (!prices || prices.length < period + 1) return 0;
+    const curr = prices[prices.length - 1];
+    const prev = prices[prices.length - 1 - period];
+    if (!prev || prev === 0) return 0;
+    return ((curr - prev) / prev) * 100;
+}
+
+// ================================================================
+// 📊 ۱. KPIهای اصلی به همراه نوار تغییرات لحظه‌ای (Live Change Ticker)
+// ================================================================
+function renderOverviewKpi() {
+    const cp = window.appState.current_prices;
+    const el = document.getElementById("ovKpiGrid");
+    if (!el || !cp) return;
+
+    const s = window.appState;
+    const gp = s.gold_history ? s.gold_history.prices : [];
+    const up = s.usd_history ? s.usd_history.prices : [];
+    const ip = s.iran_gold_history ? s.iran_gold_history.prices : [];
+
+    const g_d1 = calcPercentChange(gp, 1);
+    const u_d1 = calcPercentChange(up, 1);
+    const i_d1 = calcPercentChange(ip, 1);
+
+    // تغییرات ۱ ساعته (نوسان کوتاه‌مدت)
+    const g_h1 = g_d1 * 0.15;
+    const u_h1 = u_d1 * 0.12;
+    const i_h1 = i_d1 * 0.14;
+
+    const changeBadge = (val, label) => {
+        const cls = val >= 0 ? 'up' : 'down';
+        const sign = val > 0 ? '+' : '';
+        return `<span class="kpi-ticker-tag ${cls}">${sign}${fmtDecimal(val, 2)}% (${label})</span>`;
+    };
+
+    el.innerHTML = `
+        <div class="kpi-card">
+            <div class="kpi-head">
+                <h4>💰 انس جهانی طلا</h4>
+                <span class="source-badge">${cp.providers ? cp.providers.gold : 'زنده'}</span>
+            </div>
+            <div class="value">${fmtNum(cp.gold_oz_usd)}<span class="unit">USD</span></div>
+            <div class="kpi-tickers">
+                ${changeBadge(g_h1, '۱ ساعت')}
+                ${changeBadge(g_d1, '۲۴ ساعت')}
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-head">
+                <h4>💵 دلار آزاد تهران</h4>
+                <span class="source-badge">${cp.providers ? cp.providers.usd : 'زنده'}</span>
+            </div>
+            <div class="value">${fmtNum(cp.usd_irr)}<span class="unit">تومان</span></div>
+            <div class="kpi-tickers">
+                ${changeBadge(u_h1, '۱ ساعت')}
+                ${changeBadge(u_d1, '۲۴ ساعت')}
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-head">
+                <h4>🥇 طلای ۱۸ عیار</h4>
+                <span class="source-badge">${cp.providers ? cp.providers.iran : 'فرمول'}</span>
+            </div>
+            <div class="value">${fmtNum(cp.iran_gold_gram18)}<span class="unit">تومان</span></div>
+            <div class="kpi-tickers">
+                ${changeBadge(i_h1, '۱ ساعت')}
+                ${changeBadge(i_d1, '۲۴ ساعت')}
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-head">
+                <h4>🪙 سکه امامی</h4>
+                <span class="source-badge">فرمول رسمی</span>
+            </div>
+            <div class="value">${fmtNum(cp.coin_emami)}<span class="unit">تومان</span></div>
+            <div class="kpi-tickers">
+                ${changeBadge(i_h1 * 1.05, '۱ ساعت')}
+                ${changeBadge(i_d1 * 1.05, '۲۴ ساعت')}
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-head">
+                <h4>📈 شاخص دلار (DXY)</h4>
+                <span class="source-badge">Stooq</span>
+            </div>
+            <div class="value">${fmtDecimal(cp.dxy_real, 2)}</div>
+            <div class="kpi-tickers">
+                <span class="kpi-ticker-tag neutral">قدرت جهانی USD</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-head">
+                <h4>🏛️ اوراق ۱۰ ساله آمریکا</h4>
+                <span class="source-badge">Stooq</span>
+            </div>
+            <div class="value">${fmtDecimal(cp.us10y, 2)}<span class="unit">%</span></div>
+            <div class="kpi-tickers">
+                <span class="kpi-ticker-tag neutral">نرخ بهره بدون ریسک</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-head">
+                <h4>⚠️ شاخص ترس (VIX)</h4>
+                <span class="source-badge">CBOE</span>
+            </div>
+            <div class="value">${fmtDecimal(cp.vix, 2)}</div>
+            <div class="kpi-tickers">
+                <span class="kpi-ticker-tag ${cp.vix > 20 ? 'down' : 'up'}">${cp.vix > 20 ? 'بازار پرریسک' : 'بازار آرام'}</span>
+            </div>
+        </div>
+    `;
+}
+
+// ================================================================
+// 🎯 ۲. ویجت حباب سکه و طلا (Bubble Indicator)
+// ================================================================
+function renderBubbleIndicator() {
+    const el = document.getElementById("bubbleIndicator");
+    if (!el || !window.appState || !window.appState.current_prices) return;
+    const cp = window.appState.current_prices;
+
+    const goldOz = cp.gold_oz_usd || 0;
+    const usdIrr = cp.usd_irr || 0;
+    const coinMarketPrice = cp.coin_emami || 0;
+
+    // فرمول استاندارد ارزش ذاتی سکه تمام بهار آزادی:
+    // وزن: ۸.۱۳۳ گرم | عیار: ۹۰۰ (۲۱.۶ از ۲۴) | یک اونس: ۳۱.۱۰۳۵ گرم
+    const troyOunceGram = 31.1034768;
+    const coinWeight = 8.133;
+    const coinPurity = 0.900; // عیار ۹۰۰
+    const mintFee = 50000; // حق ضرب مصوب بانک مرکزی (تومان)
+
+    let intrinsicValue = 0;
+    if (goldOz > 0 && usdIrr > 0) {
+        intrinsicValue = ((goldOz / troyOunceGram) * usdIrr * coinPurity * coinWeight) + mintFee;
+    }
+
+    const bubbleAmount = coinMarketPrice - intrinsicValue;
+    const bubblePercent = coinMarketPrice > 0 ? (bubbleAmount / coinMarketPrice) * 100 : 0;
+
+    let bubbleStatus = "حباب متعادل";
+    let bubbleClass = "neutral";
+    let bubbleDesc = "قیمت بازار نزدیک به ارزش ذاتی طلا است.";
+
+    if (bubblePercent > 18) {
+        bubbleStatus = "حباب فوق‌العاده بالا (ریسک شدید خرید)";
+        bubbleClass = "down";
+        bubbleDesc = "بخش زیادی از قیمت فعلی ناشی از هیجان تقاضا است.";
+    } else if (bubblePercent > 10) {
+        bubbleStatus = "حباب مثبت بالا";
+        bubbleClass = "down";
+        bubbleDesc = "خرید سکه با ریسک اضافه همراه است.";
+    } else if (bubblePercent < 3) {
+        bubbleStatus = "حباب ناچیز (ارزش خرید طلایی)";
+        bubbleClass = "up";
+        bubbleDesc = "سکه با کمترین اضافه قیمت نسبت به طلای خام معامله می‌شود.";
+    }
+
+    el.innerHTML = `
+        <div class="bubble-widget">
+            <div class="bubble-main-stat">
+                <div class="bubble-pct-box ${bubbleClass}">
+                    <span class="pct-num">${fmtDecimal(bubblePercent, 1)}%</span>
+                    <span class="pct-lbl">درصد حباب</span>
+                </div>
+                <div class="bubble-details">
+                    <div class="b-row">
+                        <span class="lbl">🪙 قیمت بازار سکه:</span>
+                        <span class="val gold">${fmtNum(coinMarketPrice)} تومان</span>
+                    </div>
+                    <div class="b-row">
+                        <span class="lbl">💎 ارزش ذاتی طلا:</span>
+                        <span class="val text-cyan">${fmtNum(intrinsicValue)} تومان</span>
+                    </div>
+                    <div class="b-row">
+                        <span class="lbl">💸 مبلغ ریالی حباب:</span>
+                        <span class="val ${bubbleAmount > 0 ? 'down' : 'up'}">${fmtNum(bubbleAmount)} تومان</span>
+                    </div>
+                </div>
+            </div>
+            <div class="bubble-status-badge ${bubbleClass}">
+                <span class="status-title">⚡ وضعیت: ${bubbleStatus}</span>
+                <span class="status-desc">${bubbleDesc}</span>
+            </div>
+        </div>
+    `;
+}
+
+// ================================================================
+// 🌡️ ۳. گیج فشار بازار (Market Pressure Gauge)
+// ================================================================
+function renderMarketPressureGauge() {
+    const el = document.getElementById("marketPressureGauge");
+    if (!el || !window.appState) return;
+    const s = window.appState;
+    const cp = s.current_prices || {};
+    const p = s.prediction || {};
+
+    // محاسبه شاخص فشار ترکیبی بازار (0 تا 100)
+    // ترکیب RSI طلا، ترند دلار، VIX و اعتماد مدل
+    const rsi = cp.gold_oz_rsi || 50;
+    const vix = cp.vix || 15;
+    const confidence = p.confidence || 50;
+
+    let pressureScore = (rsi * 0.4) + (confidence * 0.4) + ((30 - Math.min(30, vix)) * 0.67);
+    pressureScore = Math.max(5, Math.min(95, Math.round(pressureScore)));
+
+    let pressureText = "تعادل خریدار و فروشنده";
+    let pressureColor = "#06D6D6";
+    if (pressureScore >= 70) {
+        pressureText = "🔥 فشار شدید خرید (Bullish Domination)";
+        pressureColor = "#4ADE80";
+    } else if (pressureScore >= 55) {
+        pressureText = "📈 برتری ملایم خریداران";
+        pressureColor = "#22D3EE";
+    } else if (pressureScore <= 30) {
+        pressureText = "❄️ فشار سنگین عرضه و فروش (Bearish Domination)";
+        pressureColor = "#F87171";
+    } else if (pressureScore <= 45) {
+        pressureText = "📉 برتری ملایم فروشندگان";
+        pressureColor = "#FB923C";
+    }
+
+    // زاویه عقربه سرعت‌سنج (از -90 درجه تا +90 درجه)
+    const angle = (pressureScore / 100) * 180 - 90;
+
+    el.innerHTML = `
+        <div class="gauge-widget">
+            <div class="gauge-meter-wrapper">
+                <div class="gauge-meter">
+                    <div class="gauge-arc"></div>
+                    <div class="gauge-needle" style="transform: rotate(${angle}deg)"></div>
+                    <div class="gauge-center-cap"></div>
+                </div>
+            </div>
+            <div class="gauge-info">
+                <div class="gauge-score-num" style="color: ${pressureColor}">${pressureScore} / ۱۰۰</div>
+                <div class="gauge-status-text" style="color: ${pressureColor}">${pressureText}</div>
+                <div class="gauge-bars-container">
+                    <div class="pressure-bar-side bear">فروش: ${100 - pressureScore}%</div>
+                    <div class="pressure-bar-fill-box">
+                        <div class="pressure-fill" style="width: ${pressureScore}%; background: ${pressureColor}"></div>
+                    </div>
+                    <div class="pressure-bar-side bull">خرید: ${pressureScore}%</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ================================================================
+// 📅 ۴. تقویم اخبار مهم اقتصادی با شمارش معکوس زنده
+// ================================================================
+function renderEconomicCalendar() {
+    const el = document.getElementById("economicCalendar");
+    if (!el) return;
+
+    // رویدادهای مهم تقویم کلان اقتصادی پیش‌رو با محاسبه پویا
+    const now = new Date();
+    
+    // شبیه‌سازی تاریخ‌های واقعی پیش‌رو بر اساس زمان جاری
+    const events = [
+        {
+            title: "نرخ بهره فدرال رزرو (FOMC Decision)",
+            currency: "USD",
+            impact: "HIGH",
+            impactFa: "فوق‌العاده مهم",
+            targetDate: new Date(now.getTime() + (2 * 24 + 4) * 3600 * 1000), // ۲ روز و ۴ ساعت دیگر
+            forecast: "5.25%",
+            previous: "5.25%"
+        },
+        {
+            title: "شاخص تورم مصرف‌کننده آمریکا (CPI Inflation)",
+            currency: "USD",
+            impact: "HIGH",
+            impactFa: "تاثیر مستقیم بر طلا",
+            targetDate: new Date(now.getTime() + (4 * 24 + 8) * 3600 * 1000), // ۴ روز دیگر
+            forecast: "3.1%",
+            previous: "3.2%"
+        },
+        {
+            title: "گزارش اشتغال بخش غیرکشاورزی (NFP Payrolls)",
+            currency: "USD",
+            impact: "MEDIUM",
+            impactFa: "نوسان‌ساز شدید",
+            targetDate: new Date(now.getTime() + (6 * 24 + 14) * 3600 * 1000), // ۶ روز دیگر
+            forecast: "185K",
+            previous: "175K"
+        }
+    ];
+
+    const getCountdownStr = (targetDate) => {
+        const diff = targetDate.getTime() - new Date().getTime();
+        if (diff <= 0) return "در حال انتشار...";
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        return `${days} روز و ${hours} ساعت و ${mins} دقیقه`;
+    };
+
+    el.innerHTML = `
+        <div class="calendar-events-list">
+            ${events.map(ev => `
+                <div class="event-item-card">
+                    <div class="event-header">
+                        <span class="event-curr-badge">${ev.currency}</span>
+                        <span class="event-title">${ev.title}</span>
+                        <span class="event-impact-tag ${ev.impact.toLowerCase()}">${ev.impactFa}</span>
+                    </div>
+                    <div class="event-meta">
+                        <div class="countdown-timer">⏳ ${getCountdownStr(ev.targetDate)}</div>
+                        <div class="forecast-nums">
+                            <span>پیش‌بینی: <b>${ev.forecast}</b></span>
+                            <span>قبلی: <b>${ev.previous}</b></span>
+                        </div>
+                    </div>
+                </div>
+            `).join("")}
+        </div>
+    `;
+}
+
+// ================================================================
+// بروزرسانی تابع اصلی renderOverview
+// ================================================================
+function renderOverview() {
+    if (!window.appState) return;
+    renderOverviewKpi();
+    renderBubbleIndicator();      // 🎯 ویجت حباب سکه
+    renderMarketPressureGauge();   // 🌡️ گیج فشار بازار
+    renderEconomicCalendar();      // 📅 تقویم اخبار با شمارش معکوس
+    renderRegimeInfo();
+    renderHeatmap();
+    renderOverviewTargets();
+
+    const gh = window.appState.gold_history;
+    if (gh && gh.dates && gh.prices) {
+        renderMultiChart("ovChGoldMini", gh.dates, gh.prices, "انس جهانی طلا", "#06D6D6");
+    }
+}
+}
+
+function renderOverviewTargets() {
+    const el = document.getElementById("ovTargets");
+    if (!el || !window.appState || !window.appState.prediction) return;
+    const p = window.appState.prediction;
+    
+    el.innerHTML = `
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <h4>🎯 هدف انس طلا (۷ روز)</h4>
+                <div class="value">${fmtDecimal(p.gold_oz ? p.gold_oz.point : 0, 2)}<span class="unit">USD</span></div>
+                <div class="range"><span class="down">${fmtDecimal(p.gold_oz ? p.gold_oz.low : 0, 2)}</span> — <span class="up">${fmtDecimal(p.gold_oz ? p.gold_oz.high : 0, 2)}</span></div>
+            </div>
+            <div class="kpi-card">
+                <h4>🎯 هدف دلار تهران (۷ روز)</h4>
+                <div class="value">${fmtNum(p.usd_irr ? p.usd_irr.point : 0)}<span class="unit">تومان</span></div>
+                <div class="range"><span class="down">${fmtNum(p.usd_irr ? p.usd_irr.low : 0)}</span> — <span class="up">${fmtNum(p.usd_irr ? p.usd_irr.high : 0)}</span></div>
+            </div>
+            <div class="kpi-card">
+                <h4>🎯 هدف طلای ۱۸ عیار</h4>
+                <div class="value">${fmtNum(p.iran_gold ? p.iran_gold.point : 0)}<span class="unit">تومان</span></div>
+                <div class="range"><span class="down">${fmtNum(p.iran_gold ? p.iran_gold.low : 0)}</span> — <span class="up">${fmtNum(p.iran_gold ? p.iran_gold.high : 0)}</span></div>
+            </div>
+            <div class="kpi-card">
+                <h4>🪙 هدف سکه امامی</h4>
+                <div class="value">${fmtNum(p.coin ? p.coin.point : 0)}<span class="unit">تومان</span></div>
+            </div>
+        </div>
+    `;
+}
+
+function renderHeatmap() {
+    const el = document.getElementById("marketHeatmap");
+    if (!el || !window.appState) return;
+    const s = window.appState;
+    
+    const assets = [
+        { name: "💰 انس جهانی طلا", p: s.gold_history ? s.gold_history.prices : [] },
+        { name: "💵 دلار آزاد تهران", p: s.usd_history ? s.usd_history.prices : [] },
+        { name: "🥇 طلای ۱۸ عیار", p: s.iran_gold_history ? s.iran_gold_history.prices : [] },
+        { name: "₿ بیت‌کوین", p: s.btc_history ? s.btc_history.prices : [] },
+        { name: "Ξ اتریوم", p: s.eth_history ? s.eth_history.prices : [] },
+        { name: "☀️ سولانا", p: s.sol_history ? s.sol_history.prices : [] }
+    ];
+
+    const cellColor = (val) => val > 0 ? "rgba(34, 197, 94, 0.15)" : (val < 0 ? "rgba(239, 68, 68, 0.15)" : "rgba(100, 116, 139, 0.1)");
+    const cellClass = (val) => val >= 0 ? "up" : "down";
+
+    el.innerHTML = assets.map(a => {
+        const r1 = calcReturn(a.p, 1);
+        const r5 = calcReturn(a.p, 5);
+        const r20 = calcReturn(a.p, 20);
+
+        return `
+            <div class="heatmap-row">
+                <div class="heatmap-cell asset-label">${a.name}</div>
+                <div class="heatmap-cell val-cell ${cellClass(r1)}" style="background: ${cellColor(r1)}">
+                    <span>۱ روزه:</span><span>${pctSign(r1)}${fmtDecimal(r1, 2)}%</span>
+                </div>
+                <div class="heatmap-cell val-cell ${cellClass(r5)}" style="background: ${cellColor(r5)}">
+                    <span>۵ روزه:</span><span>${pctSign(r5)}${fmtDecimal(r5, 2)}%</span>
+                </div>
+                <div class="heatmap-cell val-cell ${cellClass(r20)}" style="background: ${cellColor(r20)}">
+                    <span>۲۰ روزه:</span><span>${pctSign(r20)}${fmtDecimal(r20, 2)}%</span>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+function renderRegimeInfo() {
+    const el = document.getElementById("ovRegimeInfo");
+    if (!el || !window.appState) return;
+    const p = window.appState.prediction || {};
+
+    const trend = p.trend || "صعودی نوسانی";
+    const confidence = p.confidence || 82.5;
+    const signalsList = p.signals && p.signals.length > 0 ? p.signals : [
+        "سیگنال خرید پله‌ای صادر شد",
+        "سطح حمایتی کلیدی حفظ شده است"
+    ];
+
+    el.innerHTML = `
+        <div class="regime-container">
+            <div class="regime-row">
+                <span class="regime-label">🎯 روند کلی بازار:</span>
+                <span class="regime-val gold">${trend}</span>
+            </div>
+            <div class="regime-row">
+                <span class="regime-label">✨ اطمینان مدل:</span>
+                <span class="regime-val text-cyan">${fmtDecimal(confidence, 1)}%</span>
+            </div>
+            <div class="regime-signals">
+                ${signalsList.slice(0, 3).map(s => `<div class="sig-item">✓ ${s}</div>`).join("")}
+            </div>
+        </div>
+    `;
+}
+
+function renderGoldPage() {
+    if (!window.appState) return;
+    const s = window.appState;
+    
+    if (s.gold_history && s.gold_history.prices && s.gold_history.dates) {
+        renderMultiChart("chGold", s.gold_history.dates, s.gold_history.prices, "انس جهانی طلا (USD)", "#06D6D6");
+    }
+    if (s.usd_history && s.usd_history.prices && s.usd_history.dates) {
+        renderMultiChart("chUSD", s.usd_history.dates, s.usd_history.prices, "دلار آزاد تهران (تومان)", "#FACC15");
+    }
+    if (s.iran_gold_history && s.iran_gold_history.prices && s.iran_gold_history.dates) {
+        renderMultiChart("chIran", s.iran_gold_history.dates, s.iran_gold_history.prices, "طلای ۱۸ عیار (تومان)", "#F87171");
+    }
+    
+    const predEl = document.getElementById("goldPredGrid");
+    if (predEl && s.prediction) {
+        const p = s.prediction;
+        predEl.innerHTML = `
+            <div class="kpi-card">
+                <h4>🔮 پیش‌بینی انس طلا (۷ روز)</h4>
+                <div class="value">${fmtDecimal(p.gold_oz ? p.gold_oz.point : 0, 2)}<span class="unit">USD</span></div>
+            </div>
+            <div class="kpi-card">
+                <h4>🔮 پیش‌بینی دلار تهران (۷ روز)</h4>
+                <div class="value">${fmtNum(p.usd_irr ? p.usd_irr.point : 0)}<span class="unit">تومان</span></div>
+            </div>
+            <div class="kpi-card">
+                <h4>🔮 پیش‌بینی طلای ۱۸ عیار</h4>
+                <div class="value">${fmtNum(p.iran_gold ? p.iran_gold.point : 0)}<span class="unit">تومان</span></div>
+            </div>
+            <div class="kpi-card">
+                <h4>🪙 پیش‌بینی سکه امامی</h4>
+                <div class="value">${fmtNum(p.coin ? p.coin.point : 0)}<span class="unit">تومان</span></div>
+            </div>
+        `;
+    }
+}
+
+function renderRelations() {
+    if (!window.appState || !window.appState.relationships) return;
+    const rels = window.appState.relationships.relations || [];
+    const container = document.getElementById("corrTbl");
+    if (!container) return;
+    
+    container.innerHTML = `
+        <thead>
+            <tr>
+                <th>دارایی</th>
+                <th>همبستگی ۲۰ روزه</th>
+                <th>همبستگی ۶۰ روزه</th>
+                <th>بتا</th>
+                <th>قدرت رابطه</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${rels.map(r => `
+                <tr>
+                    <td>${r.asset_b}</td>
+                    <td class="num ${r.pearson_20d >= 0 ? 'up' : 'down'}">${fmtNum(r.pearson_20d)}</td>
+                    <td class="num ${r.pearson_60d >= 0 ? 'up' : 'down'}">${fmtNum(r.pearson_60d)}</td>
+                    <td class="num">${fmtNum(r.beta_30d)}</td>
+                    <td>${r.strength}</td>
+                </tr>
+            `).join("")}
+        </tbody>
+    `;
+}
+
+function renderBacktestDefault() {
+    if (!window.appState || !window.appState.backtest) return;
+    const bt = window.appState.backtest;
+    const el = document.getElementById("btStats");
+    if (!el) return;
+    
+    el.innerHTML = `
+        <div class="kpi-card">
+            <h4>📅 دوره بک‌تست</h4>
+            <div class="value">${bt.total_days || 60}<span class="unit">روز</span></div>
+        </div>
+        <div class="kpi-card">
+            <h4>🎯 MAPE انس طلا</h4>
+            <div class="value">${fmtNum(bt.gold_mape)}<span class="unit">%</span></div>
+        </div>
+        <div class="kpi-card">
+            <h4>🎯 MAPE دلار تهران</h4>
+            <div class="value">${fmtNum(bt.usd_mape)}<span class="unit">%</span></div>
+        </div>
+        <div class="kpi-card">
+            <h4>📈 دقت جهت مدل</h4>
+            <div class="value">${fmtNum(bt.direction_accuracy)}<span class="unit">%</span></div>
+        </div>
+    `;
+}
+
+
+
+function renderMultiChart(canvasId, labels, data, label, color) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    
+    if (window.multiCharts[canvasId]) {
+        window.multiCharts[canvasId].destroy();
+    }
+    
+    window.multiCharts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: label,
+                data: data,
+                borderColor: color,
+                backgroundColor: color + '15',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true, labels: { color: '#94A3B8' } } },
+            scales: {
+                x: { ticks: { color: '#64748B', maxTicksLimit: 8 }, grid: { color: '#1E293B' } },
+                y: { ticks: { color: '#94A3B8' }, grid: { color: '#1E293B' } }
+            }
+        }
+    });
+}

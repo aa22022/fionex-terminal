@@ -1,0 +1,929 @@
+/* ================================================================
+   📈 TRADINGVIEW PRO STYLE (Persian)
+   Gold Predictor v5.0 - Modern Trading Platform
+   ================================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* پس‌زمینه */
+    --bg-app: #131722;
+    --bg-panel: #1E222D;
+    --bg-panel-2: #262B3E;
+    --bg-hover: #2A2E39;
+    --bg-elev: #363A45;
+    
+    /* متن */
+    --text-primary: #D1D4DC;
+    --text-secondary: #787B86;
+    --text-tertiary: #5D6069;
+    --text-white: #FFFFFF;
+    
+    /* رنگ‌های برند */
+    --tv-blue: #2962FF;
+    --tv-blue-light: #4A7FFF;
+    --tv-blue-dark: #1E53E5;
+    
+    /* رنگ صعودی/نزولی */
+    --up: #26A69A;
+    --up-light: #4DB6AC;
+    --up-bg: rgba(38, 166, 154, 0.15);
+    --down: #EF5350;
+    --down-light: #E57373;
+    --down-bg: rgba(239, 83, 80, 0.15);
+    
+    /* رنگ‌های لهجه */
+    --gold: #FFB300;
+    --orange: #FF6D00;
+    --purple: #AB47BC;
+    --indigo: #5C6BC0;
+    
+    /* بردر */
+    --border: #363A45;
+    --border-light: #2A2E39;
+    
+    /* سایه */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+html { direction: rtl; }
+
+body {
+    font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+    background: var(--bg-app);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ================================================================
+   🔷 نوار بالای سایت (هدر)
+   ================================================================ */
+.tv-header {
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    height: 56px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow-sm);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.tv-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--tv-blue) 0%, var(--tv-blue-dark) 100%);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 2px 8px rgba(41, 98, 255, 0.4);
+}
+
+.logo-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.logo-brand {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-white);
+}
+
+.logo-tag {
+    background: var(--tv-blue);
+    color: white;
+    padding: 1px 6px;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+}
+
+/* نوار منو */
+.tv-nav {
+    display: flex;
+    gap: 2px;
+}
+
+.tv-nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.tv-nav-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-white);
+}
+
+.tv-nav-btn.active {
+    color: var(--text-white);
+    background: var(--bg-hover);
+}
+
+.tv-nav-btn.active::after {
+    content: "";
+    position: absolute;
+    bottom: -18px;
+    left: 12px;
+    right: 12px;
+    height: 3px;
+    background: var(--tv-blue);
+    border-radius: 3px 3px 0 0;
+}
+
+/* سمت راست هدر */
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tv-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    width: 220px;
+    transition: all 0.15s;
+}
+
+.tv-search:focus-within {
+    border-color: var(--tv-blue);
+    background: var(--bg-app);
+}
+
+.search-icon {
+    font-size: 13px;
+    opacity: 0.6;
+}
+
+.tv-search input {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+    flex: 1;
+    text-align: right;
+}
+
+.tv-search input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.tv-icon-btn {
+    width: 34px;
+    height: 34px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    font-size: 14px;
+}
+
+.tv-icon-btn:hover {
+    background: var(--tv-blue);
+    color: white;
+    border-color: var(--tv-blue);
+}
+
+.tv-clock {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 12px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    direction: ltr;
+    min-width: 90px;
+    text-align: center;
+}
+
+.tv-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 6px 10px;
+    background: var(--bg-hover);
+    border-radius: 6px;
+}
+
+.status-pulse {
+    width: 8px;
+    height: 8px;
+    background: var(--up);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--up);
+    animation: pulseLive 1.2s infinite alternate;
+}
+
+@keyframes pulseLive {
+    0% { opacity: 0.4; transform: scale(0.9); }
+    100% { opacity: 1; transform: scale(1.1); }
+}
+
+/* ================================================================
+   🔷 محیط کار (Workspace)
+   ================================================================ */
+.tv-workspace {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: calc(100vh - 56px);
+}
+
+/* ================================================================
+   🔷 پنل واچ‌لیست
+   ================================================================ */
+.tv-watchlist {
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    padding: 16px 12px;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    position: sticky;
+    top: 56px;
+}
+
+.watchlist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 8px 16px 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+}
+
+.watchlist-header h3 {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.badge-live {
+    background: var(--up-bg);
+    color: var(--up-light);
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid var(--up);
+}
+
+.watchlist-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.watchlist-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.watchlist-item:hover {
+    background: var(--bg-hover);
+}
+
+.wl-symbol {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.wl-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+}
+
+.wl-icon.gold { background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%); }
+.wl-icon.green { background: linear-gradient(135deg, #26A69A 0%, #00897B 100%); }
+.wl-icon.orange { background: linear-gradient(135deg, #FF6D00 0%, #E65100 100%); }
+.wl-icon.purple { background: linear-gradient(135deg, #AB47BC 0%, #7B1FA2 100%); }
+.wl-icon.blue { background: linear-gradient(135deg, #FFB300 0%, #FF6F00 100%); }
+.wl-icon.indigo { background: linear-gradient(135deg, #5C6BC0 0%, #3949AB 100%); }
+
+.wl-name {
+    font-size: 12px;
+    color: var(--text-white);
+    font-weight: 600;
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+
+.wl-code {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    direction: ltr;
+    text-align: right;
+}
+
+.wl-price {
+    text-align: left;
+}
+
+.wl-value {
+    font-size: 12px;
+    color: var(--text-white);
+    font-weight: 700;
+    direction: ltr;
+    text-align: left;
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+
+.wl-change {
+    font-size: 10px;
+    font-weight: 600;
+    direction: ltr;
+    text-align: left;
+}
+
+.wl-change.up { color: var(--up-light); }
+.wl-change.down { color: var(--down-light); }
+
+/* ================================================================
+   🔷 محتوای اصلی
+   ================================================================ */
+.tv-main {
+    padding: 16px;
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+/* نوار خلاصه */
+.tv-summary-bar {
+    background: linear-gradient(90deg, rgba(41, 98, 255, 0.1) 0%, transparent 100%);
+    border: 1px solid rgba(41, 98, 255, 0.2);
+    border-right: 3px solid var(--tv-blue);
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.summary-icon {
+    font-size: 16px;
+}
+
+/* ================================================================
+   🔷 کارت‌های KPI
+   ================================================================ */
+.tv-cards-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.kpi-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--tv-blue), var(--tv-blue-light));
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.kpi-card:hover {
+    border-color: var(--tv-blue);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.kpi-card:hover::before { opacity: 1; }
+
+.kpi-card h4 {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kpi-card .value {
+    font-size: 22px;
+    color: var(--text-white);
+    font-weight: 700;
+    margin-bottom: 6px;
+    line-height: 1.2;
+    letter-spacing: -0.5px;
+}
+
+.kpi-card .value.up { color: var(--up-light); }
+.kpi-card .value.down { color: var(--down-light); }
+
+.kpi-card .unit {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+    margin-right: 4px;
+}
+
+.source-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    font-weight: 500;
+}
+
+/* ================================================================
+   🔷 نمودار اصلی + پنل کناری
+   ================================================================ */
+.tv-main-chart-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+@media (max-width: 1200px) {
+    .tv-main-chart-layout { grid-template-columns: 1fr; }
+}
+
+.tv-chart-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.chart-panel-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.chart-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.chart-symbol {
+    color: var(--text-white);
+    font-size: 15px;
+    font-weight: 700;
+    direction: ltr;
+}
+
+.chart-name {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.chart-tools {
+    display: flex;
+    gap: 4px;
+}
+
+.tool-btn {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.tool-btn:hover {
+    background: var(--bg-elev);
+    color: var(--text-primary);
+}
+
+.tool-btn.active {
+    background: var(--tv-blue);
+    color: white;
+    border-color: var(--tv-blue);
+}
+
+.chart-body {
+    padding: 12px;
+}
+
+/* پنل کناری */
+.tv-side-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.side-panel-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.panel-title-icon {
+    font-size: 16px;
+}
+
+.side-panel-header h3 {
+    font-size: 13px;
+    color: var(--text-white);
+    font-weight: 600;
+}
+
+.side-panel-body {
+    padding: 16px;
+}
+
+/* ================================================================
+   🔷 پنل‌های اصلی
+   ================================================================ */
+.tv-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.panel-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.panel-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.panel-icon {
+    font-size: 18px;
+}
+
+.panel-title h3 {
+    font-size: 14px;
+    color: var(--text-white);
+    font-weight: 600;
+}
+
+.panel-subtitle {
+    color: var(--text-tertiary);
+    font-size: 11px;
+}
+
+.panel-body {
+    padding: 16px;
+}
+
+/* چارت */
+.chart-wrap {
+    height: 260px;
+    position: relative;
+}
+
+.chart-wrap.large { height: 380px; }
+
+.chart-wrap canvas { max-height: 100%; }
+
+/* ================================================================
+   🔷 نقشه حرارتی
+   ================================================================ */
+.heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
+}
+
+.heatmap-card {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    transition: all 0.15s;
+}
+
+.heatmap-card:hover {
+    border-color: var(--tv-blue);
+    transform: translateY(-2px);
+}
+
+.heatmap-card h4 {
+    color: var(--text-white);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.heatmap-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    font-size: 12px;
+}
+
+.heatmap-row .lbl {
+    color: var(--text-tertiary);
+}
+
+.heatmap-row .val {
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    direction: ltr;
+}
+
+.val.up { background: var(--up-bg); color: var(--up-light); }
+.val.down { background: var(--down-bg); color: var(--down-light); }
+
+/* ================================================================
+   🔷 رژیم بازار
+   ================================================================ */
+.regime-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 13px;
+}
+
+.regime-row:last-of-type { border-bottom: none; }
+.regime-row .lbl { color: var(--text-secondary); }
+.regime-row .val { color: var(--text-white); font-weight: 600; }
+
+.signal-badge {
+    background: var(--up-bg);
+    border: 1px solid var(--up);
+    color: var(--up-light);
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-top: 6px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ================================================================
+   🔷 ستاپ‌ها
+   ================================================================ */
+.setup-card {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border);
+    border-right: 3px solid var(--tv-blue);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+    align-items: center;
+    transition: all 0.15s;
+}
+
+.setup-card:hover {
+    background: var(--bg-hover);
+    border-right-color: var(--tv-blue-light);
+    transform: translateX(-2px);
+}
+
+.setup-symbol {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 100px;
+}
+
+.setup-symbol .sym {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-white);
+    direction: ltr;
+}
+
+.setup-symbol .bias {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-weight: 600;
+    display: inline-block;
+    width: fit-content;
+}
+
+.bias.long, .bias.buy { background: var(--up-bg); color: var(--up-light); }
+.bias.short, .bias.sell { background: var(--down-bg); color: var(--down-light); }
+
+.setup-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.setup-meta-item .lbl {
+    color: var(--text-tertiary);
+    margin-left: 4px;
+}
+
+.setup-meta-item .val {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.setup-quality {
+    background: linear-gradient(135deg, var(--gold) 0%, #FF8F00 100%);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* ================================================================
+   🔷 کارت پیش‌بینی
+   ================================================================ */
+.pred-card {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--gold);
+    border-radius: 6px;
+    padding: 14px;
+}
+
+.pred-card h4 {
+    color: var(--text-white);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.pred-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 12px;
+}
+
+.pred-row:last-child { border-bottom: none; }
+.pred-row .lbl { color: var(--text-secondary); }
+.pred-row .val { color: var(--text-primary); font-weight: 600; direction: ltr; }
+
+/* ================================================================
+   🔷 جدول
+   ================================================================ */
+.table-wrap {
+    overflow-x: auto;
+}
+
+.tv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.tv-table th {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    padding: 10px 14px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+}
+
+.tv-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-primary);
+}
+
+.tv-table tr:hover td { background: var(--bg-hover); }
+.tv-table td.up { color: var(--up-light); font-weight: 600; }
+.tv-table td.down { color: var(--down-light); font-weight: 600; }
+
+/* ================================================================
+   🔷 اسکرول‌بار
+   ================================================================ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-app); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--bg-elev); }
+
+/* ================================================================
+   🔷 ریسپانسیو
+   ================================================================ */
+@media (max-width: 1024px) {
+    .tv-workspace { grid-template-columns: 1fr; }
+    .tv-watchlist { display: none; }
+    .tv-nav { display: none; }
+    .tv-search { width: 150px; }
+}
+
+@media (max-width: 640px) {
+    .tv-header { padding: 0 10px; }
+    .tv-main { padding: 10px; }
+    .tv-cards-row { grid-template-columns: 1fr 1fr; }
+    .setup-card { grid-template-columns: 1fr; text-align: center; }
+    .setup-meta { justify-content: center; }
+    .tv-search { display: none; }
+}

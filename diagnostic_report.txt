@@ -1,0 +1,53 @@
+﻿═══════════════════════════════════════════════════════
+  گزارش تشخیصی سازگاری فرانت‌اند
+  تاریخ: 08/29/2026 09:41:55
+═══════════════════════════════════════════════════════
+
+📄 [templates/index.html]
+   حجم فایل: 35.71 KB | تعداد خطوط: 767
+
+🔖 شناسه‌های (ID) موجود در HTML: 71 عدد
+   [adaptiveInsightsWidget, alertBanner, alertBannerMed, btnCandleBtc, btnCandleGold, btnCandleIran, btnCandleUsd, btRangeBtns, btStats, candlestickCanvas, chartModalBackdrop, chBtGold, chBtIran, chBtUSD, chDayOfWeekPnl, chDrawdownCurve, chEquityCurve, chGold, chIran, chMethods, chUSD, corrTbl, cryptoSetups, fxCandleSymbolSelector, fxReport, fxSetups, fxStrengths, fxStudioCandleCanvas, fxStudioPriceBar, fxStudioTfs, goldPredGrid, goldSignals, goldStudioTfs, hmBtn1d, hmBtn20d, hmBtn5d, horizonStats, journalStatsWidget, lastUp, macroKpi, marketHeatmap, maxDrawdownWidget, modalAssetIcon, modalPriceBar, modalQualityBadge, modalSymbolTitle, navBadgeFx, navTime, ovChGoldMini, ovKpiGrid, ovNewsSummary, ovRegimeInfo, ovTopSetups, page-backtest, page-fx, page-gold, page-overview, page-relations, page-reports, portfolioRiskWidget, relMap, sbRegime, sbSentiment, statusDot, studioCandleCanvas, studioPriceBar, systemSummary, wfStats, wlCount, wlFilterAll, wlFilterStarred]
+
+📌 تب‌های ناوبری (data-tab): 0 عدد
+   []
+
+🗂️ Section/Div های تب: 6 عدد
+   [page-backtest, page-fx, page-gold, page-overview, page-relations, page-reports]
+
+✨ تعداد المان‌های active در قالب: 8
+
+─────────────────────────────────────────────────────
+📄 [static/app.js]
+   حجم فایل: 80.12 KB | تعداد خطوط: 1807
+
+🎯 شناسه‌های مورد استفاده در app.js: 46 عدد
+   [adaptiveInsightsWidget, alertBanner, alertBannerMed, btnCandle, btnRefresh, btStats, chartModalBackdrop, chDayOfWeekPnl, chDrawdownCurve, chEquityCurve, chMethods, corrTbl, cryptoSetups, customAccountBalance, fxBtn_, fxCandleSymbolSelector, fxReport, fxSetups, fxStrengths, fxStudioPriceBar, globalLoader, goldPredGrid, goldSignals, hmBtn, journalStatsWidget, macroKpi, marketHeatmap, maxDrawdownWidget, modalAssetIcon, modalPriceBar, modalQualityBadge, modalSymbolTitle, navTime, ovChGoldMini, ovKpiGrid, ovNewsSummary, ovRegimeInfo, ovTopSetups, portfolioRiskWidget, relMap, studioPriceBar, systemSummary, wfStats, wlCount, wlFilterAll, wlFilterStarred]
+
+⚙️ توابع رندر و بروزرسانی: 17 عدد
+   [initChartDefaults, renderAdaptiveInsights, renderBacktestDefault, renderCurrentPage, renderFX, renderFxStudioCandles, renderGold, renderGoldStudioCandles, renderHeatmap, renderMarketAlerts, renderOverview, renderPortfolioRisk, renderRelations, renderReports, renderTradeJournal, updateClock, updateWatchlistUI]
+
+🔗 اتصال Event Listener روی nav-link: 1 مورد
+
+🌐 درخواست‌های API: 3 عدد
+   [/api/backtest?days=, /api/data?ts=, /api/refresh]
+
+═══════════════════════════════════════════════════════
+  🚨 تحلیل عدم تطابق (Mismatched IDs)
+═══════════════════════════════════════════════════════
+
+❌ شناسه‌هایی که در app.js استفاده شده ولی در HTML وجود ندارند:
+   تعداد: 6
+   - btnCandle
+   - btnRefresh
+   - customAccountBalance
+   - fxBtn_
+   - globalLoader
+   - hmBtn
+
+─────────────────────────────────────────────────────
+🌐 [تست ارتباط با وب‌سرویس]
+
+✅ API پاسخ داد (HTTP 200)
+   حجم پاسخ: 159.49 KB
+   کلیدهای پاسخ JSON: [walk_forward, iran_gold_history, current_prices, eth_history, last_update, events, fx_scan, status, prediction, accuracy, backtest, market_alert, accuracy_horizons, gold_history, usd_history, portfolio_risk, macro, prediction_trails, sentiment, relationships, adaptive_insights, sol_history, correlations, btc_history, trade_journal]
